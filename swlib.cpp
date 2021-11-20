@@ -300,27 +300,25 @@ std::string sw::stitch_two_reads ( const std::vector<std::string> & v1,
 
     // gap-less alignment
     const int match_score = 2;
-    const int mismatch_penalty = 10;
-    const int gap_open_penalty = std::max ( read1.length(), read2.length() );
+    const int mismatch_penalty = 0;
+    const int gap_open_penalty = std::max ( read1.size(), read2.size() );
     const int gap_extention_penalty = 1;
     sw::Alignment aln = sw::align ( read1, read2, match_score, mismatch_penalty,
                                     gap_open_penalty, gap_extention_penalty );
 
     std::vector<std::string> cigar_vec = decompose_cigar_string (
             aln.cigar_string );
-    const size_t read1_begin = aln.ref_begin;
-    const size_t read1_end = aln.ref_end;
-    const size_t read2_begin = aln.query_begin;
-    const size_t read2_end = aln.query_end;
+    const int read1_begin = aln.ref_begin;
+    const int read1_end = aln.ref_end;
+    const int read2_begin = aln.query_begin;
+    const int read2_end = aln.query_end;
 
     // TODOtest stitchable
     // do by a separate func
 
-    /*
     std::cout << aln.cigar_string << std::endl;
     std::cout << read1_begin << ", " << read1_end << std::endl;
     std::cout << read2_begin << ", " << read2_end << std::endl;
-    */
 
     std::string lt_ext, rt_ext, mread1, mqual1, mread2, mqual2;
     if ( read2_begin == 0 ) {
@@ -333,7 +331,13 @@ std::string sw::stitch_two_reads ( const std::vector<std::string> & v1,
         mqual2 = qual2.substr ( 0, read2_end + 1 );
     }
     else if ( read1_begin == 0 ) {
-        //TODO 
+        lt_ext = read2.substr ( 0, read2_begin );
+        rt_ext = read1.substr ( read1_end + 1 );
+
+        mread1 = read1.substr ( 0, read1_end + 1 );
+        mqual1 = qual1.substr ( 0, read1_end + 1 );
+        mread2 = read2.substr ( read2_begin );
+        mread2 = read2.substr ( read2_begin );
     }
     else {
         // not stitchable
@@ -341,7 +345,7 @@ std::string sw::stitch_two_reads ( const std::vector<std::string> & v1,
 
     // do middle part
     std::string mid = "";
-    const size_t mid_len = mread1.size();
+    const std::string::size_type mid_len = mread1.size();
     for ( int i = 0; i < mid_len; ++i ) {
         if ( mread1[i] == mread2[i] ) {
             mid += mread1[i];
