@@ -288,6 +288,26 @@ std::vector<sw::ParsedVariant> sw::find_variants ( const sw::Alignment &
 }
 
 
+void average_quals ( std::string & v1, std::string & v2 )
+{
+    auto v1_len = v1.size();
+    auto v2_len = v2.size();
+
+    //std::assert(v1_len == v2_len);
+
+    for ( int i = 0; i < v1_len; i ++ ) {
+
+        int q1 = static_cast<int> ( v1[i] );
+        int q2 = static_cast<int> ( v2[i] );
+        char q = static_cast<char> ( static_cast<int> ( ( q1 + q2 ) / 2 ) );
+        //char q = 'l';
+        v1[i] = q;
+        v2[i] = q;
+    }
+
+}
+
+
 //expect cleaneds read as input
 std::string sw::stitch_two_reads ( const std::vector<std::string> & v1,
                                    const std::vector<std::string> & v2 )
@@ -337,7 +357,7 @@ std::string sw::stitch_two_reads ( const std::vector<std::string> & v1,
         mread1 = read1.substr ( 0, read1_end + 1 );
         mqual1 = qual1.substr ( 0, read1_end + 1 );
         mread2 = read2.substr ( read2_begin );
-        mread2 = read2.substr ( read2_begin );
+        mqual2 = qual2.substr ( read2_begin );
     }
     else {
         // not stitchable
@@ -354,6 +374,8 @@ std::string sw::stitch_two_reads ( const std::vector<std::string> & v1,
             mid += ( mqual1[i] >= mqual2[i] ) ? mread1[i] : mread2[i];
         }
     }
+
+    average_quals ( mqual1, mqual2 );
 
     std::string stitched_read = lt_ext + mid + rt_ext;
 
