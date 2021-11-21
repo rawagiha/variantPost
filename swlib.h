@@ -5,11 +5,9 @@
 #include <vector>
 #include <string.h>
 
-namespace sw
-{
+namespace sw {
 
-struct Alignment
-{
+struct Alignment {
     uint16_t alignment_score;
     int32_t  ref_begin;
     int32_t  ref_end;
@@ -17,19 +15,18 @@ struct Alignment
     int32_t  query_end;
     std::string cigar_string;
 
-    Alignment(uint16_t alignment_score, int32_t  ref_begin, int32_t  ref_end,
-              int32_t  query_begin, int32_t  query_end, const std::string & cigar_string);
+    Alignment ( uint16_t alignment_score, int32_t  ref_begin, int32_t  ref_end,
+                int32_t  query_begin, int32_t  query_end, const std::string & cigar_string );
 };
 
-Alignment align( const std::string & ref,
-                 const std::string & query,
-                 const uint8_t & match_score,
-                 const uint8_t & mismatch_penalty,
-                 const uint8_t & gap_open_penalty,
-                 const uint8_t & gap_extending_penalty);
+Alignment align ( const std::string & ref,
+                  const std::string & query,
+                  const uint8_t & match_score,
+                  const uint8_t & mismatch_penalty,
+                  const uint8_t & gap_open_penalty,
+                  const uint8_t & gap_extending_penalty );
 
-struct ParsedVariant
-{
+struct ParsedVariant {
     bool is_indel;
     bool is_ins;
     bool is_del;
@@ -47,14 +44,15 @@ struct ParsedVariant
     uint32_t genomic_pos;
 };
 
-std::vector<ParsedVariant> find_variants(
+std::vector<ParsedVariant> find_variants (
     const Alignment & alignment,
     const std::string & ref,
     const std::string & query,
-    const uint32_t & genomic_ref_start = 0);
+    const uint32_t & genomic_ref_start = 0 );
 
 
-std::string stitch_two_reads(const std::vector<std::string> & v1, const std::vector<std::string> & v2);
+std::vector<std::string> stitch_two_reads ( const std::vector<std::string> & v1,
+        const std::vector<std::string> & v2 );
 
 
 } //end of name sw

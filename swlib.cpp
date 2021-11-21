@@ -309,8 +309,9 @@ void average_quals ( std::string & v1, std::string & v2 )
 
 
 //expect cleaneds read as input
-std::string sw::stitch_two_reads ( const std::vector<std::string> & v1,
-                                   const std::vector<std::string> & v2 )
+std::vector<std::string> sw::stitch_two_reads ( const std::vector<std::string> &
+        v1,
+        const std::vector<std::string> & v2 )
 {
 
     std::string read1 = v1[0];
@@ -340,10 +341,12 @@ std::string sw::stitch_two_reads ( const std::vector<std::string> & v1,
     std::cout << read1_begin << ", " << read1_end << std::endl;
     std::cout << read2_begin << ", " << read2_end << std::endl;
 
-    std::string lt_ext, rt_ext, mread1, mqual1, mread2, mqual2;
+    std::string lt_ext, lt_qual, rt_ext, rt_qual, mread1, mqual1, mread2, mqual2;
     if ( read2_begin == 0 ) {
         lt_ext = read1.substr ( 0, read1_begin );
+        lt_qual = qual1.substr ( 0, read1_begin );
         rt_ext = read2.substr ( read2_end + 1 );
+        rt_qual = qual2.substr ( read2_end + 1 );
 
         mread1 = read1.substr ( read1_begin );
         mqual1 = qual1.substr ( read1_begin );
@@ -352,7 +355,9 @@ std::string sw::stitch_two_reads ( const std::vector<std::string> & v1,
     }
     else if ( read1_begin == 0 ) {
         lt_ext = read2.substr ( 0, read2_begin );
+        lt_qual = qual2.substr ( 0, read2_begin );
         rt_ext = read1.substr ( read1_end + 1 );
+        rt_qual = qual1.substr ( read1_end + 1 );
 
         mread1 = read1.substr ( 0, read1_end + 1 );
         mqual1 = qual1.substr ( 0, read1_end + 1 );
@@ -378,8 +383,9 @@ std::string sw::stitch_two_reads ( const std::vector<std::string> & v1,
     average_quals ( mqual1, mqual2 );
 
     std::string stitched_read = lt_ext + mid + rt_ext;
-
-    return stitched_read;
+    std::string stitched_qual = lt_qual + mqual1 + rt_qual;
+    std::vector<std::string> ret = {stitched_read, stitched_qual};
+    return ret;
 }
 
 
