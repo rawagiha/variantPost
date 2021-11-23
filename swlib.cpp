@@ -324,6 +324,7 @@ std::vector<std::string> sw::stitch_two_reads ( const std::vector<std::string> &
     const int mismatch_penalty = 0;
     const int gap_open_penalty = std::max ( read1.size(), read2.size() );
     const int gap_extention_penalty = 1;
+    
     sw::Alignment aln = sw::align ( read1, read2, match_score, mismatch_penalty,
                                     gap_open_penalty, gap_extention_penalty );
 
@@ -389,4 +390,7 @@ std::vector<std::string> sw::stitch_two_reads ( const std::vector<std::string> &
 }
 
 
-
+std::string flatten_reads(std::vector<std::vector<std::string>> & reads) 
+{
+    //
+}
