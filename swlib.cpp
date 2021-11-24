@@ -1,6 +1,7 @@
 #include <iostream>
 #include <algorithm>
 #include <string>
+#include <deque>
 #include <vector>
 #include <regex>
 #include <string.h>
@@ -53,6 +54,7 @@ sw::Alignment sw::align ( const std::string & ref,
 
     return alignment;
 }
+
 
 //@Function:
 //      Parse CIGAR to a list. 60=2D8I32=1S -> [60=, 2D, 8I, 32=, 1S]
@@ -324,7 +326,7 @@ std::vector<std::string> sw::stitch_two_reads ( const std::vector<std::string> &
     const int mismatch_penalty = 0;
     const int gap_open_penalty = std::max ( read1.size(), read2.size() );
     const int gap_extention_penalty = 1;
-    
+
     sw::Alignment aln = sw::align ( read1, read2, match_score, mismatch_penalty,
                                     gap_open_penalty, gap_extention_penalty );
 
@@ -386,11 +388,24 @@ std::vector<std::string> sw::stitch_two_reads ( const std::vector<std::string> &
     std::string stitched_read = lt_ext + mid + rt_ext;
     std::string stitched_qual = lt_qual + mqual1 + rt_qual;
     std::vector<std::string> ret = {stitched_read, stitched_qual};
+
     return ret;
 }
 
 
-std::string flatten_reads(std::vector<std::vector<std::string>> & reads) 
+struct BaseCount {
+    int a, c, g, t;
+};
+
+void update ( std::deque<BaseCount> & consensus,  const int & read2_begin,
+              const std::string & lt_ext, const std::string & mread1,
+              const std::string & mread2, const std::string & rt_ext )
 {
-    //
+
+}
+
+
+std::string flatten_reads ( std::vector<std::vector<std::string>> & reads )
+{
+//
 }
