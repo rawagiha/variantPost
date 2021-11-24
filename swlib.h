@@ -51,10 +51,7 @@ std::vector<ParsedVariant> find_variants (
     const uint32_t & genomic_ref_start = 0 );
 
 
-std::vector<std::string> stitch_two_reads ( const std::vector<std::string> & v1,
-        const std::vector<std::string> & v2 );
-
-
+std::string flatten_reads ( std::vector<std::vector<std::string>> & reads );
 } //end of name sw
 
 #endif

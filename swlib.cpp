@@ -380,7 +380,7 @@ void average_quals ( std::string & v1, std::string & v2 )
 
 
 //expect cleaneds read as input
-std::vector<std::string> sw::stitch_two_reads ( const std::vector<std::string> &
+std::vector<std::string> stitch_two_reads ( const std::vector<std::string> &
         v1,
         const std::vector<std::string> & v2, std::deque<BaseCount> & consensus)
 {
@@ -441,6 +441,7 @@ std::vector<std::string> sw::stitch_two_reads ( const std::vector<std::string> &
     }
 
     
+    update ( consensus, read2_begin, lt_ext, mread1, mread2, rt_ext );
     
     // do middle part
     std::string mid = "";
@@ -466,13 +467,21 @@ std::vector<std::string> sw::stitch_two_reads ( const std::vector<std::string> &
 
 
 
-std::string flatten_reads ( std::vector<std::vector<std::string>> & reads )
+std::string sw::flatten_reads ( std::vector<std::vector<std::string>> & reads )
 {
     std::deque<BaseCount>  consensus;
     std::string read1 = reads[0][0];
     for (size_t i = 0; i < read1.size(); ++i) {
-        consensus.emplace_back(BaseCount(read1[i]);
+        consensus.emplace_back(BaseCount(read1[i]));
     }
 
+    stitch_two_reads(reads[0], reads[1], consensus);
+    
+    for (size_t i = 0; i < consensus.size(); ++i) {
+        BaseCount c = consensus[i];
+        std::cout << c.a << c.c << c.g << c.t << std::endl;
+    }
+    
+    return "str";
 }
 
