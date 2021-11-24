@@ -11,9 +11,9 @@
 #include "swlib.h"
 
 
-sw::Alignment::Alignment ( uint16_t __alignment_score, int32_t  __ref_begin,
-                           int32_t  __ref_end, int32_t  __query_begin, int32_t  __query_end,
-                           const std::string & __cigar_string )
+sw::Alignment::Alignment( uint16_t __alignment_score, int32_t  __ref_begin,
+                          int32_t  __ref_end, int32_t  __query_begin, int32_t  __query_end,
+                          const std::string & __cigar_string )
 {
     alignment_score = __alignment_score;
     ref_begin = __ref_begin;
@@ -24,33 +24,33 @@ sw::Alignment::Alignment ( uint16_t __alignment_score, int32_t  __ref_begin,
 }
 
 
-sw::Alignment sw::align ( const std::string & ref,
-                          const std::string & query,
-                          const uint8_t & match_score,
-                          const uint8_t & mismatch_penalty,
-                          const uint8_t & gap_open_penalty,
-                          const uint8_t & gap_extending_penalty )
+sw::Alignment sw::align( const std::string & ref,
+                         const std::string & query,
+                         const uint8_t & match_score,
+                         const uint8_t & mismatch_penalty,
+                         const uint8_t & gap_open_penalty,
+                         const uint8_t & gap_extending_penalty )
 {
 
-    int32_t mask_len = strlen ( query.c_str() ) / 2;
+    int32_t mask_len = strlen( query.c_str() ) / 2;
     mask_len = mask_len < 15 ? 15 : mask_len;
 
     StripedSmithWaterman::Alignment __alignment;
 
-    StripedSmithWaterman::Aligner aligner ( match_score,
-                                            mismatch_penalty,
-                                            gap_open_penalty,
-                                            gap_extending_penalty );
+    StripedSmithWaterman::Aligner aligner( match_score,
+                                           mismatch_penalty,
+                                           gap_open_penalty,
+                                           gap_extending_penalty );
 
     StripedSmithWaterman::Filter filter;
 
-    aligner.Align ( query.c_str(), ref.c_str(), ref.size(), filter, &__alignment,
-                    mask_len );
+    aligner.Align( query.c_str(), ref.c_str(), ref.size(), filter, &__alignment,
+                   mask_len );
 
 
-    sw::Alignment alignment ( __alignment.sw_score, __alignment.ref_begin,
-                              __alignment.ref_end, __alignment.query_begin, __alignment.query_end,
-                              __alignment.cigar_string );
+    sw::Alignment alignment( __alignment.sw_score, __alignment.ref_begin,
+                             __alignment.ref_end, __alignment.query_begin, __alignment.query_end,
+                             __alignment.cigar_string );
 
     return alignment;
 }
@@ -58,31 +58,31 @@ sw::Alignment sw::align ( const std::string & ref,
 
 //@Function:
 //      Parse CIGAR to a list. 60=2D8I32=1S -> [60=, 2D, 8I, 32=, 1S]
-std::vector<std::string> decompose_cigar_string ( const std::string &
+std::vector<std::string> decompose_cigar_string( const std::string &
         cigar_string )
 {
-    std::regex cigar_pattern ( R"(\d+[MIDNSHPX=])" );
+    std::regex cigar_pattern( R"(\d+[MIDNSHPX=])" );
 
-    std::regex_iterator<std::string::const_iterator> cigar_itr (
+    std::regex_iterator<std::string::const_iterator> cigar_itr(
         cigar_string.begin(),
         cigar_string.end(), cigar_pattern );
     std::regex_iterator<std::string::const_iterator> end_of_itr;
 
     std::vector<std::string> cigarette;
     while ( cigar_itr != end_of_itr ) {
-        cigarette.push_back ( ( *cigar_itr ).str() );
+        cigarette.push_back( ( *cigar_itr ).str() );
         ++cigar_itr;
     }
 
     return cigarette;
 }
 
-bool is_gap ( std::string cigar_itr )
+bool is_gap( std::string cigar_itr )
 {
     return (
-               ( cigar_itr.find ( "I" ) != std::string::npos )
+               ( cigar_itr.find( "I" ) != std::string::npos )
                ||
-               ( cigar_itr.find ( "D" ) != std::string::npos )
+               ( cigar_itr.find( "D" ) != std::string::npos )
            );
 }
 
@@ -90,15 +90,15 @@ bool is_gap ( std::string cigar_itr )
 //      Check if there exist consecutive gaps (I or D)
 //      [60=, 2D, 8I, 32=, 1S] -> true
 //      [60=, 6I, 2X, 32=, 1S] -> false
-bool has_consecutive_gap ( const std::vector<std::string> & cigarette )
+bool has_consecutive_gap( const std::vector<std::string> & cigarette )
 {
     bool prev_is_gap = false;
     for ( std::vector<std::string>::const_iterator itr = cigarette.begin();
             itr != cigarette.end(); ++itr ) {
-        if ( ( prev_is_gap ) && is_gap ( ( *itr ) ) ) {
+        if ( ( prev_is_gap ) && is_gap( ( *itr ) ) ) {
             return true;
         }
-        prev_is_gap = is_gap ( ( *itr ) );
+        prev_is_gap = is_gap( ( *itr ) );
     }
     return false;
 }
@@ -107,8 +107,8 @@ bool has_consecutive_gap ( const std::vector<std::string> & cigarette )
 //@Function:
 //      Merge gaps into a signle gap of specified type
 //      [4I, 2I] -> "6I"
-std::string concat_gaps ( const std::vector<std::string> & cigarette,
-                          std::string  gap_type )
+std::string concat_gaps( const std::vector<std::string> & cigarette,
+                         std::string  gap_type )
 {
     std::string gaps;
 
@@ -117,10 +117,10 @@ std::string concat_gaps ( const std::vector<std::string> & cigarette,
 
         for ( std::vector<std::string>::const_iterator itr = cigarette.begin();
                 itr != cigarette.end(); ++itr ) {
-            total_gap_len += std::stoi ( ( *itr ).substr ( 0, ( *itr ).length() - 1 ) );
+            total_gap_len += std::stoi( ( *itr ).substr( 0, ( *itr ).length() - 1 ) );
         }
 
-        gaps = std::to_string ( total_gap_len ) + gap_type;
+        gaps = std::to_string( total_gap_len ) + gap_type;
     }
 
     return gaps;
@@ -131,60 +131,60 @@ std::string concat_gaps ( const std::vector<std::string> & cigarette,
 //      Merge consecutive gaps and make insertion come first
 //      [4=, 2I, 2D, 1I, 3=, 3D, 1I, 2D, 4I, 4=]
 //      -> [4=, 3I, 2D, 3=, 5I, 5D, 4=]
-void edit_cigar ( std::vector<std::string> & cigarette )
+void edit_cigar( std::vector<std::string> & cigarette )
 {
     std::vector<std::string> tmp, ins, del;
 
     bool prev_is_gap = false;
     for ( std::vector<std::string>::const_iterator itr = cigarette.begin();
             itr != cigarette.end(); ++itr ) {
-        if ( is_gap ( ( *itr ) ) ) {
-            if ( ( *itr ).find ( "I" ) != std::string::npos ) {
-                ins.push_back ( *itr );
+        if ( is_gap( ( *itr ) ) ) {
+            if ( ( *itr ).find( "I" ) != std::string::npos ) {
+                ins.push_back( *itr );
             }
             else {
-                del.push_back ( *itr );
+                del.push_back( *itr );
             }
             prev_is_gap = true;
         }
         else {
             if ( prev_is_gap ) {
-                std::string merged_ins = concat_gaps ( ins, "I" );
+                std::string merged_ins = concat_gaps( ins, "I" );
                 if ( !merged_ins.empty() ) {
-                    tmp.push_back ( merged_ins );
+                    tmp.push_back( merged_ins );
                 }
-                std::string merged_del = concat_gaps ( del, "D" );
+                std::string merged_del = concat_gaps( del, "D" );
                 if ( !merged_del.empty() ) {
-                    tmp.push_back ( merged_del );
+                    tmp.push_back( merged_del );
                 }
-                tmp.push_back ( *itr );
+                tmp.push_back( *itr );
                 ins.clear();
                 del.clear();
             }
             else {
-                tmp.push_back ( *itr );
+                tmp.push_back( *itr );
             }
 
             prev_is_gap = false;
         }
     }
-    std::swap ( cigarette, tmp );
+    std::swap( cigarette, tmp );
 }
 
 
-std::vector<sw::ParsedVariant> sw::find_variants ( const sw::Alignment &
+std::vector<sw::ParsedVariant> sw::find_variants( const sw::Alignment &
         alignment,
         const std::string & ref,
         const std::string & query,
         const uint32_t & genomic_ref_start )
 {
 
-    std::vector<std::string> cigarette = decompose_cigar_string (
+    std::vector<std::string> cigarette = decompose_cigar_string(
             alignment.cigar_string );
     std::vector<sw::ParsedVariant> variants;
 
-    if ( has_consecutive_gap ( cigarette ) ) {
-        edit_cigar ( cigarette );
+    if ( has_consecutive_gap( cigarette ) ) {
+        edit_cigar( cigarette );
     }
 
     uint32_t genomic_pos = ( genomic_ref_start > 0 ) ? genomic_ref_start - 1 : 0;
@@ -195,8 +195,8 @@ std::vector<sw::ParsedVariant> sw::find_variants ( const sw::Alignment &
             itr != cigarette.end(); ++itr ) {
 
         char operation = ( *itr ).back(); // cigar operation
-        uint16_t op_len = std::stoi ( ( *itr ).substr ( 0,
-                                      ( *itr ).length() - 1 ) ); // operation length
+        uint16_t op_len = std::stoi( ( *itr ).substr( 0,
+                                     ( *itr ).length() - 1 ) ); // operation length
 
         if ( operation == 'I' ) {
             sw::ParsedVariant ins;
@@ -205,20 +205,20 @@ std::vector<sw::ParsedVariant> sw::find_variants ( const sw::Alignment &
             ins.is_ins = true;
             ins.is_del = false;
 
-            ins.lt_ref = ref.substr ( 0, ref_idx );
-            ins.lt_query = query.substr ( 0, query_idx );
-            ins.ins_seq = query.substr ( query_idx, op_len );
+            ins.lt_ref = ref.substr( 0, ref_idx );
+            ins.lt_query = query.substr( 0, query_idx );
+            ins.ins_seq = query.substr( query_idx, op_len );
             ins.variant_len = op_len;
-            ins.rt_ref = ref.substr ( ref_idx );
-            ins.rt_query = query.substr ( query_idx + op_len );
+            ins.rt_ref = ref.substr( ref_idx );
+            ins.rt_query = query.substr( query_idx + op_len );
 
-            ins.lt_clipped_segment = query.substr ( 0, alignment.query_begin );
-            ins.rt_clipped_segment = query.substr ( alignment.query_end + 1,
-                                                    query.length() - alignment.query_end );
+            ins.lt_clipped_segment = query.substr( 0, alignment.query_begin );
+            ins.rt_clipped_segment = query.substr( alignment.query_end + 1,
+                                                   query.length() - alignment.query_end );
 
             ins.genomic_pos = genomic_pos;
 
-            variants.push_back ( ins );
+            variants.push_back( ins );
 
             query_idx += op_len;
 
@@ -230,20 +230,20 @@ std::vector<sw::ParsedVariant> sw::find_variants ( const sw::Alignment &
             del.is_ins = false;
             del.is_del = true;
 
-            del.lt_ref = ref.substr ( 0, ref_idx );
-            del.lt_query = query.substr ( 0, query_idx );
-            del.del_seq = ref.substr ( ref_idx, op_len );
+            del.lt_ref = ref.substr( 0, ref_idx );
+            del.lt_query = query.substr( 0, query_idx );
+            del.del_seq = ref.substr( ref_idx, op_len );
             del.variant_len = op_len;
-            del.rt_ref = ref.substr ( ref_idx + op_len );
-            del.rt_query = query.substr ( query_idx );
+            del.rt_ref = ref.substr( ref_idx + op_len );
+            del.rt_query = query.substr( query_idx );
 
-            del.lt_clipped_segment = query.substr ( 0, alignment.query_begin );
-            del.rt_clipped_segment = query.substr ( alignment.query_end + 1,
-                                                    query.length() - alignment.query_end );
+            del.lt_clipped_segment = query.substr( 0, alignment.query_begin );
+            del.rt_clipped_segment = query.substr( alignment.query_end + 1,
+                                                   query.length() - alignment.query_end );
 
             del.genomic_pos = genomic_pos;
 
-            variants.push_back ( del );
+            variants.push_back( del );
 
             ref_idx += op_len;
             genomic_pos += op_len;
@@ -255,21 +255,21 @@ std::vector<sw::ParsedVariant> sw::find_variants ( const sw::Alignment &
             smv.is_ins = false;
             smv.is_del = false;
 
-            smv.lt_ref = ref.substr ( 0, ref_idx );
-            smv.lt_query = query.substr ( 0, query_idx );
-            smv.ref_base = ref.substr ( ref_idx, op_len );
-            smv.alt_base = query.substr ( query_idx, op_len );
+            smv.lt_ref = ref.substr( 0, ref_idx );
+            smv.lt_query = query.substr( 0, query_idx );
+            smv.ref_base = ref.substr( ref_idx, op_len );
+            smv.alt_base = query.substr( query_idx, op_len );
             smv.variant_len = op_len;
-            smv.rt_ref = ref.substr ( ref_idx + op_len );
-            smv.rt_query = query.substr ( query_idx + op_len );
+            smv.rt_ref = ref.substr( ref_idx + op_len );
+            smv.rt_query = query.substr( query_idx + op_len );
 
-            smv.lt_clipped_segment = query.substr ( 0, alignment.query_begin );
-            smv.rt_clipped_segment = query.substr ( alignment.query_end + 1,
-                                                    query.length() - alignment.query_end );
+            smv.lt_clipped_segment = query.substr( 0, alignment.query_begin );
+            smv.rt_clipped_segment = query.substr( alignment.query_end + 1,
+                                                   query.length() - alignment.query_end );
 
             smv.genomic_pos = genomic_pos;
 
-            variants.push_back ( smv );
+            variants.push_back( smv );
 
             ref_idx += op_len;
             query_idx += op_len;
@@ -296,8 +296,9 @@ struct BaseCount {
 
     BaseCount() {}
 
-    BaseCount(char base) {
-        switch (base) {
+    BaseCount( char base )
+    {
+        switch ( base ) {
         case 'A':
             a = 1;
             break;
@@ -314,9 +315,10 @@ struct BaseCount {
             break;
         }
     }
-    
-    void add(char base) {
-        switch (base) {
+
+    void add( char base )
+    {
+        switch ( base ) {
         case 'A':
             ++a;
             break;
@@ -332,25 +334,25 @@ struct BaseCount {
         default:
             break;
         }
-    } 
+    }
 };
 
 
-void update ( std::deque<BaseCount> & consensus,  const int & read2_begin,
-              const std::string & lt_ext, const std::string & mread1,
-              const std::string & mread2, const std::string & rt_ext )
+void update( std::deque<BaseCount> & consensus,  const int & read2_begin,
+             const std::string & lt_ext, const std::string & mread1,
+             const std::string & mread2, const std::string & rt_ext )
 {
-    if (read2_begin == 0) {
-        
+    if ( read2_begin == 0 ) {
+
         // update middle part
         const auto lt_len = lt_ext.size();
-        for (size_t i = lt_len; i < consensus.size(); ++i) {
-            consensus[i].add(mread2[i - lt_len]);
+        for ( size_t i = lt_len; i < consensus.size(); ++i ) {
+            consensus[i].add( mread2[i - lt_len] );
         }
 
         // rt extention
-        for (size_t i = 0; i < rt_ext.size(); ++i) {
-            consensus.emplace_back(BaseCount(rt_ext[i]));
+        for ( size_t i = 0; i < rt_ext.size(); ++i ) {
+            consensus.emplace_back( BaseCount( rt_ext[i] ) );
         }
     }
     else {
@@ -359,7 +361,7 @@ void update ( std::deque<BaseCount> & consensus,  const int & read2_begin,
 }
 
 
-void average_quals ( std::string & v1, std::string & v2 )
+void average_quals( std::string & v1, std::string & v2 )
 {
     auto v1_len = v1.size();
     auto v2_len = v2.size();
@@ -368,9 +370,9 @@ void average_quals ( std::string & v1, std::string & v2 )
 
     for ( int i = 0; i < v1_len; i ++ ) {
 
-        int q1 = static_cast<int> ( v1[i] );
-        int q2 = static_cast<int> ( v2[i] );
-        char q = static_cast<char> ( static_cast<int> ( ( q1 + q2 ) / 2 ) );
+        int q1 = static_cast<int>( v1[i] );
+        int q2 = static_cast<int>( v2[i] );
+        char q = static_cast<char>( static_cast<int>( ( q1 + q2 ) / 2 ) );
         //char q = 'l';
         v1[i] = q;
         v2[i] = q;
@@ -380,9 +382,9 @@ void average_quals ( std::string & v1, std::string & v2 )
 
 
 //expect cleaneds read as input
-std::vector<std::string> stitch_two_reads ( const std::vector<std::string> &
+std::vector<std::string> stitch_two_reads( const std::vector<std::string> &
         v1,
-        const std::vector<std::string> & v2, std::deque<BaseCount> & consensus)
+        const std::vector<std::string> & v2, std::deque<BaseCount> & consensus )
 {
 
     std::string read1 = v1[0];
@@ -393,13 +395,13 @@ std::vector<std::string> stitch_two_reads ( const std::vector<std::string> &
     // gap-less alignment
     const int match_score = 2;
     const int mismatch_penalty = 0;
-    const int gap_open_penalty = std::max ( read1.size(), read2.size() );
+    const int gap_open_penalty = std::max( read1.size(), read2.size() );
     const int gap_extention_penalty = 1;
 
-    sw::Alignment aln = sw::align ( read1, read2, match_score, mismatch_penalty,
-                                    gap_open_penalty, gap_extention_penalty );
+    sw::Alignment aln = sw::align( read1, read2, match_score, mismatch_penalty,
+                                   gap_open_penalty, gap_extention_penalty );
 
-    std::vector<std::string> cigar_vec = decompose_cigar_string (
+    std::vector<std::string> cigar_vec = decompose_cigar_string(
             aln.cigar_string );
     const int read1_begin = aln.ref_begin;
     const int read1_end = aln.ref_end;
@@ -415,34 +417,34 @@ std::vector<std::string> stitch_two_reads ( const std::vector<std::string> &
 
     std::string lt_ext, lt_qual, rt_ext, rt_qual, mread1, mqual1, mread2, mqual2;
     if ( read2_begin == 0 ) {
-        lt_ext = read1.substr ( 0, read1_begin );
-        lt_qual = qual1.substr ( 0, read1_begin );
-        rt_ext = read2.substr ( read2_end + 1 );
-        rt_qual = qual2.substr ( read2_end + 1 );
+        lt_ext = read1.substr( 0, read1_begin );
+        lt_qual = qual1.substr( 0, read1_begin );
+        rt_ext = read2.substr( read2_end + 1 );
+        rt_qual = qual2.substr( read2_end + 1 );
 
-        mread1 = read1.substr ( read1_begin );
-        mqual1 = qual1.substr ( read1_begin );
-        mread2 = read2.substr ( 0, read2_end + 1 );
-        mqual2 = qual2.substr ( 0, read2_end + 1 );
+        mread1 = read1.substr( read1_begin );
+        mqual1 = qual1.substr( read1_begin );
+        mread2 = read2.substr( 0, read2_end + 1 );
+        mqual2 = qual2.substr( 0, read2_end + 1 );
     }
     else if ( read1_begin == 0 ) {
-        lt_ext = read2.substr ( 0, read2_begin );
-        lt_qual = qual2.substr ( 0, read2_begin );
-        rt_ext = read1.substr ( read1_end + 1 );
-        rt_qual = qual1.substr ( read1_end + 1 );
+        lt_ext = read2.substr( 0, read2_begin );
+        lt_qual = qual2.substr( 0, read2_begin );
+        rt_ext = read1.substr( read1_end + 1 );
+        rt_qual = qual1.substr( read1_end + 1 );
 
-        mread1 = read1.substr ( 0, read1_end + 1 );
-        mqual1 = qual1.substr ( 0, read1_end + 1 );
-        mread2 = read2.substr ( read2_begin );
-        mqual2 = qual2.substr ( read2_begin );
+        mread1 = read1.substr( 0, read1_end + 1 );
+        mqual1 = qual1.substr( 0, read1_end + 1 );
+        mread2 = read2.substr( read2_begin );
+        mqual2 = qual2.substr( read2_begin );
     }
     else {
         // not stitchable
     }
 
-    
-    update ( consensus, read2_begin, lt_ext, mread1, mread2, rt_ext );
-    
+
+    update( consensus, read2_begin, lt_ext, mread1, mread2, rt_ext );
+
     // do middle part
     std::string mid = "";
     const std::string::size_type mid_len = mread1.size();
@@ -455,7 +457,7 @@ std::vector<std::string> stitch_two_reads ( const std::vector<std::string> &
         }
     }
 
-    average_quals ( mqual1, mqual2 );
+    average_quals( mqual1, mqual2 );
 
     std::string stitched_read = lt_ext + mid + rt_ext;
     std::string stitched_qual = lt_qual + mqual1 + rt_qual;
@@ -467,21 +469,21 @@ std::vector<std::string> stitch_two_reads ( const std::vector<std::string> &
 
 
 
-std::string sw::flatten_reads ( std::vector<std::vector<std::string>> & reads )
+std::string sw::flatten_reads( std::vector<std::vector<std::string>> & reads )
 {
     std::deque<BaseCount>  consensus;
     std::string read1 = reads[0][0];
-    for (size_t i = 0; i < read1.size(); ++i) {
-        consensus.emplace_back(BaseCount(read1[i]));
+    for ( size_t i = 0; i < read1.size(); ++i ) {
+        consensus.emplace_back( BaseCount( read1[i] ) );
     }
 
-    stitch_two_reads(reads[0], reads[1], consensus);
-    
-    for (size_t i = 0; i < consensus.size(); ++i) {
+    stitch_two_reads( reads[0], reads[1], consensus );
+
+    for ( size_t i = 0; i < consensus.size(); ++i ) {
         BaseCount c = consensus[i];
         std::cout << c.a << c.c << c.g << c.t << std::endl;
     }
-    
+
     return "str";
 }
 
