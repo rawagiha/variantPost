@@ -290,6 +290,75 @@ std::vector<sw::ParsedVariant> sw::find_variants ( const sw::Alignment &
 }
 
 
+//
+struct BaseCount {
+    int a = 0, c = 0, g = 0, t = 0;
+
+    BaseCount() {}
+
+    BaseCount(char base) {
+        switch (base) {
+        case 'A':
+            a = 1;
+            break;
+        case 'C':
+            c = 1;
+            break;
+        case 'G':
+            g = 1;
+            break;
+        case 'T':
+            t = 1;
+            break;
+        default:
+            break;
+        }
+    }
+    
+    void add(char base) {
+        switch (base) {
+        case 'A':
+            ++a;
+            break;
+        case 'C':
+            ++c;
+            break;
+        case 'G':
+            ++g;
+            break;
+        case 'T':
+            ++t;
+            break;
+        default:
+            break;
+        }
+    } 
+};
+
+
+void update ( std::deque<BaseCount> & consensus,  const int & read2_begin,
+              const std::string & lt_ext, const std::string & mread1,
+              const std::string & mread2, const std::string & rt_ext )
+{
+    if (read2_begin == 0) {
+        
+        // update middle part
+        const auto lt_len = lt_ext.size();
+        for (size_t i = lt_len; i < consensus.size(); ++i) {
+            consensus[i].add(mread2[i - lt_len]);
+        }
+
+        // rt extention
+        for (size_t i = 0; i < rt_ext.size(); ++i) {
+            consensus.emplace_back(BaseCount(rt_ext[i]));
+        }
+    }
+    else {
+        //
+    }
+}
+
+
 void average_quals ( std::string & v1, std::string & v2 )
 {
     auto v1_len = v1.size();
@@ -313,7 +382,7 @@ void average_quals ( std::string & v1, std::string & v2 )
 //expect cleaneds read as input
 std::vector<std::string> sw::stitch_two_reads ( const std::vector<std::string> &
         v1,
-        const std::vector<std::string> & v2 )
+        const std::vector<std::string> & v2, std::deque<BaseCount> & consensus)
 {
 
     std::string read1 = v1[0];
@@ -371,6 +440,8 @@ std::vector<std::string> sw::stitch_two_reads ( const std::vector<std::string> &
         // not stitchable
     }
 
+    
+    
     // do middle part
     std::string mid = "";
     const std::string::size_type mid_len = mread1.size();
@@ -393,19 +464,15 @@ std::vector<std::string> sw::stitch_two_reads ( const std::vector<std::string> &
 }
 
 
-struct BaseCount {
-    int a, c, g, t;
-};
-
-void update ( std::deque<BaseCount> & consensus,  const int & read2_begin,
-              const std::string & lt_ext, const std::string & mread1,
-              const std::string & mread2, const std::string & rt_ext )
-{
-
-}
 
 
 std::string flatten_reads ( std::vector<std::vector<std::string>> & reads )
 {
-//
+    std::deque<BaseCount>  consensus;
+    std::string read1 = reads[0][0];
+    for (size_t i = 0; i < read1.size(); ++i) {
+        consensus.emplace_back(BaseCount(read1[i]);
+    }
+
 }
+
