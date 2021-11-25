@@ -477,12 +477,16 @@ std::string sw::flatten_reads( std::vector<std::vector<std::string>> & reads )
         consensus.emplace_back( BaseCount( read1[i] ) );
     }
 
-    stitch_two_reads( reads[0], reads[1], consensus );
+    std::vector<std::string>  ss = stitch_two_reads( reads[0], reads[1], consensus );
 
+    stitch_two_reads( ss, reads[2], consensus );
+    
     for ( size_t i = 0; i < consensus.size(); ++i ) {
         BaseCount c = consensus[i];
         std::cout << c.a << c.c << c.g << c.t << std::endl;
     }
+
+
 
     return "str";
 }
