@@ -292,7 +292,7 @@ std::vector<sw::ParsedVariant> sw::find_variants( const sw::Alignment &
 
 //
 struct BaseCount {
-    int a = 0, c = 0, g = 0, t = 0;
+    int a = 0, c = 0, g = 0, t = 0, n = 0;
 
     BaseCount() {}
 
@@ -312,10 +312,12 @@ struct BaseCount {
             t = 1;
             break;
         default:
+            n = 1;
             break;
         }
     }
 
+    // TODO rename
     void add( char base )
     {
         switch ( base ) {
@@ -332,8 +334,19 @@ struct BaseCount {
             ++t;
             break;
         default:
+            ++n;
             break;
         }
+    }
+
+    char get_consensus() {
+        char bases[] = {'A', 'C', 'G', 'T', 'N'};
+        int scores[] = {a, c, g, t, n};
+        
+        int idx = std::distance(scores, std::max_element(scores, scores + 5));
+
+        return bases[idx];
+
     }
 };
 
@@ -483,7 +496,7 @@ std::string sw::flatten_reads( std::vector<std::vector<std::string>> & reads )
     
     for ( size_t i = 0; i < consensus.size(); ++i ) {
         BaseCount c = consensus[i];
-        std::cout << c.a << c.c << c.g << c.t << std::endl;
+        std::cout << c.a << c.c << c.g << c.t << c.n << std::endl;
     }
 
 
