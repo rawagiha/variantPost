@@ -296,45 +296,49 @@ struct BaseCount {
 
     BaseCount() {}
 
-    BaseCount( char base )
+    BaseCount( char base, char qual )
     {
+        int _qual = static_cast<int>(qual);
+
         switch ( base ) {
         case 'A':
-            a = 1;
+            a = _qual;
             break;
         case 'C':
-            c = 1;
+            c = _qual;
             break;
         case 'G':
-            g = 1;
+            g = _qual;
             break;
         case 'T':
-            t = 1;
+            t = _qual;
             break;
         default:
-            n = 1;
+            n = _qual;
             break;
         }
     }
 
     // TODO rename
-    void add( char base )
+    void add(char base, char qual)
     {
+        int _qual = static_cast<int>(qual);
+        
         switch ( base ) {
         case 'A':
-            ++a;
+            a += _qual;
             break;
         case 'C':
-            ++c;
+            c += _qual;
             break;
         case 'G':
-            ++g;
+            g += _qual;
             break;
         case 'T':
-            ++t;
+            t += _qual;
             break;
         default:
-            ++n;
+            n += _qual;
             break;
         }
     }
@@ -352,20 +356,22 @@ struct BaseCount {
 
 
 void update( std::deque<BaseCount> & consensus,  const int & read2_begin,
-             const std::string & lt_ext, const std::string & mread1,
-             const std::string & mread2, const std::string & rt_ext )
+             const std::string & lt_ext, const std::string & lt_qual,
+             const std::string & mread1, const std::string & mqual1,
+             const std::string & mread2, const std::string & mqual2,
+             const std::string & rt_ext, const std::string & rt_qual )
 {
     if ( read2_begin == 0 ) {
 
         // update middle part
         const auto lt_len = lt_ext.size();
         for ( size_t i = lt_len; i < consensus.size(); ++i ) {
-            consensus[i].add( mread2[i - lt_len] );
+            consensus[i].add( mread2[i - lt_len], mqual2[i - lt_len] );
         }
 
         // rt extention
         for ( size_t i = 0; i < rt_ext.size(); ++i ) {
-            consensus.emplace_back( BaseCount( rt_ext[i] ) );
+            consensus.emplace_back( BaseCount( rt_ext[i], rt_qual[i]) );
         }
     }
     else {
@@ -456,7 +462,7 @@ std::vector<std::string> stitch_two_reads( const std::vector<std::string> &
     }
 
 
-    update( consensus, read2_begin, lt_ext, mread1, mread2, rt_ext );
+    update( consensus, read2_begin, lt_ext, lt_qual, mread1, mqual1, mread2, mqual2, rt_ext, rt_qual );
 
     // do middle part
     std::string mid = "";
@@ -486,8 +492,9 @@ std::string sw::flatten_reads( std::vector<std::vector<std::string>> & reads )
 {
     std::deque<BaseCount>  consensus;
     std::string read1 = reads[0][0];
+    std::string qual1 = reads[0][1];
     for ( size_t i = 0; i < read1.size(); ++i ) {
-        consensus.emplace_back( BaseCount( read1[i] ) );
+        consensus.emplace_back( BaseCount( read1[i], qual1[i] ) );
     }
 
     std::vector<std::string>  ss = stitch_two_reads( reads[0], reads[1], consensus );
@@ -496,7 +503,7 @@ std::string sw::flatten_reads( std::vector<std::vector<std::string>> & reads )
     
     for ( size_t i = 0; i < consensus.size(); ++i ) {
         BaseCount c = consensus[i];
-        std::cout << c.a << c.c << c.g << c.t << c.n << std::endl;
+        std::cout << c.a << ":" << c.c << ":" << c.g << ":" << c.t << ":" << c.n << std::endl;
     }
 
 
