@@ -3,6 +3,7 @@
 #include <string>
 #include <deque>
 #include <vector>
+#include <iterator>
 #include <regex>
 #include <string.h>
 
@@ -290,31 +291,55 @@ std::vector<sw::ParsedVariant> sw::find_variants( const sw::Alignment &
 }
 
 
+namespace bases {
+    char bases[5] = {'A', 'C', 'G', 'T', 'N'};
+}
+
+template <typename T>
+std::vector<int> get_max_indices(const T & arr) {
+    std::vector<int> indices;
+
+    auto it = std::max_element(std::begin(arr), std::end(arr));
+    while (it != std::end(arr))
+    {
+        indices.push_back(std::distance(std::begin(arr), it));
+        it = std::find(std::next(it), std::end(arr), *it);
+    }
+    return indices;
+}
+
+
 //
 struct BaseCount {
-    int a = 0, c = 0, g = 0, t = 0, n = 0;
 
+    double a = 0.0, c = 0.0, g = 0.0, t = 0.0, n = 0.0;
+    double a_cnt = 0.0001, c_cnt = 0.0001, g_cnt = 0.0001, n_cnt = 0.0001
     BaseCount() {}
 
     BaseCount( char base, char qual )
     {
-        int _qual = static_cast<int>(qual);
+        double _qual = static_cast<double>(qual);
 
         switch ( base ) {
         case 'A':
             a = _qual;
+            ++a_cnt; 
             break;
         case 'C':
             c = _qual;
+            ++c_cnt;
             break;
         case 'G':
             g = _qual;
+            ++g_cnt;
             break;
         case 'T':
             t = _qual;
+            ++t_cnt;
             break;
         default:
             n = _qual;
+            ++n_cnt;
             break;
         }
     }
@@ -327,29 +352,38 @@ struct BaseCount {
         switch ( base ) {
         case 'A':
             a += _qual;
+            ++a_cnt;
             break;
         case 'C':
             c += _qual;
+            ++c_cnt;
             break;
         case 'G':
             g += _qual;
+            ++g_cnt;
             break;
         case 'T':
             t += _qual;
+            ++t_cnt;
             break;
         default:
             n += _qual;
+            ++n_cnt;
             break;
         }
     }
 
-    char get_consensus() {
-        char bases[] = {'A', 'C', 'G', 'T', 'N'};
-        int scores[] = {a, c, g, t, n};
+    std::vector<char> get_consensus() {
+        double counts[] = {a_cnt, c_cnt, g_cnt, t_cnt, n_cnt};
+        double quals[] = {a, c, g, t, n};
         
-        int idx = std::distance(scores, std::max_element(scores, scores + 5));
-
-        return bases[idx];
+        std::vector<int> max_cnt_indices = get_max_indices(counts);
+        
+         
+        double max_score = std::max_element(scores, scores + 5);
+        int idx = std::distance(scores, max_score);
+        std::vector<char> ret = {bases::bases[idx], static_cast<char>(max_score)};
+        return ret;
 
     }
 };
@@ -464,6 +498,15 @@ std::vector<std::string> stitch_two_reads( const std::vector<std::string> &
 
     update( consensus, read2_begin, lt_ext, lt_qual, mread1, mqual1, mread2, mqual2, rt_ext, rt_qual );
 
+   /*    
+    std::string ans = "";
+    for ( size_t i = 0; i < consensus.size(); ++i ) {
+        BaseCount c = consensus[i];
+        ans += c.get_consensus();
+        //std::cout << c.a << ":" << c.c << ":" << c.g << ":" << c.t << ":" << c.n << std::endl;
+    }
+    */
+     
     // do middle part
     std::string mid = "";
     const std::string::size_type mid_len = mread1.size();
@@ -481,7 +524,7 @@ std::vector<std::string> stitch_two_reads( const std::vector<std::string> &
     std::string stitched_read = lt_ext + mid + rt_ext;
     std::string stitched_qual = lt_qual + mqual1 + rt_qual;
     std::vector<std::string> ret = {stitched_read, stitched_qual};
-
+    
     return ret;
 }
 
@@ -501,11 +544,14 @@ std::string sw::flatten_reads( std::vector<std::vector<std::string>> & reads )
 
     stitch_two_reads( ss, reads[2], consensus );
     
+    std::string ans = "";
     for ( size_t i = 0; i < consensus.size(); ++i ) {
         BaseCount c = consensus[i];
-        std::cout << c.a << ":" << c.c << ":" << c.g << ":" << c.t << ":" << c.n << std::endl;
+        ans += c.get_consensus();
+        //std::cout << c.a << ":" << c.c << ":" << c.g << ":" << c.t << ":" << c.n << std::endl;
     }
-
+   
+    std::cout << ans << std::endl;
 
 
     return "str";
