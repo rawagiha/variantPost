@@ -423,7 +423,8 @@ void update( std::deque<BaseCount> & consensus,  const int & read2_begin,
         }
 
         //lt extention
-        for ( size_t i = lt_ext.size() - 1; i >= 0; i-- ) {
+        std::cout << lt_ext.size() << std::endl;
+        for ( int i = lt_ext.size() - 1; i >= 0; --i ) {
             consensus.emplace_front( BaseCount( lt_ext[i], lt_qual[i] ) );
         }
     }
@@ -462,7 +463,7 @@ void pairwise_stitch( std::deque<BaseCount> & consensus,
 
     // gap-less alignment
     const int match_score = 2;
-    const int mismatch_penalty = 0;
+    const int mismatch_penalty = 10;
     const int gap_open_penalty = std::max( read1.size(), read2.size() );
     const int gap_extention_penalty = 1;
 
@@ -476,6 +477,9 @@ void pairwise_stitch( std::deque<BaseCount> & consensus,
     const int read2_begin = aln.query_begin;
     const int read2_end = aln.query_end;
 
+    
+    //std::cout << aln.cigar_string << ", " << read1_begin << ", " << read1_end << ", " << read2_begin << ", " << read2_end << std::endl;
+    
     std::string lt_ext, lt_qual, rt_ext, rt_qual, mread1, mqual1, mread2, mqual2;
     if ( read2_begin == 0 ) {
         lt_ext = read1.substr( 0, read1_begin );
@@ -503,7 +507,7 @@ void pairwise_stitch( std::deque<BaseCount> & consensus,
     // check for stichability needed
     update( consensus, read2_begin, lt_ext, lt_qual, mread2, mqual2, rt_ext,
             rt_qual );
-
+   
 }
 
 
