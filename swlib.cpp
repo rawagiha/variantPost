@@ -5,6 +5,7 @@
 #include <vector>
 #include <iterator>
 #include <regex>
+#include <random>
 #include <string.h>
 
 
@@ -292,38 +293,40 @@ std::vector<sw::ParsedVariant> sw::find_variants( const sw::Alignment &
 
 
 namespace bases {
-    char bases[5] = {'A', 'C', 'G', 'T', 'N'};
+char bases[5] = {'A', 'C', 'G', 'T', 'N'};
 }
 
+
 template <typename T>
-std::vector<int> get_max_indices(const T & arr) {
+std::vector<int> get_max_indices( const T & arr )
+{
     std::vector<int> indices;
 
-    auto it = std::max_element(std::begin(arr), std::end(arr));
-    while (it != std::end(arr))
-    {
-        indices.push_back(std::distance(std::begin(arr), it));
-        it = std::find(std::next(it), std::end(arr), *it);
+    auto it = std::max_element( std::begin( arr ), std::end( arr ) );
+    while ( it != std::end( arr ) ) {
+        indices.push_back( std::distance( std::begin( arr ), it ) );
+        it = std::find( std::next( it ), std::end( arr ), *it );
     }
     return indices;
 }
 
 
-//
 struct BaseCount {
 
     double a = 0.0, c = 0.0, g = 0.0, t = 0.0, n = 0.0;
-    double a_cnt = 0.0001, c_cnt = 0.0001, g_cnt = 0.0001, n_cnt = 0.0001
+    double a_cnt = 0.0001, c_cnt = 0.0001, g_cnt = 0.0001, t_cnt = 0.0001,
+           n_cnt = 0.0001;
+
     BaseCount() {}
 
     BaseCount( char base, char qual )
     {
-        double _qual = static_cast<double>(qual);
+        double _qual = static_cast<double>( qual );
 
         switch ( base ) {
         case 'A':
             a = _qual;
-            ++a_cnt; 
+            ++a_cnt;
             break;
         case 'C':
             c = _qual;
@@ -344,11 +347,10 @@ struct BaseCount {
         }
     }
 
-    // TODO rename
-    void add(char base, char qual)
+    void add( char base, char qual )
     {
-        int _qual = static_cast<int>(qual);
-        
+        int _qual = static_cast<int>( qual );
+
         switch ( base ) {
         case 'A':
             a += _qual;
@@ -373,25 +375,31 @@ struct BaseCount {
         }
     }
 
-    std::vector<char> get_consensus() {
+    std::vector<char> get_consensus()
+    {
         double counts[] = {a_cnt, c_cnt, g_cnt, t_cnt, n_cnt};
         double quals[] = {a, c, g, t, n};
-        
-        std::vector<int> max_cnt_indices = get_max_indices(counts);
-        
-         
-        double max_score = std::max_element(scores, scores + 5);
-        int idx = std::distance(scores, max_score);
-        std::vector<char> ret = {bases::bases[idx], static_cast<char>(max_score)};
-        return ret;
 
+        std::vector<int> max_cnt_indices = get_max_indices( counts );
+
+        int max_idx;
+        if ( max_cnt_indices.size() > 1 ) {
+            std::vector<int> max_qual_indices = get_max_indices( quals );
+            max_idx = max_qual_indices[0];
+        }
+        else {
+            max_idx = max_cnt_indices[0];
+        }
+
+        std::vector<char> ret = {bases::bases[max_idx], static_cast<char>( quals[max_idx] / counts[max_idx] )};
+
+        return ret;
     }
 };
 
 
 void update( std::deque<BaseCount> & consensus,  const int & read2_begin,
              const std::string & lt_ext, const std::string & lt_qual,
-             const std::string & mread1, const std::string & mqual1,
              const std::string & mread2, const std::string & mqual2,
              const std::string & rt_ext, const std::string & rt_qual )
 {
@@ -405,45 +413,52 @@ void update( std::deque<BaseCount> & consensus,  const int & read2_begin,
 
         // rt extention
         for ( size_t i = 0; i < rt_ext.size(); ++i ) {
-            consensus.emplace_back( BaseCount( rt_ext[i], rt_qual[i]) );
+            consensus.emplace_back( BaseCount( rt_ext[i], rt_qual[i] ) );
         }
     }
     else {
-        //
+        // update middle part
+        for ( size_t i = 0; i < mread2.size(); ++i ) {
+            consensus[i].add( mread2[i], mqual2[i] );
+        }
+
+        //lt extention
+        for ( size_t i = lt_ext.size() - 1; i >= 0; i-- ) {
+            consensus.emplace_front( BaseCount( lt_ext[i], lt_qual[i] ) );
+        }
     }
 }
 
 
-void average_quals( std::string & v1, std::string & v2 )
+std::vector<std::string> get_consensus_contig( std::deque<BaseCount> &
+        consensus )
 {
-    auto v1_len = v1.size();
-    auto v2_len = v2.size();
 
-    //std::assert(v1_len == v2_len);
-
-    for ( int i = 0; i < v1_len; i ++ ) {
-
-        int q1 = static_cast<int>( v1[i] );
-        int q2 = static_cast<int>( v2[i] );
-        char q = static_cast<char>( static_cast<int>( ( q1 + q2 ) / 2 ) );
-        //char q = 'l';
-        v1[i] = q;
-        v2[i] = q;
+    std::string consensus_seq;
+    std::string consensus_qual;
+    for ( std::deque<BaseCount>::iterator itr = consensus.begin();
+            itr != consensus.end(); ++itr ) {
+        std::vector<char> c = ( *itr ).get_consensus();
+        consensus_seq += c[0];
+        consensus_qual += c[1];
     }
 
+    std::vector<std::string> ret {consensus_seq, consensus_qual};
+
+    return ret;
 }
 
 
-//expect cleaneds read as input
-std::vector<std::string> stitch_two_reads( const std::vector<std::string> &
-        v1,
-        const std::vector<std::string> & v2, std::deque<BaseCount> & consensus )
+void pairwise_stitch( std::deque<BaseCount> & consensus,
+                      const std::vector<std::string> & v )
 {
 
-    std::string read1 = v1[0];
-    std::string qual1 = v1[1];
-    std::string read2 = v2[0];
-    std::string qual2 = v2[1];
+    std::vector<std::string> c = get_consensus_contig( consensus );
+    std::string read1 = c[0];
+    std::string qual1 = c[1];
+
+    std::string read2 = v[0];
+    std::string qual2 = v[1];
 
     // gap-less alignment
     const int match_score = 2;
@@ -461,13 +476,6 @@ std::vector<std::string> stitch_two_reads( const std::vector<std::string> &
     const int read2_begin = aln.query_begin;
     const int read2_end = aln.query_end;
 
-    // TODOtest stitchable
-    // do by a separate func
-
-    std::cout << aln.cigar_string << std::endl;
-    std::cout << read1_begin << ", " << read1_end << std::endl;
-    std::cout << read2_begin << ", " << read2_end << std::endl;
-
     std::string lt_ext, lt_qual, rt_ext, rt_qual, mread1, mqual1, mread2, mqual2;
     if ( read2_begin == 0 ) {
         lt_ext = read1.substr( 0, read1_begin );
@@ -475,8 +483,6 @@ std::vector<std::string> stitch_two_reads( const std::vector<std::string> &
         rt_ext = read2.substr( read2_end + 1 );
         rt_qual = qual2.substr( read2_end + 1 );
 
-        mread1 = read1.substr( read1_begin );
-        mqual1 = qual1.substr( read1_begin );
         mread2 = read2.substr( 0, read2_end + 1 );
         mqual2 = qual2.substr( 0, read2_end + 1 );
     }
@@ -486,8 +492,6 @@ std::vector<std::string> stitch_two_reads( const std::vector<std::string> &
         rt_ext = read1.substr( read1_end + 1 );
         rt_qual = qual1.substr( read1_end + 1 );
 
-        mread1 = read1.substr( 0, read1_end + 1 );
-        mqual1 = qual1.substr( 0, read1_end + 1 );
         mread2 = read2.substr( read2_begin );
         mqual2 = qual2.substr( read2_begin );
     }
@@ -496,63 +500,42 @@ std::vector<std::string> stitch_two_reads( const std::vector<std::string> &
     }
 
 
-    update( consensus, read2_begin, lt_ext, lt_qual, mread1, mqual1, mread2, mqual2, rt_ext, rt_qual );
+    // check for stichability needed
+    update( consensus, read2_begin, lt_ext, lt_qual, mread2, mqual2, rt_ext,
+            rt_qual );
 
-   /*    
-    std::string ans = "";
-    for ( size_t i = 0; i < consensus.size(); ++i ) {
-        BaseCount c = consensus[i];
-        ans += c.get_consensus();
-        //std::cout << c.a << ":" << c.c << ":" << c.g << ":" << c.t << ":" << c.n << std::endl;
-    }
-    */
-     
-    // do middle part
-    std::string mid = "";
-    const std::string::size_type mid_len = mread1.size();
-    for ( int i = 0; i < mid_len; ++i ) {
-        if ( mread1[i] == mread2[i] ) {
-            mid += mread1[i];
-        }
-        else {
-            mid += ( mqual1[i] >= mqual2[i] ) ? mread1[i] : mread2[i];
-        }
-    }
-
-    average_quals( mqual1, mqual2 );
-
-    std::string stitched_read = lt_ext + mid + rt_ext;
-    std::string stitched_qual = lt_qual + mqual1 + rt_qual;
-    std::vector<std::string> ret = {stitched_read, stitched_qual};
-    
-    return ret;
 }
 
 
-
-
-std::string sw::flatten_reads( std::vector<std::vector<std::string>> & reads )
+std::string sw::flatten_reads( const std::vector<std::string> seed_read,
+                               const std::vector<std::vector<std::string>> & reads )
 {
     std::deque<BaseCount>  consensus;
-    std::string read1 = reads[0][0];
-    std::string qual1 = reads[0][1];
-    for ( size_t i = 0; i < read1.size(); ++i ) {
-        consensus.emplace_back( BaseCount( read1[i], qual1[i] ) );
+    std::string seed_bases = seed_read[0];
+    std::string seed_quals = seed_read[1];
+
+    for ( size_t i = 0; i < seed_bases.size(); ++i ) {
+        consensus.emplace_back( BaseCount( seed_bases[i], seed_quals[i] ) );
     }
 
-    std::vector<std::string>  ss = stitch_two_reads( reads[0], reads[1], consensus );
 
-    stitch_two_reads( ss, reads[2], consensus );
-    
+    for ( std::vector<std::vector<std::string>>::const_iterator itr = reads.begin();
+            itr != reads.end(); ++itr ) {
+        pairwise_stitch( consensus, *itr );
+    }
+
+
     std::string ans = "";
+    std::string qual = "";
     for ( size_t i = 0; i < consensus.size(); ++i ) {
         BaseCount c = consensus[i];
-        ans += c.get_consensus();
-        //std::cout << c.a << ":" << c.c << ":" << c.g << ":" << c.t << ":" << c.n << std::endl;
+        ans += c.get_consensus()[0];
+        qual += c.get_consensus()[1];
+        //std::cout << static_cast<int>( c.get_consensus()[1] ) << ", ";
     }
-   
-    std::cout << ans << std::endl;
 
+    std::cout << ans << std::endl;
+    std::cout << qual << std::endl;
 
     return "str";
 }
