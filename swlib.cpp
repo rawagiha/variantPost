@@ -292,10 +292,13 @@ std::vector<sw::ParsedVariant> sw::find_variants( const sw::Alignment &
 }
 
 
+/*
 namespace bases {
 char bases[5] = {'A', 'C', 'G', 'T', 'N'};
 }
+*/
 
+static char bases[5] = {'A', 'C', 'G', 'T', 'N'};
 
 template <typename T>
 std::vector<int> get_max_indices( const T & arr )
@@ -391,7 +394,7 @@ struct BaseCount {
             max_idx = max_cnt_indices[0];
         }
 
-        std::vector<char> ret = {bases::bases[max_idx], static_cast<char>( quals[max_idx] / counts[max_idx] )};
+        std::vector<char> ret = {bases[max_idx], static_cast<char>( quals[max_idx] / counts[max_idx] )};
 
         return ret;
     }
