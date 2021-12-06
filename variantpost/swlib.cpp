@@ -9,7 +9,7 @@
 #include <string.h>
 
 
-#include "ssw_cpp.h"
+#include "ssw/ssw_cpp.h"
 #include "swlib.h"
 
 
