@@ -8,7 +8,8 @@
 
 std::string to_fastq_qual(const std::vector<int> & ); 
 
-std::vector<std::string> to_cigar_vector( const std::regex &, const std::string & );
+//std::vector<std::string> to_cigar_vector( const std::regex &, const std::string & );
+std::vector<std::string> to_cigar_vector( const std::string & );
 
 std::string get_read_wise_ref_seq(int, int, int, const std::string &);
 

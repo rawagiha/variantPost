@@ -19,6 +19,23 @@ std::string to_fastq_qual(const std::vector<int> & qvec)
 }
 
 
+std::vector<std::string> to_cigar_vector(const std::string & cigar_string)
+{
+    std::vector<std::string> bits;
+    size_t pos = 0;
+    size_t newpos;
+    size_t len = cigar_string.size();
+    
+    while(pos < len) {
+        newpos = cigar_string.find_first_of("MIDNSHPX=", pos) + 1;
+        bits.push_back(cigar_string.substr(pos, newpos - pos));
+        pos = newpos;
+    }
+    
+    return bits;
+}
+
+/*
 std::vector<std::string> to_cigar_vector( const std::regex & cigar_pattern, const std::string & cigar_string )
 {
     std::vector<std::string> cigarette;
@@ -32,6 +49,7 @@ std::vector<std::string> to_cigar_vector( const std::regex & cigar_pattern, cons
     
     return cigarette;
 }
+*/
 
 /*
 std::vector<std::string> to_cigar_vector( const std::regex & cigar_pattern, const std::string & cigar_string )
