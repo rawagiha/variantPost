@@ -1,6 +1,5 @@
-# from .variant import Variant
 from .preprocessor import preprocess
-
+from variantpost.pileup_parser_wrapper import test_it 
 
 class VariantAlignment(object):
     def __init__(
@@ -22,7 +21,9 @@ class VariantAlignment(object):
             variant.unspliced_local_reference_start,
             variant.reference,
         )
-        preprocess(
+        
+        #processed reads for c++ wrapper
+        reads = preprocess(
             chrom,
             pos,
             chrom_len,
@@ -34,3 +35,5 @@ class VariantAlignment(object):
             window,
             downsample_thresh,
         )
+
+        test_it(unspliced_local_reference_start, unspliced_local_reference.encode("utf-8"), * reads)

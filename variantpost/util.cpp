@@ -21,53 +21,19 @@ std::string to_fastq_qual(const std::vector<int> & qvec)
 
 std::vector<std::string> to_cigar_vector(const std::string & cigar_string)
 {
-    std::vector<std::string> bits;
+    std::vector<std::string> cigarette;
+    
     size_t pos = 0;
     size_t newpos;
     size_t len = cigar_string.size();
-    
     while(pos < len) {
         newpos = cigar_string.find_first_of("MIDNSHPX=", pos) + 1;
-        bits.push_back(cigar_string.substr(pos, newpos - pos));
+        cigarette.push_back(cigar_string.substr(pos, newpos - pos));
         pos = newpos;
     }
     
-    return bits;
-}
-
-/*
-std::vector<std::string> to_cigar_vector( const std::regex & cigar_pattern, const std::string & cigar_string )
-{
-    std::vector<std::string> cigarette;
-    std::sregex_token_iterator itr(cigar_string.begin(), cigar_string.end(), cigar_pattern, -1);
-    std::sregex_token_iterator end_itr;
-    
-    while (itr != end_itr) {
-        cigarette.push_back(*itr);
-        ++itr;
-    }
-    
     return cigarette;
 }
-*/
-
-/*
-std::vector<std::string> to_cigar_vector( const std::regex & cigar_pattern, const std::string & cigar_string )
-{
-    std::regex_iterator<std::string::const_iterator> cigar_itr(
-        cigar_string.begin(),
-        cigar_string.end(), cigar_pattern );
-    std::regex_iterator<std::string::const_iterator> end_of_itr;
-    
-    std::vector<std::string> cigarette;
-    while ( cigar_itr != end_of_itr ) {
-        cigarette.push_back( ( *cigar_itr ).str() );
-        ++cigar_itr;
-    }
-    
-    return cigarette;
-}
-*/
 
 int get_clipped_len( const std::vector<std::string> & cigar_vector,
                      bool for_start )
