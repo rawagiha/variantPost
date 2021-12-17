@@ -67,12 +67,13 @@ std::string get_read_wise_ref_seq( int aln_start, int aln_end,
             ( aln_end - aln_start + 1 ) );
 }
 
+/*
 std::vector<std::string> split( const std::string & seq, int aln_start,
                                 int aln_end, int pos, const std::vector<std::string> & cigar_vector )
 {
 
 }
-
+*/
 
 // position indexed local reference
 //-----------------------------------------------------------------------------
@@ -80,7 +81,7 @@ std::map<int, char> pos_index_reference( const std::string &
         unspliced_local_reference, int unspliced_local_reference_start,
         int unspliced_local_reference_end )
 {
-    std::map<char, int> indexed_local_reference;
+    std::map<int, char> indexed_local_reference;
 
     int i = 0;
     int pos = unspliced_local_reference_start;
@@ -90,7 +91,7 @@ std::map<int, char> pos_index_reference( const std::string &
         ++pos;
     }
 
-    return indexed_local_reference
+    return indexed_local_reference;
 }
 
 // simplified Variant object used in C++ codes
@@ -114,36 +115,61 @@ Variant::Variant( const std::string & chrom,
     ref_len_ = ref_.size();
     alt_len_ = alt_.size();
 
-    is_substitute_ = ( alt_len_ == ref_len_ )
-                     is_ins_ = ( alt_len_ > ref_len_ );
+    is_substitute_ = ( alt_len_ == ref_len_ );
+    is_ins_ = ( alt_len_ > ref_len_ );
     is_del_ = ( alt_len_ < ref_len_ );
 
-    variant_end_pos_ = pos_ + ref_len_
+    variant_end_pos_ = pos_ + ref_len_;
 }
 
-inline ends_with_same( const string & ref, int ref_len, const string & alt,
-                       int alt_len )
+
+inline bool is_rotatable( const std::string & allele )
 {
-    return ( ref[ref_len - 1] == alt[alt_len - 1] != 'N' )
+    return ( allele[0] == allele[allele.size() - 1] );
 }
 
-inline void to_right( int & variant_end_pos, std::string & ref,
-                      std::string & alt, const bool is_ins,
+
+inline void to_right( int variant_end_pos, std::string & longer_allele,
+                      std::string & shorter_allele,
                       const std::map<int, char> & indexed_local_reference )
 {
-    char next_base = indexed_local_reference[variant_end_pos];
-    if ( is_ins ) {
-        alt.erase( 0, 1 );
-        alt += next_base;
-        ref = next_base;
-    }
-    else {
-        ref.erase( 0, 1 );
-        ref += next_base;
-        alt = next_base;
-    }
+    char next_base = indexed_local_reference.at( variant_end_pos );
+    longer_allele.erase( 0, 1 );
+    longer_allele += next_base;
+    shorter_allele = next_base;
     ++variant_end_pos;
 }
+
+inline void to_left ( int pos, std::string & longer_allele,
+                      std::string & shorter_allele,
+                      const std::map<int, char> & indexed_local_reference )
+{
+    --pos;
+    char prev_base = indexed_local_reference.at( pos );
+    longer_allele.pop_back();
+    longer_allele = prev_base.append( longer_allele );
+    shorter_allele = prev_base;
+}
+
+void left_align( int pos, std::string ref, std::string & alt, bool is_ins,
+                 const int unspliced_local_reference_start,
+                 const std::map<int, char> & indexed_local_reference )
+{
+    if ( is_ins ) {
+        std::string longer_allele = alt;
+        std::string shorter_allele = ref;
+    }
+    std::string longer_allele = ref;
+    std::string shorter_allele = alt;
+}
+
+while ( ( is_rotatable( longer_allele ) & ( unspliced_local_reference_start <=
+          pos ) )
+{
+to_left( pos, longer_allele, shorter_allele, indexed_local_reference );
+}
+}
+
 
 bool Variant::is_shiftable()
 {
@@ -152,32 +178,57 @@ bool Variant::is_shiftable()
         return false;
     }
 
+    if ( is_ins_ ) {
+        if ( is_rotatable( alt_ ) ) {
+            return true;
+        }
+        else {
+            std::string longer = alt_;
+            std::string shorter = ref_;
+            int _variant_end_pos = variant_end_pos_;
 
-    // true if left_alignable
-    if ( ends_with_same( alt_, alt_len_, ref_, ref_len_ ) ) {
-        return true;
+            to_right( _variant_end_pos, longer, shorter, indexed_local_reference_ );
+
+            return is_rotatable( longer );
+        }
     }
+    else {
+        if ( is_rotatable( ref_ ) ) {
+            return true;
+        }
+        else {
+            std::string longer = ref_;
+            std::string shorter = alt_;
+            int _variant_end_pos = variant_end_pos_;
 
-    // check if right_alignable
-    int _variant_end_pos = variant_end_pos_;
-    std::string _ref = ref_;
-    std::string _alt_ = alt_;
+            to_right( _variant_end_pos, longer, shorter, indexed_local_reference_ );
 
-    to_right( _variant_end_pos, _ref, _alt, is_ins_, indexed_local_reference_ );
-
-    return ends_with_same( _ref, ref_len_, _alt, alt_len );
+            return is_rotatable( longer );
+        }
+    }
 }
 
-/*
+
+
 bool Variant::operator == ( const Variant &rhs ) const
 {
-    std::string lhs_alt = alt_;
     std::string lhs_ref = ref_;
+    std::string lhs_alt = alt_;
+    int lhs_pos = pos_;
 
     std::string rhs_alt = rhs.alt_;
     std::string rhs_ref = rhs.ref_;
+    int rhs_pos = rhs.pos_;
+
+    left_align( lhs_pos, lhs_ref, lhs_alt, is_ins_,
+                unspliced_local_reference_start_, indexed_local_reference_ );
+    left_align( rhs_pos, rhs_ref, rhs_alt, rhs.is_ins_,
+                unspliced_local_reference_start_, indexed_local_reference_ );
+
+    return ( ( lhs_pos == rhs_pos ) & ( lhs_ref == rhs_ref ) &
+             ( lhs_alt == rhs_alt ) );
 }
-*/
+
 
 
 //------------------------------------------------------------------------------
