@@ -1,6 +1,7 @@
 #ifndef UTIL_H
 #define UTIL_H
 
+#include <map>
 #include <string>
 #include <vector>
 
@@ -10,6 +11,7 @@ std::vector<std::string> to_cigar_vector( const std::string & );
 
 std::string get_read_wise_ref_seq( int, int, int, const std::string & );
 
+std::map<int, char> pos_index_reference( const std::string &, int, int);
 
 struct Variant {
     std::string chrom_;
@@ -21,13 +23,13 @@ struct Variant {
     int unspliced_local_reference_end_;
     std::map<int, char> indexed_local_reference_;
 
-    const int ref_len_;
-    const int alt_len_;
-    const int variant_end_pos_ = pos_ + ref_len_
+    int ref_len_;
+    int alt_len_;
+    int variant_end_pos_ = pos_ + ref_len_;
 
-                                 const bool is_substitute_;
-    const bool is_ins_;
-    const bool is_del_;
+    bool is_substitute_;
+    bool is_ins_;
+    bool is_del_;
 
     Variant( const std::string & chrom,
              const int pos,
@@ -35,14 +37,14 @@ struct Variant {
              const std::string & alt,
              const int unspliced_local_reference_start,
              const int unspliced_local_reference_end,
-             const std::map<int, char> & indexed_local_reference;
+             const std::map<int, char> & indexed_local_reference
            );
 
 
     bool is_shiftable();
     // get_leftmost_pos
     // get_rightmost_pos
-    //bool operator == (const Variant & rhs) const;
+    bool operator == (const Variant & rhs) const;
 
 };
 
