@@ -41,9 +41,10 @@ struct Variant {
            );
 
 
-    bool is_shiftable();
-    // get_leftmost_pos
-    // get_rightmost_pos
+    bool is_shiftable() const;
+    int get_leftmost_pos() const;
+    int get_rightmost_pos() const;
+
     bool operator == (const Variant & rhs) const;
 
 };
