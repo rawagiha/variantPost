@@ -3,6 +3,7 @@
 
 #include <string>
 #include <vector>
+#include <utility>
 
 namespace pileup {
 
@@ -10,7 +11,7 @@ struct ParsedRead {
     std::string read_name_;
     bool is_reverse_;
     std::string cigar_string_;
-    std::vector<std::string> cigar_vector_;
+    std::vector<std::pair<char, int>> cigar_vector_;
     int aln_start_;
     int aln_end_;
     std::string read_seq_;
@@ -35,6 +36,7 @@ struct ParsedRead {
 };
 
 void parse_pileup( int, 
+                   int,
                    const std::string &, 
                    const std::vector<std::string> &,
                    const std::vector<bool> &, 

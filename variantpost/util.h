@@ -4,14 +4,20 @@
 #include <map>
 #include <string>
 #include <vector>
+#include <utility>
 
-std::string to_fastq_qual( const std::vector<int> & );
+std::string to_fastq_qual( const std::vector<int> & arr_qual );
 
-std::vector<std::string> to_cigar_vector( const std::string & );
+std::vector<std::pair<char, int>> to_cigar_vector( const std::string &
+                               cigar_string );
 
-std::string get_read_wise_ref_seq( int, int, int, const std::string & );
+std::string get_read_wise_ref_seq( int aln_start, int aln_end,
+                                   int unspliced_local_reference_start,
+                                   const std::string & unspliced_local_reference );
 
-std::map<int, char> pos_index_reference( const std::string &, int, int);
+std::map<int, char> pos_index_reference( const std::string &
+        unspliced_local_reference, int unspliced_local_reference_start,
+        int unspliced_local_reference_end );
 
 struct Variant {
     std::string chrom_;
@@ -45,7 +51,7 @@ struct Variant {
     int get_leftmost_pos() const;
     int get_rightmost_pos() const;
 
-    bool operator == (const Variant & rhs) const;
+    bool operator == ( const Variant & rhs ) const;
 
 };
 

@@ -1,6 +1,7 @@
 #include <map>
 #include <string>
 #include <vector>
+#include <utility>
 #include <iostream>
 #include <algorithm>
 
@@ -19,22 +20,31 @@ std::string to_fastq_qual( const std::vector<int> & qvec )
     return fq;
 }
 
-
-std::vector<std::string> to_cigar_vector( const std::string & cigar_string )
+inline std::pair<char, int> to_op_and_op_len(const std::string & cigar)
 {
-    std::vector<std::string> cigarette;
+    size_t last_idx = cigar.size() - 1;
+    return std::make_pair(cigar.substr(last_idx, 1)[0], std::stoi( cigar.substr( 0, last_idx) ));
+}
+
+std::vector<std::pair<char, int>> to_cigar_vector( const std::string & cigar_string )
+{
+    std::vector<std::pair<char, int>> cigarette;
 
     size_t pos = 0;
     size_t newpos;
-    size_t len = cigar_string.size();
+    const size_t len = cigar_string.size();
+    
     while ( pos < len ) {
         newpos = cigar_string.find_first_of( "MIDNSHPX=", pos ) + 1;
-        cigarette.push_back( cigar_string.substr( pos, newpos - pos ) );
+        cigarette.emplace_back( to_op_and_op_len(cigar_string.substr( pos, newpos - pos )) );
         pos = newpos;
     }
 
     return cigarette;
 }
+
+/*
+
 
 int get_clipped_len( const std::vector<std::string> & cigar_vector,
                      bool for_start )
@@ -57,6 +67,7 @@ int get_clipped_len( const std::vector<std::string> & cigar_vector,
     return clip_len;
 }
 
+*/
 
 std::string get_read_wise_ref_seq( int aln_start, int aln_end,
                                    int unspliced_local_reference_start,
@@ -68,8 +79,8 @@ std::string get_read_wise_ref_seq( int aln_start, int aln_end,
 }
 
 /*
-std::vector<std::string> split( const std::string & seq, int aln_start,
-                                int aln_end, int pos, const std::vector<std::string> & cigar_vector )
+std::vector<std::string> split( const int pos, const std::string & seq, const int aln_start,
+                                const int aln_end, const std::vector<std::string> & cigar_vector )
 {
 
 }
