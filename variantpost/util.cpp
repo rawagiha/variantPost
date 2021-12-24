@@ -7,6 +7,9 @@
 
 #include "util.h"
 
+
+// convert numeric base qual arr to FASTQ-style ASCII string
+//----------------------------------------------------------------------------
 inline char to_base_qual( int q )
 {
     return static_cast<char>( q + 33 );
@@ -20,55 +23,38 @@ std::string to_fastq_qual( const std::vector<int> & qvec )
     return fq;
 }
 
-inline std::pair<char, int> to_op_and_op_len(const std::string & cigar)
+
+// parse cigar string: 10M4D3M2S -> {<'M', 10>, <'D', 4>, <'M', 3>, <'S', 2>}
+//-----------------------------------------------------------------------------
+inline std::pair<char, int> to_op_and_op_len( const std::string & cigar )
 {
     size_t last_idx = cigar.size() - 1;
-    return std::make_pair(cigar.substr(last_idx, 1)[0], std::stoi( cigar.substr( 0, last_idx) ));
+    return std::make_pair( cigar.substr( last_idx, 1 )[0],
+                           std::stoi( cigar.substr( 0, last_idx ) ) );
 }
 
-std::vector<std::pair<char, int>> to_cigar_vector( const std::string & cigar_string )
+std::vector<std::pair<char, int>> to_cigar_vector( const std::string &
+                               cigar_string )
 {
     std::vector<std::pair<char, int>> cigarette;
 
     size_t pos = 0;
     size_t newpos;
     const size_t len = cigar_string.size();
-    
+
     while ( pos < len ) {
         newpos = cigar_string.find_first_of( "MIDNSHPX=", pos ) + 1;
-        cigarette.emplace_back( to_op_and_op_len(cigar_string.substr( pos, newpos - pos )) );
+        cigarette.emplace_back( to_op_and_op_len( cigar_string.substr( pos,
+                                newpos - pos ) ) );
         pos = newpos;
     }
 
     return cigarette;
 }
 
-/*
 
-
-int get_clipped_len( const std::vector<std::string> & cigar_vector,
-                     bool for_start )
-{
-    int clip_len = 0;
-
-    if ( for_start ) {
-        std::string first_op = cigar_vector.front();
-        if ( first_op.find( 'S' ) != std::string::npos ) {
-            clip_len = std::stoi( first_op.substr( 0, first_op.size() - 1 ) );
-        }
-    }
-    else {
-        std::string last_op = cigar_vector.back();
-        if ( last_op.find( 'S' ) != std::string::npos ) {
-            clip_len = std::stoi( last_op.substr( 0, last_op.size() - 1 ) );
-        }
-    }
-
-    return clip_len;
-}
-
-*/
-
+// fit local referenece to read alignment
+//-----------------------------------------------------------------------------
 std::string get_read_wise_ref_seq( int aln_start, int aln_end,
                                    int unspliced_local_reference_start,
                                    const std::string & unspliced_local_reference )
@@ -78,13 +64,6 @@ std::string get_read_wise_ref_seq( int aln_start, int aln_end,
             ( aln_end - aln_start + 1 ) );
 }
 
-/*
-std::vector<std::string> split( const int pos, const std::string & seq, const int aln_start,
-                                const int aln_end, const std::vector<std::string> & cigar_vector )
-{
-
-}
-*/
 
 // position indexed local reference
 //-----------------------------------------------------------------------------
@@ -104,6 +83,7 @@ std::map<int, char> pos_index_reference( const std::string &
 
     return indexed_local_reference;
 }
+
 
 // simplified Variant object used in C++ codes
 // ----------------------------------------------------------------------------
@@ -147,7 +127,7 @@ inline void to_left ( int & pos, std::string & longer_allele,
     --pos;
     char prev_base = indexed_local_reference.at( pos );
     longer_allele.pop_back();
-    longer_allele.insert(0, 1, prev_base);
+    longer_allele.insert( 0, 1, prev_base );
     shorter_allele = prev_base;
 }
 
@@ -156,8 +136,8 @@ void left_align( int & pos, std::string & ref, std::string & alt, bool is_ins,
                  const int unspliced_local_reference_start,
                  const std::map<int, char> & indexed_local_reference )
 {
-    std::string & longer_allele = (is_ins) ? alt : ref;
-    std::string & shorter_allele = (is_ins) ? ref : alt;
+    std::string & longer_allele = ( is_ins ) ? alt : ref;
+    std::string & shorter_allele = ( is_ins ) ? ref : alt;
 
     while ( ( is_rotatable( longer_allele ) ) & ( unspliced_local_reference_start <=
             pos ) ) {
@@ -172,7 +152,8 @@ int Variant::get_leftmost_pos() const
     std::string ref = ref_ ;
     std::string alt = alt_;
 
-    left_align( pos, ref, alt, is_ins_, unspliced_local_reference_start_, indexed_local_reference_ );
+    left_align( pos, ref, alt, is_ins_, unspliced_local_reference_start_,
+                indexed_local_reference_ );
 
     return pos;
 }
@@ -190,19 +171,24 @@ inline void to_right( int & variant_end_pos, std::string & longer_allele,
 }
 
 
-void right_align( int & pos, int & variant_end_pos, std::string & ref, std::string & alt, bool is_ins,
+void right_align( int & pos, int & variant_end_pos, std::string & ref,
+                  std::string & alt, bool is_ins,
                   const int unspliced_local_reference_end,
                   const std::map<int, char> & indexed_local_reference )
 {
-    std::string & longer_allele = (is_ins) ? alt : ref;
-    std::string & shorter_allele = (is_ins) ? ref : alt;
-    
-    do {
-        to_right(variant_end_pos, longer_allele, shorter_allele, indexed_local_reference);
-        ++pos;
-    } while ( (is_rotatable ( longer_allele )) & ( pos <= unspliced_local_reference_end ));
+    std::string & longer_allele = ( is_ins ) ? alt : ref;
+    std::string & shorter_allele = ( is_ins ) ? ref : alt;
 
-    to_left(pos, longer_allele, shorter_allele, indexed_local_reference); // undo the last right shift
+    do {
+        to_right( variant_end_pos, longer_allele, shorter_allele,
+                  indexed_local_reference );
+        ++pos;
+    }
+    while ( ( is_rotatable ( longer_allele ) ) & ( pos <=
+            unspliced_local_reference_end ) );
+
+    to_left( pos, longer_allele, shorter_allele,
+             indexed_local_reference ); // undo the last right shift
 }
 
 
@@ -213,7 +199,8 @@ int Variant::get_rightmost_pos() const
     std::string ref = ref_ ;
     std::string alt = alt_;
 
-    right_align(pos, variant_end_pos, ref, alt, is_ins_, unspliced_local_reference_end_, indexed_local_reference_);
+    right_align( pos, variant_end_pos, ref, alt, is_ins_,
+                 unspliced_local_reference_end_, indexed_local_reference_ );
 
     return pos;
 }
@@ -277,4 +264,67 @@ bool Variant::operator == ( const Variant & rhs ) const
 }
 
 
+// parse mapping to find Variant
 //------------------------------------------------------------------------------
+
+inline void process_mapped_base( std::vector<Variant> & variants,
+                                 const int read_idx, const int ref_idx, const std::string & read_seq,
+                                 const std::string & ref_seq )
+{
+
+}
+
+
+std::vector<Variant> find_mapped_variants( const int aln_start,
+        const int aln_end, const std::string & read_seq, const std::string & ref_seq,
+        const std::vector<std::pair<char, int> & cigar_vector )
+{
+    std::vector<Variant> variants;
+
+    if ( read_seq == ref_seq ) {
+        return variants;
+    }
+
+    char operation;
+    int operation_len;
+    int read_idx, ref_idx;
+    for ( std::vector<std::pair<char, int>>::const_iterator itr = cigarette.begin();
+            itr != cigarette.end(); ++itr ) {
+
+        operation = ( *itr ).first;
+        operation_len = ( *itr ).second;
+
+        switch ( operation ) {
+        case 'M':
+            //
+            break;
+        case 'I':
+            //
+            break;
+        case 'D':
+            //
+            break;
+        case 'N':
+            //
+            break;
+        case 'S':
+            //
+            break;
+        case 'H':
+            //
+            break;
+        case 'P':
+            //
+            break;
+        case 'X':
+            //
+            break;
+        case '=':
+            //
+            break;
+        }
+
+        //MIDNSHPX=
+
+    }
+}
