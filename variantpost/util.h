@@ -55,4 +55,13 @@ struct Variant {
 
 };
 
+
+std::vector<Variant> find_mapped_variants( const int aln_start,
+        const int aln_end, const std::string & ref_seq, const std::string & read_seq,
+        const std::vector<std::pair<char, int>> & cigar_vector,
+        const std::string & chrom,
+        const int & unspliced_local_reference_start,
+        const int & unspliced_local_reference_end,
+        const std::map<int, char> & indexed_local_reference );
+
 #endif

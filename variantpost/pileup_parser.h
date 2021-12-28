@@ -1,6 +1,7 @@
 #ifndef PILEUP_PARSER_H
 #define PILEUP_PARSER_H
 
+#include <map>
 #include <string>
 #include <vector>
 #include <utility>
@@ -21,6 +22,7 @@ struct ParsedRead {
     bool is_spliced_;
 
     ParsedRead(int, 
+               int,
                const std::string &, 
                const std::string &,
                bool, 
@@ -30,7 +32,8 @@ struct ParsedRead {
                const std::string &,
                const std::string &, 
                const std::vector<int> &, 
-               int 
+               int,
+               const std::map<int, char> & //std::map<int, char> & indexed_local_reference
     );
 
 };

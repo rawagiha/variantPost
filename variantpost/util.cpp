@@ -59,7 +59,7 @@ std::string get_read_wise_ref_seq( int aln_start, int aln_end,
                                    int unspliced_local_reference_start,
                                    const std::string & unspliced_local_reference )
 {
-    int start_idx = aln_start - 1 - unspliced_local_reference_start;
+    int start_idx = aln_start - unspliced_local_reference_start;
     return unspliced_local_reference.substr( start_idx,
             ( aln_end - aln_start + 1 ) );
 }
@@ -103,6 +103,7 @@ Variant::Variant( const std::string & chrom,
     unspliced_local_reference_end_ = unspliced_local_reference_end;
     indexed_local_reference_ = indexed_local_reference;
 
+    
     ref_len_ = ref_.size();
     alt_len_ = alt_.size();
 
@@ -111,6 +112,7 @@ Variant::Variant( const std::string & chrom,
     is_del_ = ( alt_len_ < ref_len_ );
 
     variant_end_pos_ = pos_ + ref_len_;
+    
 }
 
 
@@ -264,7 +266,7 @@ bool Variant::operator == ( const Variant & rhs ) const
 }
 
 
-/append_snv/ parse mapping to find Variant
+// parse mapping to find Variant
 //------------------------------------------------------------------------------
 
 inline void append_snv( std::vector<Variant> & variants,
@@ -279,7 +281,7 @@ inline void append_snv( std::vector<Variant> & variants,
     std::string alt = read_seq.substr( read_idx, 1 );
 
     if ( ref != alt ) {
-        variants.emplace_back( Variant( chrom, pos, ref, alt,
+        variants.emplace_back( chrom, pos, ref, alt,
                                         unspliced_local_reference_start, unspliced_local_reference_end,
                                         indexed_local_reference );
     }
@@ -289,50 +291,68 @@ inline void append_snv( std::vector<Variant> & variants,
 
 std::vector<Variant> find_mapped_variants( const int aln_start,
         const int aln_end, const std::string & ref_seq, const std::string & read_seq,
-        const std::vector<std::pair<char, int> & cigar_vector,
+        const std::vector<std::pair<char, int>> & cigar_vector,
         const std::string & chrom,
         const int & unspliced_local_reference_start,
         const int & unspliced_local_reference_end,
         const std::map<int, char> & indexed_local_reference )
 {
     std::vector<Variant> variants;
-
+    
     if ( read_seq == ref_seq ) {
         return variants;
     }
 
     char operation;
     int operation_len;
-    int ref_idx, read_idx;
+    int ref_idx=0;
+    int read_idx=0;
     int pos = aln_start;
-    for ( std::vector<std::pair<char, int>>::const_iterator itr = cigarette.begin();
-            itr != cigarette.end(); ++itr ) {
+   
+    for ( std::vector<std::pair<char, int>>::const_iterator itr = cigar_vector.begin();
+            itr != cigar_vector.end(); ++itr ) {
 
         operation = ( *itr ).first;
         operation_len = ( *itr ).second;
 
         switch ( operation ) {
         case 'M':
-            for ( int i = 0; i < operation_len; ++i ) {
-                append_snv( variants, ref_idx, read_idx, pos, ref_seq, read_seq, chrom,
-                            unspliced_local_reference_start, unspliced_local_reference_end,
-                            indexed_local_reference );
+            /*for ( int i = 0; i < operation_len; ++i ) {
+                
+                
+                std::string ref = ref_seq.substr( ref_idx, 1 );
+                std::string alt = read_seq.substr( read_idx, 1 );
 
+                if ( ref != alt ) {
+                    variants.emplace_back( chrom, pos, ref, alt,
+                                        unspliced_local_reference_start, unspliced_local_reference_end,
+                                        indexed_local_reference );
+                }
+                //for (auto j : cigar_vector) { std::cout << j.first << "-" << j.second << "; ";}
+                //std::cout << ref_seq << std::endl;
+                //std::cout << read_seq << std::endl;
                 ++ref_idx;
                 ++read_idx;
                 ++pos;
             }
+            */ 
+            ref_idx += (operation_len - 1);
+            read_idx += (operation_len - 1);
+            pos += (operation_len - 1);
             break;
         case 'I':
-            variants.emplace_back( Variant( chrom, pos, ref_seq.substr( ref_idx, 1 ),
+            
+            variants.emplace_back(chrom, pos, ref_seq.substr( ref_idx, 1 ),
                                             read_seq.substr( read_idx, 1 + operation_len ), unspliced_local_reference_start,
-                                            unspliced_local_reference_end, indexed_local_reference ) );
+                                            unspliced_local_reference_end, indexed_local_reference);
+            
+            std::cout << pos << "-" << ref_seq.substr( ref_idx, 1 ) << "-" << read_seq.substr( read_idx, 1 + operation_len ) << std::endl;
             break;
         case 'D':
-            variants.emplace_back( Variant( chrom, pos, ref_seq.substr( ref_idx,
+            variants.emplace_back(chrom, pos, ref_seq.substr( ref_idx,
                                             1 + operation_len ), ref_seq.substr( ref_idx, 1 ),
                                             unspliced_local_reference_start, unspliced_local_reference_end,
-                                            indexed_local_reference ) );
+                                            indexed_local_reference);
             ref_idx += operation_len;
             pos += operation_len;
             break;
@@ -367,4 +387,5 @@ std::vector<Variant> find_mapped_variants( const int aln_start,
         //MIDNSHPX=
 
     }
+    return variants;
 }
