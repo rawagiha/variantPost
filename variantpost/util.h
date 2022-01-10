@@ -24,19 +24,26 @@ struct Variant {
     int pos_;
     std::string ref_;
     std::string alt_;
-
-    int unspliced_local_reference_start_;
-    int unspliced_local_reference_end_;
-    std::map<int, char> indexed_local_reference_;
-
+    
     int ref_len_;
     int alt_len_;
     int variant_end_pos_ = pos_ + ref_len_;
-
+    
     bool is_substitute_;
     bool is_ins_;
     bool is_del_;
+    
+    Variant(const std::string & chrom, const int pos, const std::string & ref, const std::string & alt);
+    
+    //int ref_len_;
+    //int alt_len_;
+    //int variant_end_pos_ = pos_ + ref_len_;
 
+    //bool is_substitute_;
+    //bool is_ins_;
+    //bool is_del_;
+
+    /*
     Variant( const std::string & chrom,
              const int pos,
              const std::string & ref,
@@ -47,12 +54,13 @@ struct Variant {
            );
 
 
-    bool is_shiftable() const;
-    int get_leftmost_pos() const;
-    int get_rightmost_pos() const;
+    */
+    bool is_shiftable(const std::map<int, char> & indexed_local_reference) const;
+    int get_leftmost_pos(const int unspliced_local_reference_start, const std::map<int, char> & indexed_local_reference) const;
+    int get_rightmost_pos(const int unspliced_local_reference_end, const std::map<int, char> & indexed_local_reference) const;
 
-    bool operator == ( const Variant & rhs ) const;
-
+    //bool operator == ( const Variant & rhs ) const;
+    
 };
 
 
@@ -63,5 +71,6 @@ std::vector<Variant> find_mapped_variants( const int aln_start,
         const int & unspliced_local_reference_start,
         const int & unspliced_local_reference_end,
         const std::map<int, char> & indexed_local_reference );
+
 
 #endif
