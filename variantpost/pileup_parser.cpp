@@ -8,6 +8,9 @@
 #include "pileup_parser.h"
 #include "util.h"
 
+/* read filter */
+
+
 
 pileup::ParsedRead::ParsedRead( int unspliced_local_reference_start,
                                 int unspliced_local_reference_end,
@@ -27,12 +30,13 @@ pileup::ParsedRead::ParsedRead( int unspliced_local_reference_start,
     read_name_ = read_name;
     is_reverse_ = is_reverse;
 
-    cigar_string_ = cigar_string;
-    cigar_vector_ = to_cigar_vector( cigar_string );
+    cigar_string_ = cigar_string;   // may be removed later 
+    cigar_vector_ = to_cigar_vector( cigar_string ); // may be removed later 
 
     aln_start_ = aln_start + 1; // 1-based
     aln_end_ = aln_end;  // pysam aln_end is 1-based
-
+    
+    /*may be removed later*/
     read_seq_ = read_seq;
     if ( cigar_string.find( 'N' ) != std::string::npos ) {
         ref_seq_ = ref_seq;
@@ -55,6 +59,10 @@ pileup::ParsedRead::ParsedRead( int unspliced_local_reference_start,
 }
 
 void pileup::parse_pileup(
+    const std::string & chrom,
+    int pos,
+    const std::string & ref,
+    const std::string & alt,
     int unspliced_local_reference_start,
     int unspliced_local_reference_end,
     const std::string & unspliced_local_reference,
@@ -72,16 +80,15 @@ void pileup::parse_pileup(
 
     std::vector<pileup::ParsedRead> parsed;
 
-    std::map<int, char> aa = pos_index_reference( unspliced_local_reference,
+    std::map<int, char> aa = reference_by_position( unspliced_local_reference,
                              unspliced_local_reference_start, unspliced_local_reference_end );
 
-    Variant v = Variant( "1", 241661227,  "A",  "ATTT",
-                         unspliced_local_reference_start, unspliced_local_reference_end, aa );
-    Variant vv = Variant( "1", 241661228,  "T",  "TTTT",
-                          unspliced_local_reference_start, unspliced_local_reference_end, aa );
+    Variant v = Variant( "1", 241661227,  "A",  "ATTT");
+     //                    unspliced_local_reference_start, unspliced_local_reference_end, aa );
+    Variant vv = Variant( "1", 241661228,  "T",  "TTTT");
+      //                    unspliced_local_reference_start, unspliced_local_reference_end, aa );
 
-    std::cout << v.get_rightmost_pos() << " onaji " << vv.get_leftmost_pos() <<
-              std::endl;
+    std::cout << v.get_rightmost_pos(unspliced_local_reference_end, aa ) << " onaji " << vv.get_leftmost_pos( unspliced_local_reference_start, aa) << std::endl;
     //for (auto i : aa) std::cout << i.first << " : " << i.second  << std::endl;
 
     for ( size_t i = 0; i < pileup_size; ++i ) {

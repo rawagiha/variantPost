@@ -15,7 +15,7 @@ std::string get_read_wise_ref_seq( int aln_start, int aln_end,
                                    int unspliced_local_reference_start,
                                    const std::string & unspliced_local_reference );
 
-std::map<int, char> pos_index_reference( const std::string &
+std::map<int, char> reference_by_position( const std::string &
         unspliced_local_reference, int unspliced_local_reference_start,
         int unspliced_local_reference_end );
 
