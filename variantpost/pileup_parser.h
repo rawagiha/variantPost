@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 #include <utility>
+#include "util.h"
 
 namespace pileup {
 
@@ -20,6 +21,7 @@ struct ParsedRead {
     std::string base_qualities_;
     int mapq_;
     bool is_spliced_;
+    std::vector<Variant> variants;
 
     ParsedRead(int, 
                int,
@@ -38,7 +40,11 @@ struct ParsedRead {
 
 };
 
-void parse_pileup( int, 
+void parse_pileup( const std::string &,
+                   int,
+                   const std::string &,
+                   const std::string &,
+                   int, 
                    int,
                    const std::string &, 
                    const std::vector<std::string> &,

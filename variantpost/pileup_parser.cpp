@@ -24,7 +24,7 @@ pileup::ParsedRead::ParsedRead( int unspliced_local_reference_start,
                                 const std::string & ref_seq,
                                 const std::vector<int> & q,
                                 const int mapq,
-                                const std::map<int, char> & indexed_local_reference )
+                                const std::map<int, char> & indexed_local_reference)
 {
     const std::string chrom = "1";
     read_name_ = read_name;
@@ -52,9 +52,9 @@ pileup::ParsedRead::ParsedRead( int unspliced_local_reference_start,
     mapq_ = mapq;
 
 
-    find_mapped_variants( aln_start, aln_end, ref_seq_, read_seq_, cigar_vector_,
-                          chrom, unspliced_local_reference_start, unspliced_local_reference_end,
-                          indexed_local_reference );
+    variants = find_mapped_variants( aln_start, aln_end, ref_seq_, read_seq_, cigar_vector_,
+                                                 chrom, unspliced_local_reference_start, unspliced_local_reference_end,
+                                                 indexed_local_reference );
 
 }
 
@@ -88,7 +88,7 @@ void pileup::parse_pileup(
     Variant vv = Variant( "1", 241661228,  "T",  "TTTT");
       //                    unspliced_local_reference_start, unspliced_local_reference_end, aa );
 
-    std::cout << v.get_rightmost_pos(unspliced_local_reference_end, aa ) << " onaji " << vv.get_leftmost_pos( unspliced_local_reference_start, aa) << std::endl;
+    //std::cout << v.get_rightmost_pos(unspliced_local_reference_end, aa ) << " onaji " << vv.get_leftmost_pos( unspliced_local_reference_start, aa) << std::endl;
     //for (auto i : aa) std::cout << i.first << " : " << i.second  << std::endl;
 
     for ( size_t i = 0; i < pileup_size; ++i ) {
@@ -106,5 +106,6 @@ void pileup::parse_pileup(
                                  mapqs[i],
                                  aa
                            );
+
     }
 }
