@@ -281,6 +281,37 @@ bool Variant::is_shiftable(const std::map<int, char> & indexed_local_reference) 
     }
 }
 
+/*
+void Variant::say_hi(const Variant & j) const
+{
+    std::cout << j.pos_ << std::endl;
+}
+*/
+
+bool Variant::is_equivalent(const Variant & other, const int unspliced_local_reference_start, const std::map<int, char> & indexed_local_reference) const
+{
+    //return false;
+    //std::vector<bool> this_variant_type{is_substitute_, is_ins_, is_del_};
+    //std::vector<bool> other_varaint_type{other.is_substitute_, other.is_ins_, other.is_del_};
+
+    std::vector<int> var_len_0{ref_len_, alt_len_};
+    std::vector<int> var_len_1{other.ref_len_, other.alt_len_};
+
+    if (var_len_0 == var_len_1){
+        int pos = other.pos_;
+        std::string ref = other.ref_;
+        std::string alt = other.alt_;
+           
+        left_align( pos, ref, alt, other.is_ins_, unspliced_local_reference_start, indexed_local_reference );
+        
+        return ( ( pos_ == pos ) & ( ref_ == ref ) &  ( alt_ == alt ) );      
+         
+    }
+    else {
+        return false;
+    }
+} 
+
 
 /*
 bool Variant::operator == ( const Variant & rhs ) const
@@ -334,10 +365,11 @@ std::vector<Variant> find_mapped_variants ( const int aln_start,
     const int &unspliced_local_reference_start,
     const int &unspliced_local_reference_end,
     const std::map<int, char> &indexed_local_reference ) {
+  
   std::vector<Variant> variants;
 
   if ( read_seq == ref_seq ) {
-    return variants;
+     return variants;
   }
 
   char operation;

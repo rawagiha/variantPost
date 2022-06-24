@@ -22,6 +22,7 @@ struct ParsedRead {
     int mapq_;
     bool is_spliced_;
     std::vector<Variant> variants;
+    bool is_target;
 
     ParsedRead(int, 
                int,
@@ -35,7 +36,9 @@ struct ParsedRead {
                const std::string &, 
                const std::vector<int> &, 
                int,
+               const Variant &, // target
                const std::map<int, char> & //std::map<int, char> & indexed_local_reference
+
     );
 
 };

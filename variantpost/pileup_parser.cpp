@@ -24,9 +24,10 @@ pileup::ParsedRead::ParsedRead( int unspliced_local_reference_start,
                                 const std::string & ref_seq,
                                 const std::vector<int> & q,
                                 const int mapq,
+                                const Variant & target, 
                                 const std::map<int, char> & indexed_local_reference)
 {
-    const std::string chrom = "1";
+    const std::string chrom = target.chrom_;
     read_name_ = read_name;
     is_reverse_ = is_reverse;
 
@@ -55,7 +56,15 @@ pileup::ParsedRead::ParsedRead( int unspliced_local_reference_start,
     variants = find_mapped_variants( aln_start, aln_end, ref_seq_, read_seq_, cigar_vector_,
                                                  chrom, unspliced_local_reference_start, unspliced_local_reference_end,
                                                  indexed_local_reference );
-
+    is_target = false;
+    for (auto & v : variants) {
+        if (is_target) {
+            break;
+        }
+        else {    
+            is_target = target.is_equivalent(v, unspliced_local_reference_start, indexed_local_reference);      
+        }
+    }
 }
 
 void pileup::parse_pileup(
@@ -83,11 +92,17 @@ void pileup::parse_pileup(
     std::map<int, char> aa = reference_by_position( unspliced_local_reference,
                              unspliced_local_reference_start, unspliced_local_reference_end );
 
+    // target variant
+    Variant trgt = Variant(chrom, pos, ref, alt);
+    
+    
     Variant v = Variant( "1", 241661227,  "A",  "ATTT");
      //                    unspliced_local_reference_start, unspliced_local_reference_end, aa );
     Variant vv = Variant( "1", 241661228,  "T",  "TTTT");
       //                    unspliced_local_reference_start, unspliced_local_reference_end, aa );
 
+    std::cout << v.is_equivalent(vv, unspliced_local_reference_start, aa) << std::endl;
+    
     //std::cout << v.get_rightmost_pos(unspliced_local_reference_end, aa ) << " onaji " << vv.get_leftmost_pos( unspliced_local_reference_start, aa) << std::endl;
     //for (auto i : aa) std::cout << i.first << " : " << i.second  << std::endl;
 
@@ -104,8 +119,17 @@ void pileup::parse_pileup(
                                  ref_seqs[i],
                                  quals[i],
                                  mapqs[i],
+                                 trgt,
                                  aa
                            );
-
+ 
     }
+ 
+    int h = 0;
+    for (auto & read: parsed) {
+        if (read.is_target) {
+            h += 1;
+        }   
+    }
+    std::cout << h << " num of target read" << std::endl;
 }
