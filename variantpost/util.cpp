@@ -4,8 +4,24 @@
 #include <utility>
 #include <iostream>
 #include <algorithm>
+#include <unordered_map>
 
 #include "util.h"
+
+
+// select most frequent str
+// ------------------------------------------------------------
+std::string find_commonest_str(const std::vector<std::string> & v)
+{
+    std::unordered_map<std::string, int> freq;
+    for (const auto & elem : v) {
+         freq[elem]++;
+    }
+   
+    auto commonest = std::max_element(freq.begin(), freq.end(), [] (const auto & x, const auto & y) {return x.second < y.second;});
+
+    return commonest->first;
+}
 
 
 // convert numeric base qual arr to FASTQ-style ASCII string

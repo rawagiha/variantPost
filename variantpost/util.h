@@ -5,6 +5,12 @@
 #include <string>
 #include <vector>
 #include <utility>
+#include <algorithm>
+#include <unordered_map>
+
+
+
+std::string find_commonest_str(const std::vector<std::string> & arr_str);
 
 std::string to_fastq_qual( const std::vector<int> & arr_qual );
 

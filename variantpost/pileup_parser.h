@@ -23,6 +23,7 @@ struct ParsedRead {
     bool is_spliced_;
     std::vector<Variant> variants;
     bool is_target;
+    std::string variant_str;
 
     ParsedRead(int, 
                int,
@@ -61,6 +62,6 @@ void parse_pileup( const std::string &,
                    const std::vector<int> & 
 );
 
-} // end of pileup
+} // end of namespace "pileup"
 
 #endif

@@ -1,4 +1,5 @@
 #include <map>
+#include <random>
 #include <vector>
 #include <string>
 #include <utility>
@@ -10,6 +11,8 @@
 
 /* read filter */
 
+
+std::vector<pileup::ParsedRead> get_gapped_seed_reads(std::vector<pileup::ParsedRead> & parsed_reads, size_t n);
 
 
 pileup::ParsedRead::ParsedRead( int unspliced_local_reference_start,
@@ -56,12 +59,12 @@ pileup::ParsedRead::ParsedRead( int unspliced_local_reference_start,
     variants = find_mapped_variants( aln_start, aln_end, ref_seq_, read_seq_, cigar_vector_,
                                                  chrom, unspliced_local_reference_start, unspliced_local_reference_end,
                                                  indexed_local_reference );
+    
+    //std::string variant_str; 
     is_target = false;
     for (auto & v : variants) {
-        if (is_target) {
-            break;
-        }
-        else {    
+        variant_str += (std::to_string(v.pos_) + "_" + v.ref_ + "_" + v.alt_ + ";");
+        if (!is_target) {
             is_target = target.is_equivalent(v, unspliced_local_reference_start, indexed_local_reference);      
         }
     }
@@ -87,7 +90,7 @@ void pileup::parse_pileup(
 {
     size_t pileup_size = read_names.size();
 
-    std::vector<pileup::ParsedRead> parsed;
+    std::vector<pileup::ParsedRead> parsed_reads;
 
     std::map<int, char> aa = reference_by_position( unspliced_local_reference,
                              unspliced_local_reference_start, unspliced_local_reference_end );
@@ -96,18 +99,18 @@ void pileup::parse_pileup(
     Variant trgt = Variant(chrom, pos, ref, alt);
     
     
-    Variant v = Variant( "1", 241661227,  "A",  "ATTT");
+    //Variant v = Variant( "1", 241661227,  "A",  "ATTT");
      //                    unspliced_local_reference_start, unspliced_local_reference_end, aa );
-    Variant vv = Variant( "1", 241661228,  "T",  "TTTT");
+    //Variant vv = Variant( "1", 241661228,  "T",  "TTTT");
       //                    unspliced_local_reference_start, unspliced_local_reference_end, aa );
 
-    std::cout << v.is_equivalent(vv, unspliced_local_reference_start, aa) << std::endl;
+    //std::cout << v.is_equivalent(vv, unspliced_local_reference_start, aa) << std::endl;
     
     //std::cout << v.get_rightmost_pos(unspliced_local_reference_end, aa ) << " onaji " << vv.get_leftmost_pos( unspliced_local_reference_start, aa) << std::endl;
     //for (auto i : aa) std::cout << i.first << " : " << i.second  << std::endl;
 
     for ( size_t i = 0; i < pileup_size; ++i ) {
-        parsed.emplace_back( unspliced_local_reference_start,
+        parsed_reads.emplace_back( unspliced_local_reference_start,
                                  unspliced_local_reference_end,
                                  unspliced_local_reference,
                                  read_names[i],
@@ -126,10 +129,48 @@ void pileup::parse_pileup(
     }
  
     int h = 0;
-    for (auto & read: parsed) {
+    for (auto & read: parsed_reads) {
         if (read.is_target) {
             h += 1;
         }   
     }
     std::cout << h << " num of target read" << std::endl;
+    std::vector<pileup::ParsedRead> j = get_gapped_seed_reads(parsed_reads, 6);
+    for (auto & read : j) {
+        std::cout << read.aln_start_ << "  " << read.aln_end_ << std::endl;
+    }
+}
+
+// select gapped_seed
+
+std::vector<pileup::ParsedRead> get_gapped_seed_reads(std::vector<pileup::ParsedRead> & parsed_reads, size_t n=5)
+{
+    
+    std::vector<pileup::ParsedRead> target_reads;
+    std::vector<pileup::ParsedRead> seed_candidates;
+    std::vector<std::string> variant_ptrns;
+    
+    for (auto & read : parsed_reads) {
+        if ( read.is_target ) {
+            target_reads.push_back(read);
+            variant_ptrns.push_back(read.variant_str);       
+        }
+    } 
+   
+    std::string commonest_ptrn = find_commonest_str(variant_ptrns);
+    
+    
+    for (auto & read : target_reads) {
+        if ( read.variant_str == commonest_ptrn ){
+            seed_candidates.push_back(read);
+        }
+    }
+
+    if (seed_candidates.size() > n) {
+        std::shuffle(seed_candidates.begin(), seed_candidates.end(), std::default_random_engine(123));
+        std::vector<pileup::ParsedRead> tmp(seed_candidates.begin(), seed_candidates.begin() + n);
+        return tmp;
+    }
+    
+    return seed_candidates;   
 }
