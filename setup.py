@@ -17,8 +17,8 @@ extensions = [
         ["variantpost/variantalignment.pyx"],
         language="c++",
     ),
-    Extension("variantpost.preprocessor", ["variantpost/preprocessor.pyx"], language="c++"),
-    Extension("variantpost.pileup_parser_wrapper", ["variantpost/pileup_parser_wrapper.pyx", "variantpost/pileup_parser.cpp", "variantpost/util.cpp"], language="c++",),
+    Extension("variantpost.preprocessor", ["variantpost/preprocessor.pyx"], language="c++",),
+    Extension("variantpost.pileup_parser_wrapper", ["variantpost/pileup_parser_wrapper.pyx", "variantpost/pileup_parser.cpp", "variantpost/util.cpp", "variantpost/swlib.cpp", "variantpost/ssw/ssw.c", "variantpost/ssw/ssw_cpp.cpp"], language="c++",),
 
 ]
 
