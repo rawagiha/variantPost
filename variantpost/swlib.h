@@ -53,6 +53,6 @@ std::vector<ParsedVariant> find_variants(
 
 std::string flatten_reads( const std::vector<std::string> seed_read,
                            const std::vector<std::vector<std::string>> & reads );
-} //end of name sw
+} //end of namespace "sw"
 
 #endif

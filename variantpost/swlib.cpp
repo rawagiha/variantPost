@@ -410,7 +410,7 @@ void update( std::deque<BaseCount> & consensus,  const int & read2_begin,
 
         // update middle part
         const auto lt_len = lt_ext.size();
-        for ( size_t i = lt_len; i < consensus.size(); ++i ) {
+        for ( size_t i = lt_len; (i < consensus.size() && (i - lt_len) < mread2.size() - 1); ++i ) {
             consensus[i].add( mread2[i - lt_len], mqual2[i - lt_len] );
         }
 
@@ -426,7 +426,6 @@ void update( std::deque<BaseCount> & consensus,  const int & read2_begin,
         }
 
         //lt extention
-        std::cout << lt_ext.size() << std::endl;
         for ( int i = lt_ext.size() - 1; i >= 0; --i ) {
             consensus.emplace_front( BaseCount( lt_ext[i], lt_qual[i] ) );
         }
@@ -458,6 +457,7 @@ void pairwise_stitch( std::deque<BaseCount> & consensus,
 {
 
     std::vector<std::string> c = get_consensus_contig( consensus );
+    
     std::string read1 = c[0];
     std::string qual1 = c[1];
 
@@ -475,12 +475,12 @@ void pairwise_stitch( std::deque<BaseCount> & consensus,
 
     std::vector<std::string> cigar_vec = decompose_cigar_string(
             aln.cigar_string );
+    
     const int read1_begin = aln.ref_begin;
     const int read1_end = aln.ref_end;
     const int read2_begin = aln.query_begin;
     const int read2_end = aln.query_end;
 
-    
     //std::cout << aln.cigar_string << ", " << read1_begin << ", " << read1_end << ", " << read2_begin << ", " << read2_end << std::endl;
     
     std::string lt_ext, lt_qual, rt_ext, rt_qual, mread1, mqual1, mread2, mqual2;
@@ -498,9 +498,10 @@ void pairwise_stitch( std::deque<BaseCount> & consensus,
         lt_qual = qual2.substr( 0, read2_begin );
         rt_ext = read1.substr( read1_end + 1 );
         rt_qual = qual1.substr( read1_end + 1 );
-
-        mread2 = read2.substr( read2_begin );
-        mqual2 = qual2.substr( read2_begin );
+        
+        size_t m_len = read2_end - read2_begin + 1;
+        mread2 = read2.substr( read2_begin, m_len );
+        mqual2 = qual2.substr( read2_begin, m_len );
     }
     else {
         // not stitchable
