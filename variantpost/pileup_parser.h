@@ -22,6 +22,8 @@ struct ParsedRead {
     int mapq_;
     bool is_spliced_;
     std::vector<Variant> variants;
+    bool is_clipped;
+    bool is_ref_seq;
     bool is_target;
     std::string variant_str;
 

@@ -5,14 +5,20 @@
 #include <utility>
 #include <iostream>
 
-
-#include "pileup_parser.h"
 #include "util.h"
+#include "swlib.h"
+#include "pileup_parser.h"
+
+
 
 /* read filter */
 
 
 std::vector<pileup::ParsedRead> get_gapped_seed_reads(std::vector<pileup::ParsedRead> & parsed_reads, size_t n);
+
+// read evaluate func (ref_seq, clipping, worth_realn)
+// covering checker
+
 
 
 pileup::ParsedRead::ParsedRead( int unspliced_local_reference_start,
@@ -59,14 +65,41 @@ pileup::ParsedRead::ParsedRead( int unspliced_local_reference_start,
     variants = find_mapped_variants( aln_start, aln_end, ref_seq_, read_seq_, cigar_vector_,
                                                  chrom, unspliced_local_reference_start, unspliced_local_reference_end,
                                                  indexed_local_reference );
+    // read evaluations
+    // test if clipped
+    bool is_soft = false, is_hard = false;
+    if ( cigar_string.find( 'S' ) == std::string::npos ) {
+        is_soft = true;
+    }
+
+    if ( cigar_string.find( 'H' ) == std::string::npos ) {
+        is_hard = true;
+    }
     
-    //std::string variant_str; 
-    is_target = false;
-    for (auto & v : variants) {
-        variant_str += (std::to_string(v.pos_) + "_" + v.ref_ + "_" + v.alt_ + ";");
-        if (!is_target) {
-            is_target = target.is_equivalent(v, unspliced_local_reference_start, indexed_local_reference);      
+    is_clipped = false;
+    if ( is_soft || is_hard ) {
+        is_clipped = true;
+    }
+
+    // test if read seq == reference
+    is_ref_seq = false;
+    if ( variants.empty() && ( !is_clipped ) ) {
+        is_ref_seq = true;
+    }
+    
+    if ( !is_ref_seq ) {
+    
+        // test if target is aligned
+        is_target = false;
+        for (auto & v : variants) {
+            variant_str += (std::to_string(v.pos_) + "_" + v.ref_ + "_" + v.alt_ + ";");
+            if (!is_target) {
+                is_target = target.is_equivalent(v, unspliced_local_reference_start, indexed_local_reference);      
+            }
         }
+
+        //
+    
     }
 }
 
@@ -136,9 +169,24 @@ void pileup::parse_pileup(
     }
     std::cout << h << " num of target read" << std::endl;
     std::vector<pileup::ParsedRead> j = get_gapped_seed_reads(parsed_reads, 6);
-    for (auto & read : j) {
-        std::cout << read.aln_start_ << "  " << read.aln_end_ << std::endl;
+    
+    std::vector<std::string> seed_read = {j[0].read_seq_, j[0].base_qualities_};
+    
+    std::cout << j[0].read_seq_ << "  " << j[0].base_qualities_ << std::endl;
+    std::vector<std::vector<std::string>> _reads;
+    for ( size_t i = 1; i < 6; ++i) {
+        std::cout << j[i].read_seq_ << "  " << j[i].base_qualities_ << std::endl;
+        std::vector<std::string> r = {j[i].read_seq_, j[i].base_qualities_};
+        _reads.push_back(r);
     }
+    
+    //std::vector<std::string> lll = {"TAAATTTATGTAAATCACTTTGGACCCAGCATGTCCTTAGGTTTTACCCATTCGTCAAACTGCTCTGCTGTGAGATAGCCAAGTTCGATAGCAGTTTCCTTTAAGGTTGATCCATTTTTTTTGTGTGCTGTCTTAGCAATCTTTGCTGCCTTGTCATACCCTGAAGAAAAAATAAAAAGACGACATATGGGTTAGCAGTGA", "@E@JJJJJJJJJJJEHIIJJJJJJJJJJJJJJJJJJJJJJJJJJGHCECGEGJJJJJJIJJJIIJJJIJHHJJJJJJJJJJJHJJJJJJJJJJJJIJJJJHJJJJJJJJJJJJJJJJJJJJJIJIJIIJIHJJJJGHIJJJJJJHEIHJIJJJJIJJJJHJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJE@"};
+    //std::vector<std::vector<std::string>> _pp = {{"TTTCATTATAAATTTATGTAAATCACTTTGGACCCAGCATGTCCTTAGGTTTTACCCATTCGTCAAACTGCTCTGCTGTGAGATAGCCAAGTTCGATAGCAGTTTCCTTTAAGGTTGATCCATTTTTTTTGTGTGCTGTCT", "KFK<7KKKKFAKKKKKKKKKKKKF<KKKKKFAKKKFKKKKKKKKKKKKKKFKKFFKKFKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKA"}};
+    
+    sw::flatten_reads(seed_read, _reads);
+   // for (auto & read : j) {
+   //     std::cout << read.aln_start_ << "  " << read.aln_end_ << std::endl;
+   // }
 }
 
 // select gapped_seed
