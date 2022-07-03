@@ -64,15 +64,56 @@ cigar_string ) {
   return cigarette;
 }
 
+
+
+void parse_splice_pattern(std::vector<std::pair<int, int>> & exons,
+                          std::vector<std::pair<int, int>> & introns,
+                          const std::vector<std::pair<char, int>> & cigar_vector,
+                          const int start)
+{
+    char op;
+    int op_len;
+    int curr_pos = start;
+    for (const auto & c : cigar_vector) {
+        op = c.first;
+        op_len = c.second;
+        
+        switch (op) {
+            case 'M':
+                curr_pos += op_len;
+                break;
+            case '=':
+                curr_pos += op_len;
+                break;
+            case 'X':
+                curr_pos += op_len;
+                break;
+            case 'D':
+                curr_pos += op_len;
+                break;
+            case 'N':
+                introns.emplace_back(curr_pos, (curr_pos + op_len - 1));
+                curr_pos += op_len;
+                break;
+            default:
+                break;
+        }
+    }
+
+    // make exon
+   
+}   
+
+
 // returns a list of intron start and stop positions (inclusive: [start, start])
-std::vector<std::pair<int, int>> get_introns ( const
-std::vector<std::pair<char, int>> &cigar_vector, const int aln_start ) {
+std::vector<std::pair<int, int>> get_introns ( const std::vector<std::pair<char, int>> &cigar_vector, const int aln_start ) {
 
   std::vector<std::pair<int, int>> introns;
 
   char operation;
   int operation_len;
-  int current_pos = aln_start - 1;
+  //int current_pos = aln_start - 1;
+  int current_pos = aln_start;
   for ( std::vector<std::pair<char, int>>::const_iterator itr =
           cigar_vector.begin();
         itr != cigar_vector.end(); ++itr ) {
@@ -84,6 +125,12 @@ std::vector<std::pair<char, int>> &cigar_vector, const int aln_start ) {
       case 'M':
         current_pos += operation_len;
         break;
+      case '=':
+        current_pos += operation_len;
+        break;
+      case 'X':
+        current_pos += operation_len;
+        break;
       case 'I':
         break;
       case 'D':
@@ -91,8 +138,8 @@ std::vector<std::pair<char, int>> &cigar_vector, const int aln_start ) {
         break;
       case 'N':
         break;
-
-
+      default:
+        break;
     }
   }
 }
