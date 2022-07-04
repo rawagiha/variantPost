@@ -1,7 +1,12 @@
 import re
 import random
 import numpy as np
-cimport cython
+import time
+
+
+#from libcpp.string cimport string
+#from libcpp.vector cimport vector
+#from libcpp cimport bool as bool_t
 
 
 cigar_ptrn = re.compile(b"[0-9]+[MIDNSHPX=]")
@@ -82,7 +87,7 @@ def get_spliced_reference_seq(
     consuming_operations = (b"M", b"X", b"D")
     ref_seq = ""
     for c in cigar_list:
-        op, op_len = c[-1], int(c[:-1])
+        op, op_len = c[-1:], int(c[:-1])
         if op in consuming_operations:
             ref_seq += fasta.fetch(chrom, __pos, __pos + op_len)
             __pos += op_len
@@ -91,9 +96,8 @@ def get_spliced_reference_seq(
         else:
             # non consuming operations (b"I", b"S", b"H", b"P")
             pass
-
+   
     return ref_seq.encode()
-
 
 def make_qual_seq(qual_arr):
     a = np.frombuffer(qual_arr, dtype=np.int8)
@@ -114,25 +118,36 @@ def preprocess(
     downsample_thresh,
 ):
     chrom = edit_chrom_prefix(chrom, bam)
+    
+    tt = time.time()
     reads = fetch_reads(bam, chrom, pos, chrom_len, window, exclude_duplicates)
+    print("I/O by pysam", time.time() - tt)
 
     if downsample_thresh < 0:
         sample_factor = 1.0
     else:
         reads, sample_factor = downsampler(chrom, pos, bam, downsample_thresh, reads)
 
+    #reads = [read for read in reads if "N" not in read.cigarstring]
+    
     read_names = []  #
+    
     are_reverse = [] #
     cigar_strings = [] #
     aln_starts = []  #
     aln_ends = []     #
     read_seqs = []  #
+    #cdef vector[string] read_seqs 
     ref_seqs = [] #
     qual_seqs = [] #
     mapqs = [] #
     
     cdef int n = len(reads)
     cdef int i = 0
+    cdef object read
+    cdef bytes cigar_string
+    cdef int aln_start, aln_end
+    
     for i in range(n):
         
         read = reads[i]
@@ -145,11 +160,11 @@ def preprocess(
         aln_starts.append(aln_start)
         aln_ends.append(aln_end)
         read_seqs.append(read.query_sequence.encode())
+        #read_seqs.push_back(read.query_sequence.encode()) 
 
         if b"N" in cigar_string:
             
             cigar_list = cigar_ptrn.findall(cigar_string)
-
             ref_seqs.append(
                 get_spliced_reference_seq(
                     chrom,
@@ -162,6 +177,7 @@ def preprocess(
                     fasta,
                 )
             )
+        
 
         else:
             ref_seqs.append(b"")
@@ -170,7 +186,6 @@ def preprocess(
         mapqs.append(read.mapping_quality)
         
         i += 1
-    
     return (
         read_names,
         are_reverse,

@@ -69,7 +69,8 @@ cigar_string ) {
 void parse_splice_pattern(std::vector<std::pair<int, int>> & exons,
                           std::vector<std::pair<int, int>> & introns,
                           const std::vector<std::pair<char, int>> & cigar_vector,
-                          const int start)
+                          const int start,
+                          const int end)
 {
     char op;
     int op_len;
@@ -100,8 +101,12 @@ void parse_splice_pattern(std::vector<std::pair<int, int>> & exons,
         }
     }
 
-    // make exon
-   
+    curr_pos = start;
+    for (const auto & i : introns) {
+        exons.emplace_back(curr_pos, i.first - 1);
+        curr_pos = i.second + 1;
+    }
+    exons.emplace_back(curr_pos, end);
 }   
 
 
@@ -150,8 +155,17 @@ std::string get_read_wise_ref_seq ( int aln_start, int aln_end,
                                     int unspliced_local_reference_start,
                                     const std::string &unspliced_local_reference ) {
   int start_idx = aln_start - unspliced_local_reference_start;
-  return unspliced_local_reference.substr ( start_idx,
-         ( aln_end - aln_start + 1 ) );
+  size_t expected_ref_len = aln_end - aln_start + 1;
+   
+  if ( start_idx >= 0 ){
+    std::string fitted_ref = unspliced_local_reference.substr ( start_idx, expected_ref_len );
+    if ( fitted_ref.size() == expected_ref_len ) {
+        return fitted_ref;
+    }
+  }
+
+  // failed to fit
+  return "";
 }
 
 
@@ -364,7 +378,7 @@ bool Variant::is_equivalent(const Variant & other, const int unspliced_local_ref
         int pos = other.pos_;
         std::string ref = other.ref_;
         std::string alt = other.alt_;
-           
+        
         left_align( pos, ref, alt, other.is_ins_, unspliced_local_reference_start, indexed_local_reference );
         
         return ( ( pos_ == pos ) & ( ref_ == ref ) &  ( alt_ == alt ) );      

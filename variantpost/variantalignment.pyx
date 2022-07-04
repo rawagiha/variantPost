@@ -1,5 +1,7 @@
 from .preprocessor import preprocess
-from variantpost.pileup_parser_wrapper import test_it 
+from variantpost.pileup_parser_wrapper cimport test_it
+
+import time
 
 class VariantAlignment(object):
     def __init__(
@@ -9,19 +11,27 @@ class VariantAlignment(object):
         (
             chrom,
             pos,
+            ref,
+            alt,
             chrom_len,
             unspliced_local_reference,
             unspliced_local_reference_start,
+            unspliced_local_reference_end,
             reference,
         ) = (
             variant.chrom,
             variant.pos,
+            variant.ref,
+            variant.alt,
             variant.reference_len,
             variant.unspliced_local_reference,
             variant.unspliced_local_reference_start,
+            variant.unspliced_local_reference_end,            
             variant.reference,
         )
         
+        t = time.time()
+
         #processed reads for c++ wrapper
         reads = preprocess(
             chrom,
@@ -35,5 +45,11 @@ class VariantAlignment(object):
             window,
             downsample_thresh,
         )
+       
+        tt = time.time()
+        print(tt -t, "preprosess")
 
-        test_it(unspliced_local_reference_start, unspliced_local_reference.encode("utf-8"), * reads)
+        test_it(chrom.encode(), pos, ref.encode(), alt.encode(), unspliced_local_reference_start, unspliced_local_reference_end, unspliced_local_reference.encode("utf-8"), reads[0], reads[1], reads[2], reads[3], reads[4], reads[5], reads[6], reads[7], reads[8])
+
+        print(time.time() - tt, "c++ time")
+        print(time.time() - t, "total varaln")

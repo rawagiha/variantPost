@@ -21,6 +21,13 @@ std::string get_read_wise_ref_seq( int aln_start, int aln_end,
                                    int unspliced_local_reference_start,
                                    const std::string & unspliced_local_reference );
 
+void parse_splice_pattern(std::vector<std::pair<int, int>> & exons,
+                          std::vector<std::pair<int, int>> & introns,
+                          const std::vector<std::pair<char, int>> & cigar_vector,
+                          const int start,
+                          const int end);
+
+
 std::map<int, char> reference_by_position( const std::string &
         unspliced_local_reference, int unspliced_local_reference_start,
         int unspliced_local_reference_end );

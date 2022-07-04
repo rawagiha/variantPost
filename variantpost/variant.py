@@ -15,11 +15,11 @@ class Variant(object):
         
         self.reference_len = reference.get_reference_length(self._chrom) 
         
-        # 0-based
-        self.unspliced_local_reference_start = max(0, pos - self.window) 
+        # 1-based
+        self.unspliced_local_reference_start = max(0, pos - self.window) + 1
         self.unspliced_local_reference_end = min(pos + self.window, self.reference_len)
         
         self.unspliced_local_reference = reference.fetch(
-            chrom, self.unspliced_local_reference_start, self.unspliced_local_reference_end
+            chrom, self.unspliced_local_reference_start - 1, self.unspliced_local_reference_end
         )
 

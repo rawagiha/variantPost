@@ -16,6 +16,17 @@
 
 std::vector<pileup::ParsedRead> get_gapped_seed_reads(std::vector<pileup::ParsedRead> & parsed_reads, size_t n);
 
+
+//check covering
+
+// read classifer
+char classify_read(const int aln_start,
+                   const int aln_end,
+                   const std::string & cigar_string,
+                   const std::vector<std::pair<char, int>> & cigar_vec,
+                   const Variant & variant, 
+                   const std::vector<Variant> & variants);
+
 // read evaluate func (ref_seq, clipping, worth_realn)
 // covering checker
 
@@ -61,12 +72,33 @@ pileup::ParsedRead::ParsedRead( int unspliced_local_reference_start,
     base_qualities_ = to_fastq_qual( q );
     mapq_ = mapq;
 
-
-    variants = find_mapped_variants( aln_start, aln_end, ref_seq_, read_seq_, cigar_vector_,
-                                                 chrom, unspliced_local_reference_start, unspliced_local_reference_end,
-                                                 indexed_local_reference );
+    /* 
+    if (cigar_string.find( 'S' ) != std::string::npos) {
+        std::vector<std::pair<int, int>> exons;
+        std::vector<std::pair<int, int>> introns;
+        parse_splice_pattern(exons, introns, cigar_vector_, aln_start, aln_end);
+        
+         
+        for (auto e : exons ) {
+            std::cout << "(" << e.first << ", " << e.second << "), " ;
+        }
+        std::cout << std::endl;
+        for (auto i : introns ) {
+            std::cout << "(" << i.first << ", " << i.second << "), ";
+        }
+        std::cout << std::endl;
+    }
+    */
+    //remove check for empty str
+    if ( !ref_seq_.empty() ) {
+        variants = find_mapped_variants( aln_start, aln_end, ref_seq_, read_seq_, cigar_vector_,
+                                         chrom, unspliced_local_reference_start, unspliced_local_reference_end,
+                                         indexed_local_reference );
+    }
     // read evaluations
     // test if clipped
+    
+    /*
     bool is_soft = false, is_hard = false;
     if ( cigar_string.find( 'S' ) == std::string::npos ) {
         is_soft = true;
@@ -80,6 +112,8 @@ pileup::ParsedRead::ParsedRead( int unspliced_local_reference_start,
     if ( is_soft || is_hard ) {
         is_clipped = true;
     }
+    */
+
 
     // test if read seq == reference
     is_ref_seq = false;
@@ -87,7 +121,7 @@ pileup::ParsedRead::ParsedRead( int unspliced_local_reference_start,
         is_ref_seq = true;
     }
     
-    if ( !is_ref_seq ) {
+    if ( 1) {
     
         // test if target is aligned
         is_target = false;
@@ -101,7 +135,7 @@ pileup::ParsedRead::ParsedRead( int unspliced_local_reference_start,
         //
     
     }
-}
+} 
 
 void pileup::parse_pileup(
     const std::string & chrom,
@@ -130,7 +164,6 @@ void pileup::parse_pileup(
 
     // target variant
     Variant trgt = Variant(chrom, pos, ref, alt);
-    
     
     //Variant v = Variant( "1", 241661227,  "A",  "ATTT");
      //                    unspliced_local_reference_start, unspliced_local_reference_end, aa );
@@ -168,8 +201,9 @@ void pileup::parse_pileup(
         }   
     }
     std::cout << h << " num of target read" << std::endl;
-    std::vector<pileup::ParsedRead> j = get_gapped_seed_reads(parsed_reads, 6);
     
+    if ( h > 0 ) {
+    std::vector<pileup::ParsedRead> j = get_gapped_seed_reads(parsed_reads, 6);
     std::vector<std::string> seed_read = {j[0].read_seq_, j[0].base_qualities_};
     
     std::cout << j[0].read_seq_ << "  " << j[0].base_qualities_ << std::endl;
@@ -184,6 +218,8 @@ void pileup::parse_pileup(
     //std::vector<std::vector<std::string>> _pp = {{"TTTCATTATAAATTTATGTAAATCACTTTGGACCCAGCATGTCCTTAGGTTTTACCCATTCGTCAAACTGCTCTGCTGTGAGATAGCCAAGTTCGATAGCAGTTTCCTTTAAGGTTGATCCATTTTTTTTGTGTGCTGTCT", "KFK<7KKKKFAKKKKKKKKKKKKF<KKKKKFAKKKFKKKKKKKKKKKKKKFKKFFKKFKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKA"}};
     
     sw::flatten_reads(seed_read, _reads);
+    }
+   
    // for (auto & read : j) {
    //     std::cout << read.aln_start_ << "  " << read.aln_end_ << std::endl;
    // }
