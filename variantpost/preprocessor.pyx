@@ -27,7 +27,7 @@ def edit_chrom_prefix(chrom, bam):
 
 def is_qualified_read(read, exclude_duplicates):
     if exclude_duplicates:
-        if read.cigarstring and (not read.is_duplicate) and (not read.is_secondary) and (not read.is_supplementary):
+        if read.cigarstring and (read.reference_end is not None) and (not read.is_duplicate) and (not read.is_secondary) and (not read.is_supplementary):
             return True
         
         #return all(
@@ -39,7 +39,7 @@ def is_qualified_read(read, exclude_duplicates):
         #    )
         #)
     else:
-        if read.cigarstring and (not read.is_secondary) and (not read.is_supplementary):
+        if read.cigarstring and (read.reference_end is not None) and (not read.is_secondary) and (not read.is_supplementary):
             return True
         #return all(((not read.is_secondary), (not read.is_supplementary), read.cigarstring))
 

@@ -24,7 +24,11 @@ char classify_read(const int aln_start,
                    const int aln_end,
                    const std::string & cigar_string,
                    const std::vector<std::pair<char, int>> & cigar_vec,
-                   const Variant & variant, 
+                   //const Variant & variant, 
+                   const bool is_ins,
+                   const bool is_del,
+                   const int l_pos, 
+                   const int r_pos,
                    const std::vector<Variant> & variants);
 
 // read evaluate func (ref_seq, clipping, worth_realn)
@@ -57,6 +61,15 @@ pileup::ParsedRead::ParsedRead( int unspliced_local_reference_start,
     aln_start_ = aln_start + 1; // 1-based
     aln_end_ = aln_end;  // pysam aln_end is 1-based
     
+    //std::pair<char, int> first_c, last_c = cigar_vector_[0], cigar_vector_.back();
+    std::pair<char, int> first_c = cigar_vector_[0];
+    std::pair<char, int> last_c = cigar_vector_.back();
+    int start_offset = ( first_c.first == 'S' ) ? first_c.second : 0;
+    int read_start = aln_start_ - start_offset;
+    int end_offset = ( last_c.first == 'S' ) ? last_c.second : 0;   
+    int read_end = aln_end + end_offset;
+    
+    
     /*may be removed later*/
     read_seq_ = read_seq;
     if ( cigar_string.find( 'N' ) != std::string::npos ) {
@@ -72,13 +85,11 @@ pileup::ParsedRead::ParsedRead( int unspliced_local_reference_start,
     base_qualities_ = to_fastq_qual( q );
     mapq_ = mapq;
 
-    /* 
-    if (cigar_string.find( 'S' ) != std::string::npos) {
-        std::vector<std::pair<int, int>> exons;
-        std::vector<std::pair<int, int>> introns;
-        parse_splice_pattern(exons, introns, cigar_vector_, aln_start, aln_end);
+    std::vector<std::pair<int, int>> exons;
+    std::vector<std::pair<int, int>> introns;
+    parse_splice_pattern(exons, introns, cigar_vector_, read_start, read_end);
         
-         
+        /* 
         for (auto e : exons ) {
             std::cout << "(" << e.first << ", " << e.second << "), " ;
         }
@@ -87,8 +98,8 @@ pileup::ParsedRead::ParsedRead( int unspliced_local_reference_start,
             std::cout << "(" << i.first << ", " << i.second << "), ";
         }
         std::cout << std::endl;
-    }
-    */
+        */
+    
     //remove check for empty str
     if ( !ref_seq_.empty() ) {
         variants = find_mapped_variants( aln_start, aln_end, ref_seq_, read_seq_, cigar_vector_,
@@ -98,7 +109,6 @@ pileup::ParsedRead::ParsedRead( int unspliced_local_reference_start,
     // read evaluations
     // test if clipped
     
-    /*
     bool is_soft = false, is_hard = false;
     if ( cigar_string.find( 'S' ) == std::string::npos ) {
         is_soft = true;
@@ -112,7 +122,6 @@ pileup::ParsedRead::ParsedRead( int unspliced_local_reference_start,
     if ( is_soft || is_hard ) {
         is_clipped = true;
     }
-    */
 
 
     // test if read seq == reference
@@ -126,6 +135,8 @@ pileup::ParsedRead::ParsedRead( int unspliced_local_reference_start,
         // test if target is aligned
         is_target = false;
         for (auto & v : variants) {
+            
+            // do for spl ptrn
             variant_str += (std::to_string(v.pos_) + "_" + v.ref_ + "_" + v.alt_ + ";");
             if (!is_target) {
                 is_target = target.is_equivalent(v, unspliced_local_reference_start, indexed_local_reference);      
