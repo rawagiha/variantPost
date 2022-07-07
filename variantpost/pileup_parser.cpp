@@ -51,7 +51,7 @@ pileup::ParsedRead::ParsedRead( int unspliced_local_reference_start,
                                 const Variant & target, 
                                 const std::map<int, char> & indexed_local_reference)
 {
-    const std::string chrom = target.chrom_;
+    const std::string chrom = target.chrom;
     read_name_ = read_name;
     is_reverse_ = is_reverse;
 
@@ -137,7 +137,7 @@ pileup::ParsedRead::ParsedRead( int unspliced_local_reference_start,
         for (auto & v : variants) {
             
             // do for spl ptrn
-            variant_str += (std::to_string(v.pos_) + "_" + v.ref_ + "_" + v.alt_ + ";");
+            variant_str += (std::to_string(v.pos) + "_" + v.ref + "_" + v.alt + ";");
             if (!is_target) {
                 is_target = target.is_equivalent(v, unspliced_local_reference_start, indexed_local_reference);      
             }
@@ -209,7 +209,11 @@ void pileup::parse_pileup(
     for (auto & read: parsed_reads) {
         if (read.is_target) {
             h += 1;
-        }   
+            //std::cout << read.read_name_ << " " << read.is_reverse_ << std::endl;
+        } 
+        else {
+            //std::cout << read.read_name_ << " " << read.is_reverse_ << " " << read.cigar_string_ << std::endl;
+        }  
     }
     std::cout << h << " num of target read" << std::endl;
     

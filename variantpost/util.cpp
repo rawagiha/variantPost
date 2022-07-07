@@ -150,6 +150,8 @@ std::vector<std::pair<int, int>> get_introns ( const std::vector<std::pair<char,
 }
 
 // fit local referenece to read alignment
+// not considered del??
+// do we need this??
 //-----------------------------------------------------------------------------
 std::string get_read_wise_ref_seq ( int aln_start, int aln_end,
                                     int unspliced_local_reference_start,
@@ -221,11 +223,11 @@ Variant::Variant( const std::string & chrom,
 */
 
 Variant::Variant ( const std::string &chrom, int pos, const std::string &ref,
-                   const std::string &alt ) : chrom_ ( chrom ), pos_ ( pos ), ref_ ( ref ),
-  alt_ ( alt ), ref_len_ ( ref_.size() ), alt_len_ ( alt_.size() ),
-  is_substitute_ ( ( alt_len_ == ref_len_ ) ),
-  is_ins_ ( ( alt_len_ > ref_len_ ) ),
-  is_del_ ( ( alt_len_ < ref_len_ ) )
+                   const std::string &alt ) : chrom ( chrom ), pos ( pos ), ref ( ref ),
+  alt ( alt ), ref_len ( ref.size() ), alt_len ( alt.size() ),
+  is_substitute ( ( alt_len == ref_len ) ),
+  is_ins ( ( alt_len > ref_len ) ),
+  is_del ( ( alt_len < ref_len ) )
 {}
 
 
@@ -263,14 +265,14 @@ void left_align( int & pos, std::string & ref, std::string & alt, bool is_ins,
 
 int Variant::get_leftmost_pos(const int unspliced_local_reference_start, const std::map<int, char> & indexed_local_reference) const
 {
-    int pos = pos_;
-    std::string ref = ref_ ;
-    std::string alt = alt_;
+    int pos_ = pos;
+    std::string ref_ = ref;
+    std::string alt_ = alt;
 
-    left_align( pos, ref, alt, is_ins_, unspliced_local_reference_start,
+    left_align( pos_, ref_, alt_, is_ins, unspliced_local_reference_start,
                 indexed_local_reference );
 
-    return pos;
+    return pos_;
 }
 
 
@@ -309,49 +311,49 @@ void right_align( int & pos, int & variant_end_pos, std::string & ref,
 
 int Variant::get_rightmost_pos(const int unspliced_local_reference_end, const std::map<int, char> & indexed_local_reference) const
 {
-    int pos = pos_;
-    int variant_end_pos = variant_end_pos_;
-    std::string ref = ref_ ;
-    std::string alt = alt_;
+    int pos_ = pos;
+    int variant_end_pos_ = variant_end_pos;
+    std::string ref_ = ref;
+    std::string alt_ = alt;
 
-    right_align( pos, variant_end_pos, ref, alt, is_ins_,
+    right_align( pos_, variant_end_pos_, ref_, alt_, is_ins,
                  unspliced_local_reference_end, indexed_local_reference );
 
-    return pos;
+    return pos_;
 }
 
 
 bool Variant::is_shiftable(const std::map<int, char> & indexed_local_reference) const
 {
 
-    if ( is_substitute_ ) {
+    if ( is_substitute ) {
         return false;
     }
 
-    if ( is_ins_ ) {
-        if ( is_rotatable( alt_ ) ) {
+    if ( is_ins ) {
+        if ( is_rotatable( alt ) ) {
             return true;
         }
         else {
-            std::string longer = alt_;
-            std::string shorter = ref_;
-            int _variant_end_pos = variant_end_pos_;
+            std::string longer = alt;
+            std::string shorter = ref;
+            int variant_end_pos_ = variant_end_pos;
 
-            to_right( _variant_end_pos, longer, shorter, indexed_local_reference );
+            to_right( variant_end_pos_, longer, shorter, indexed_local_reference );
 
             return is_rotatable( longer );
         }
     }
     else {
-        if ( is_rotatable( ref_ ) ) {
+        if ( is_rotatable( ref ) ) {
             return true;
         }
         else {
-            std::string longer = ref_;
-            std::string shorter = alt_;
-            int _variant_end_pos = variant_end_pos_;
+            std::string longer = ref;
+            std::string shorter = alt;
+            int variant_end_pos_ = variant_end_pos;
 
-            to_right( _variant_end_pos, longer, shorter, indexed_local_reference );
+            to_right( variant_end_pos_, longer, shorter, indexed_local_reference );
 
             return is_rotatable( longer );
         }
@@ -371,17 +373,17 @@ bool Variant::is_equivalent(const Variant & other, const int unspliced_local_ref
     //std::vector<bool> this_variant_type{is_substitute_, is_ins_, is_del_};
     //std::vector<bool> other_varaint_type{other.is_substitute_, other.is_ins_, other.is_del_};
 
-    std::vector<int> var_len_0{ref_len_, alt_len_};
-    std::vector<int> var_len_1{other.ref_len_, other.alt_len_};
+    std::vector<int> var_len_0{ref_len, alt_len};
+    std::vector<int> var_len_1{other.ref_len, other.alt_len};
 
     if (var_len_0 == var_len_1){
-        int pos = other.pos_;
-        std::string ref = other.ref_;
-        std::string alt = other.alt_;
+        int pos_ = other.pos;
+        std::string ref_ = other.ref;
+        std::string alt_ = other.alt;
         
-        left_align( pos, ref, alt, other.is_ins_, unspliced_local_reference_start, indexed_local_reference );
+        left_align( pos_, ref_, alt_, other.is_ins, unspliced_local_reference_start, indexed_local_reference );
         
-        return ( ( pos_ == pos ) & ( ref_ == ref ) &  ( alt_ == alt ) );      
+        return ( ( pos == pos_ ) & ( ref == ref_ ) &  ( alt == alt_ ) );      
          
     }
     else {
@@ -464,15 +466,16 @@ std::vector<Variant> find_mapped_variants ( const int aln_start,
 
     switch ( operation ) {
       case 'M':
+      case 'X':
+      case '=':
         for ( int i = 0; i < operation_len; ++i ) {
-
 
           std::string ref = ref_seq.substr ( ref_idx, 1 );
           std::string alt = read_seq.substr ( read_idx, 1 );
 
+          // snv
           if ( ref != alt ) {
             variants.emplace_back ( chrom, pos, ref, alt );
-            //std::cout << pos << "-" << ref << "-" << alt << std::endl;
           }
           ++ref_idx;
           ++read_idx;
@@ -483,7 +486,6 @@ std::vector<Variant> find_mapped_variants ( const int aln_start,
         variants.emplace_back ( chrom, pos - 1, ref_seq.substr ( ref_idx - 1, 1 ),
                                 ref_seq.substr ( ref_idx - 1, 1 ) + read_seq.substr ( read_idx,
                                     operation_len ) );
-        //std::cout << pos << "-" << ref_seq.substr( ref_idx - 1, 1 ) << "-" << read_seq.substr( read_idx, operation_len ) << std::endl;
         read_idx += operation_len;
         break;
       case 'D':
@@ -499,31 +501,10 @@ std::vector<Variant> find_mapped_variants ( const int aln_start,
         read_idx += ( operation_len );
         break;
       case 'H':
-        //
-        break;
       case 'P':
         //
         break;
-      case 'X':
-        /*
-        append_snv( variants, ref_idx, read_idx, pos, ref_seq, read_seq, chrom,
-                    unspliced_local_reference_start, unspliced_local_reference_end,
-                    indexed_local_reference );
-
-        */
-        ++ref_idx;
-        ++read_idx;
-        ++pos;
-        break;
-      case '=':
-        ++ref_idx;
-        ++read_idx;
-        ++pos;
-        break;
     }
-
-    //MIDNSHPX=
-
   }
   return variants;
 }

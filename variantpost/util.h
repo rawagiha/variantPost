@@ -33,18 +33,18 @@ std::map<int, char> reference_by_position( const std::string &
         int unspliced_local_reference_end );
 
 struct Variant {
-    std::string chrom_;
-    int pos_;
-    std::string ref_;
-    std::string alt_;
+    std::string chrom;
+    int pos;
+    std::string ref;
+    std::string alt;
     
-    int ref_len_;
-    int alt_len_;
-    int variant_end_pos_ = pos_ + ref_len_;
+    int ref_len;
+    int alt_len;
+    int variant_end_pos = pos + ref_len;
     
-    bool is_substitute_;
-    bool is_ins_;
-    bool is_del_;
+    bool is_substitute;
+    bool is_ins;
+    bool is_del;
     
     Variant(const std::string & chrom, const int pos, const std::string & ref, const std::string & alt);
     
