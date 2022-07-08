@@ -71,17 +71,9 @@ def downsampler(chrom, pos, bam, downsample_thresh, reads):
 def get_spliced_reference_seq(
     chrom,
     aln_start,
-    aln_end,
-    unspliced_local_reference,
-    unspliced_local_reference_start,
-    cigar_string,
     cigar_list,
     fasta,
 ):
-    """
-    unspliced_local_reference_start: 0-based
-    aln_start and aln_end: 1-based
-    """
     __pos = aln_start - 1  # 0-based
 
     consuming_operations = (b"M", b"X", b"D")
@@ -169,10 +161,6 @@ def preprocess(
                 get_spliced_reference_seq(
                     chrom,
                     aln_start,
-                    aln_end,
-                    unspliced_local_reference,
-                    unspliced_local_reference_start,
-                    cigar_string,
                     cigar_list,
                     fasta,
                 )
