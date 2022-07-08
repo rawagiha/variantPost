@@ -114,7 +114,7 @@ pileup::ParsedRead::ParsedRead( const int & unspliced_local_reference_start,
     
     
     char cov = classify_covering(lpos, pos, rpos, is_shiftable, exons, variants);
-    std::cout << read_name << "  " << cov << " " << is_reverse << std::endl;
+    //std::cout << read_name << "  " << cov << " " << is_reverse << std::endl;
     
     // read evaluations
     // test if clipped
