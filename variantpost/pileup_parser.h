@@ -10,37 +10,41 @@
 namespace pileup {
 
 struct ParsedRead {
-    std::string read_name_;
-    bool is_reverse_;
-    std::string cigar_string_;
-    std::vector<std::pair<char, int>> cigar_vector_;
-    int aln_start_;
-    int aln_end_;
-    std::string read_seq_;
-    std::string ref_seq_;
-    std::string base_qualities_;
-    int mapq_;
-    bool is_spliced_;
+    std::string read_name;
+    bool is_reverse;
+    std::string cigar_string;
+    std::vector<std::pair<char, int>> cigar_vector;
+    int aln_start;
+    int aln_end;
+    std::string read_seq;
+    std::string ref_seq;
+    std::string base_qualities;
+    int mapq;
+    bool is_spliced;
     std::vector<Variant> variants;
     bool is_clipped;
     bool is_ref_seq;
     bool is_target;
     std::string variant_str;
 
-    ParsedRead(int, 
-               int,
-               const std::string &, 
-               const std::string &,
-               bool, 
-               const std::string &,
-               int, 
-               int, 
-               const std::string &,
-               const std::string &, 
-               const std::vector<int> &, 
-               int,
-               const Variant &, // target
-               const std::map<int, char> & //std::map<int, char> & indexed_local_reference
+    ParsedRead(const int & unspliced_local_reference_start, 
+               const int & unspliced_local_reference_end,
+               const std::string & unspliced_local_reference, 
+               const std::string & read_name,
+               const bool & is_reverse, 
+               const std::string & cigar_string,
+               const int & aln_start, 
+               const int & aln_end, 
+               const std::string & read_seq,
+               const std::string & ref_seq, 
+               const std::vector<int> & qualities, 
+               const int & mapq,
+               const Variant & target, // target
+               const int & lpos,
+               const int & pos,
+               const int & rpos,
+               const bool & is_shiftable,
+               const std::map<int, char> &  indexed_local_reference //std::map<int, char> & indexed_local_reference
 
     );
 

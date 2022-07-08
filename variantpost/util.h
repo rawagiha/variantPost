@@ -9,6 +9,13 @@
 #include <unordered_map>
 
 
+template<typename A, typename B, typename C>
+bool ordered(const A & a, const B & b, const C & c)
+{
+    return (a <= b) && (b <= c);
+}
+
+
 
 std::string find_commonest_str(const std::vector<std::string> & arr_str);
 
@@ -33,7 +40,7 @@ std::map<int, char> reference_by_position( const std::string &
         int unspliced_local_reference_end );
 
 struct Variant {
-    std::string chrom;
+    //std::string chrom;
     int pos;
     std::string ref;
     std::string alt;
@@ -46,7 +53,7 @@ struct Variant {
     bool is_ins;
     bool is_del;
     
-    Variant(const std::string & chrom, const int pos, const std::string & ref, const std::string & alt);
+    Variant(const int pos, const std::string & ref, const std::string & alt);
     
     //int ref_len_;
     //int alt_len_;
@@ -82,7 +89,7 @@ struct Variant {
 std::vector<Variant> find_mapped_variants( const int aln_start,
         const int aln_end, const std::string & ref_seq, const std::string & read_seq,
         const std::vector<std::pair<char, int>> & cigar_vector,
-        const std::string & chrom,
+        //const std::string & chrom,
         const int & unspliced_local_reference_start,
         const int & unspliced_local_reference_end,
         const std::map<int, char> & indexed_local_reference );

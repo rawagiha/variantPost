@@ -81,15 +81,10 @@ void parse_splice_pattern(std::vector<std::pair<int, int>> & exons,
         
         switch (op) {
             case 'M':
-                curr_pos += op_len;
-                break;
-            case '=':
-                curr_pos += op_len;
-                break;
-            case 'X':
-                curr_pos += op_len;
-                break;
+            case 'S': //offset added
             case 'D':
+            case 'X':
+            case '=':
                 curr_pos += op_len;
                 break;
             case 'N':
@@ -222,8 +217,8 @@ Variant::Variant( const std::string & chrom,
 }
 */
 
-Variant::Variant ( const std::string &chrom, int pos, const std::string &ref,
-                   const std::string &alt ) : chrom ( chrom ), pos ( pos ), ref ( ref ),
+Variant::Variant ( int pos, const std::string &ref,
+                   const std::string &alt ) : pos ( pos ), ref ( ref ),
   alt ( alt ), ref_len ( ref.size() ), alt_len ( alt.size() ),
   is_substitute ( ( alt_len == ref_len ) ),
   is_ins ( ( alt_len > ref_len ) ),
@@ -440,7 +435,7 @@ inline void append_snv( std::vector<Variant> & variants,
 std::vector<Variant> find_mapped_variants ( const int aln_start,
     const int aln_end, const std::string &ref_seq, const std::string &read_seq,
     const std::vector<std::pair<char, int>> &cigar_vector,
-    const std::string &chrom,
+    //const std::string &chrom,
     const int &unspliced_local_reference_start,
     const int &unspliced_local_reference_end,
     const std::map<int, char> &indexed_local_reference ) {
@@ -475,7 +470,7 @@ std::vector<Variant> find_mapped_variants ( const int aln_start,
 
           // snv
           if ( ref != alt ) {
-            variants.emplace_back ( chrom, pos, ref, alt );
+            variants.emplace_back ( pos, ref, alt );
           }
           ++ref_idx;
           ++read_idx;
@@ -483,13 +478,13 @@ std::vector<Variant> find_mapped_variants ( const int aln_start,
         }
         break;
       case 'I':
-        variants.emplace_back ( chrom, pos - 1, ref_seq.substr ( ref_idx - 1, 1 ),
+        variants.emplace_back ( pos - 1, ref_seq.substr ( ref_idx - 1, 1 ),
                                 ref_seq.substr ( ref_idx - 1, 1 ) + read_seq.substr ( read_idx,
                                     operation_len ) );
         read_idx += operation_len;
         break;
       case 'D':
-        variants.emplace_back ( chrom, pos - 1, ref_seq.substr ( ref_idx - 1,
+        variants.emplace_back ( pos - 1, ref_seq.substr ( ref_idx - 1,
                                 1 + operation_len ), ref_seq.substr ( ref_idx - 1, 1 ) );
         ref_idx += operation_len;
         pos += operation_len;
