@@ -18,10 +18,12 @@ std::vector<pileup::ParsedRead> get_gapped_seed_reads(std::vector<pileup::Parsed
 
 
 //check covering
-char classify_covering(const int lpos, 
-                       const int pos,
-                       const int rpos,
-                       const bool is_shiftable,
+char classify_covering(const int & lpos, 
+                       const int & pos,
+                       const int & rpos,
+                       const bool & is_shiftable,
+                       const int & start_offset,
+                       const int & end_offset,
                        const std::vector<std::pair<int, int>> & exons,
                        const std::vector<Variant> & variants);
  
@@ -90,9 +92,9 @@ pileup::ParsedRead::ParsedRead( const int & unspliced_local_reference_start,
 
     base_qualities = to_fastq_qual( q );
 
-    std::vector<std::pair<int, int>> exons;
-    std::vector<std::pair<int, int>> introns;
-    parse_splice_pattern(exons, introns, cigar_vector, read_start, read_end);
+    std::vector<std::pair<int, int>> un_spliced_segments;
+    std::vector<std::pair<int, int>> spliced_segments;
+    parse_splice_pattern(un_spliced_segments, spliced_segments, cigar_vector, read_start, read_end);
         
         /* 
         for (auto e : exons ) {
@@ -113,8 +115,10 @@ pileup::ParsedRead::ParsedRead( const int & unspliced_local_reference_start,
     }
     
     
-    char cov = classify_covering(lpos, pos, rpos, is_shiftable, exons, variants);
-    //std::cout << read_name << "  " << cov << " " << is_reverse << std::endl;
+    char cov = classify_covering(lpos, pos, rpos, is_shiftable, start_offset, end_offset, un_spliced_segments, variants);
+    //ddif ( cov == 'B')
+    
+    if (!is_reverse) std::cout << read_name << "  " << cov << " " << is_reverse << " " << start_offset << " " << end_offset << std::endl;
     
     // read evaluations
     // test if clipped
@@ -285,48 +289,80 @@ std::vector<pileup::ParsedRead> get_gapped_seed_reads(std::vector<pileup::Parsed
     return seed_candidates;   
 }
 
-// check how the read covers the locus of interest
-// 'A' : valid covering
-// 'B' : possibly (may be a part of complex event) 
-// 'C' : undetermined or not covering 
-//-------------------------------------------------
-char classify_covering(const int lpos, 
-                       const int pos,
-                       const int rpos, 
-                       const bool is_shiftable,
+
+//@Function
+//    check how the read covers the locus of interest
+//@Return 
+//    'A' : covering
+//    'D' : non covering
+//
+//    applicable shiftable target only 
+//    'B' : covering with non-ref bases
+//       -> may support the target
+//    'C' : covering with ref-bases only 
+//       -> undetermined if this read supports the target
+//-------------------------------------------------------
+char classify_covering(const int & lpos, 
+                       const int & pos,
+                       const int & rpos, 
+                       const bool & is_shiftable,
+                       const int & start_offset,
+                       const int & end_offset, 
                        const std::vector<std::pair<int, int>> & unspl_segments,
                        const std::vector<Variant> & variants)
 {
+    size_t i = 0;
+    size_t last = unspl_segments.size() - 1;
+
     for (auto & segment : unspl_segments) {
+        
         int start = segment.first;
         int stop = segment.second;  
+        
         if (!is_shiftable) {
-            if (ordered(start, pos, stop)) return 'A'; // simply covering
+            if (ordered(start, pos, stop)) {
+                return 'A';
+            }
         }
         else {
             // repeats bounded 
-            if (start <= lpos && rpos + 1 <= stop) return 'A'; // covering & repeat bounded
+            if (start <= lpos && rpos + 1 <= stop) {
+                return 'A';
+            }
             // repeats left open  
             else if (ordered(lpos + 1, start, rpos)) {
-                
+                // 1st segment & lt-clipped
+                if ( i == 0 && start_offset) {
+                    //std::cout << i << "  " << start << " " << last << std::endl;
+                    return 'B';
+                }
                 // variants exist between start and rpos
                 for (auto & variant : variants) {
                     if (ordered(start, variant.pos, rpos)) {
                         return 'B'; // repeats broken
                     }
                 }
-                return 'L';    
-            }           
+                return 'C';
+            }
             // repeats right open
             else if (ordered(lpos, stop, rpos)) {
+                // last segment & rt-clipped
+                if (i == last && end_offset) {
+                    //std::cout << i << "  " << start << " " << last << " " << end_offset << std::endl;
+                    return 'B';
+                }   
+                // variants exist between lpos and stop
                 for (auto & variant : variants) {
                     if (ordered(lpos, variant.pos, stop)) {
-                        return 'E'; // repeats broken
+                        return 'B'; // repeats broken
                     }
-                }
-                return 'R'; 
+                }    
+                return 'C'; 
             }
+
+        i += 1;    
         }
+       
     }
-    return 'D'; //uncovering  
+    return 'D';
 }
