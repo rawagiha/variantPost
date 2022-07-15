@@ -1,9 +1,11 @@
 #include <map>
+#include <cmath>
 #include <random>
 #include <vector>
 #include <string>
 #include <utility>
 #include <iostream>
+#include <climits>
 
 #include "util.h"
 #include "swlib.h"
@@ -17,7 +19,7 @@
 std::vector<pileup::ParsedRead> get_gapped_seed_reads(std::vector<pileup::ParsedRead> & parsed_reads, size_t n);
 
 
-//check covering
+//check covering pattern
 char classify_covering(const int lpos, const int pos, const int rpos,
                        const bool is_shiftable, 
                        const int start_offset, const int end_offset,
@@ -27,17 +29,27 @@ char classify_covering(const int lpos, const int pos, const int rpos,
 
 
 
-// read classifer
-char classify_read(const int aln_start,
-                   const int aln_end,
-                   const std::string & cigar_string,
-                   const std::vector<std::pair<char, int>> & cigar_vec,
-                   //const Variant & variant,
-                   const bool is_ins,
-                   const bool is_del,
-                   const int l_pos,
-                   const int r_pos,
-                   const std::vector<Variant> & variants);
+// check local non-ref base pattern
+char classify_local_pattern(const char covering_ptrn,
+                            const std::string & ref_seq,
+                            const std::string & read_seq,
+                            const int lpos,
+                            const int pos,
+                            const int rpos,
+                            const int aln_start,
+                            const int aln_end,
+                            const int start_offset, 
+                            const int end_offset,
+                            const int covering_start, 
+                            const int covering_end,
+                            const int ref_allele_len,
+                            const Variant & target,
+                            const std::vector<Variant> & variants,
+                            const int unspliced_local_reference_start,
+                            const int unspliced_local_reference_end,
+                            const std::map<int, char> & indexed_local_reference);
+
+
 
 // read evaluate func (ref_seq, clipping, worth_realn)
 // covering checker
@@ -99,7 +111,7 @@ pileup::ParsedRead::ParsedRead
 
     
     if (ref_seq.empty()) {
-        covering_ptrn = 'D'; // 'D': non covering read   
+        covering_ptrn = 'X'; // X: disqualified flag 
     }
     else {
         // assign: variants already aligned
@@ -109,18 +121,31 @@ pileup::ParsedRead::ParsedRead
                                         unspliced_local_reference_start, 
                                         unspliced_local_reference_end,
                                         indexed_local_reference);
-
+        
         // check: covering pattern (indel position shift considered)
         covering_ptrn = classify_covering(lpos, pos, rpos, is_shiftable,
                                           start_offset, end_offset,
                                           covering_start, covering_end,
                                           un_spliced_segments, variants);
     
-        std::cout << covering_start << "  " << covering_end << " " << read_name << "  " << is_reverse <<  "  " << covering_ptrn  << std::endl;
     }
 
     
     // check: worth analyzing? 
+    char res = classify_local_pattern(covering_ptrn, 
+                                      ref_seq, read_seq,
+                                      lpos, pos, rpos, 
+                                      aln_start, aln_end,
+                                      start_offset, end_offset, 
+                                      covering_start, covering_end,
+                                      target.ref_len,
+                                      target,
+                                      variants,
+                                      unspliced_local_reference_start,
+                                      unspliced_local_reference_end,
+                                      indexed_local_reference);          
+                                                                                                                                                 
+  
     
     
     //if (!is_reverse) std::cout << read_name << "  " << cov << " " << is_reverse << " " << start_offset << " " << end_offset << std::endl;
@@ -198,7 +223,6 @@ void pileup::parse_pileup
     
     int lpos = trgt.get_leftmost_pos(unspliced_local_reference_start, aa);
     int rpos = trgt.get_rightmost_pos(unspliced_local_reference_end, aa);
-    std::cout << lpos << " " << rpos << std::endl;
     bool is_shiftable = (lpos != rpos) ? true : false;
 
     //Variant v = Variant( "1", 241661227,  "A",  "ATTT");
@@ -306,7 +330,7 @@ std::vector<pileup::ParsedRead> get_gapped_seed_reads(std::vector<pileup::Parsed
 //    check how the read covers the locus of interest
 //@Return
 //    'A' : covering
-//    'D' : non covering
+//    'D' : non covering (but may contain target (e.g. del))
 //
 //    applicable shiftable target only
 //    'B' : covering with non-ref bases
@@ -374,35 +398,122 @@ char classify_covering(const int lpos, const int pos, const int rpos,
     return 'D';
 }
 
-char classify_local_pattern(const char coverage_ptrn,
+/*
+inline char is_locally_ref(int pos, 
+                           int aln_start,
+                           int aln_end,
+                           int start_offset,
+                           int end_offset,
+                           int read_len, 
+                           const std::vector<Variant> & variants,
+                           const int unspliced_local_reference_start,
+                           const int unspliced_local_reference_end,
+                           const std::map<int, char> & indexed_local_reference){
+    
+    bool is_lefty = (std::abs(pos - aln_start) < std::abs(aln_end - pos)) ? true : false;
+    
+    // clip patterns
+    if (start_offset && end_offset) return 'Y';
+    if (is_lefty && start_offset) return 'Y';
+    if (!is_lefty && end_offset) return 'Y';
+
+    double distance_thersh = read_len / 10; 
+    for (auto & variant : variants) {
+        int lp = variant.get_leftmost_pos(unspliced_local_reference_start, indexed_local_reference);
+        int rp = variant.get_rightmost_pos(unspliced_local_reference_end, indexed_local_reference);
+        if (std::abs(pos - lp) < distance_thersh || std::abs(pos - rp) < distance_thersh) {
+            return 'Y';
+        } 
+    
+    return 'N';
+}
+*/
+
+inline int dist_to_non_target_variant(bool & has_target,
+                                      const int pos, 
+                                      const Variant & target,
+                                      const std::vector<Variant> & variants,
+                                      const int unspliced_local_reference_start,
+                                      const int unspliced_local_reference_end,
+                                      const std::map<int, char> & indexed_local_reference){
+    
+    if (variants.empty()) return INT_MAX;
+    
+    std::vector<int> dist;
+    for (auto & variant : variants) {
+        bool is_target = target.is_equivalent(variant, 
+                                              unspliced_local_reference_start, 
+                                              indexed_local_reference);
+        
+        if (is_target) {
+            has_target = true;
+        }
+        else {
+            int lp = variant.get_leftmost_pos(unspliced_local_reference_start, indexed_local_reference);
+            int rp = variant.get_rightmost_pos(unspliced_local_reference_end, indexed_local_reference);
+            int ld = std::abs(pos - lp);
+            int rd = std::abs(rp - pos);
+            if (ld < rd) {
+                dist.push_back(ld);
+            }
+            else {
+                dist.push_back(rd);
+            }
+        }
+    }
+   
+    if (dist.empty()){ 
+        return INT_MAX;
+    }
+    else {
+        return *std::min_element(dist.begin(), dist.end());
+    }
+}
+
+char classify_local_pattern(const char covering_ptrn,
                             const std::string & ref_seq,
                             const std::string & read_seq,
+                            const int lpos,
+                            const int pos,
+                            const int rpos,
                             const int aln_start,
                             const int aln_end,
                             const int start_offset, 
                             const int end_offset,
-                            //const int ref_allele_len,
-                            const std::vector<Variant> & variants)
+                            const int covering_start, 
+                            const int covering_end,
+                            const int ref_allele_len,
+                            const Variant & target,
+                            const std::vector<Variant> & variants,
+                            const int unspliced_local_reference_start,
+                            const int unspliced_local_reference_end,
+                            const std::map<int, char> & indexed_local_reference
+                            )
 {
-    // need check for ref_allele_len > 1.
-    // non-covering reads can carry the event
+    //trivial cases
+    if (ref_seq == read_seq) return 'N';
+    if (covering_ptrn == 'X') return 'N'; 
     
-    // trivial cases
-    if (coverage_ptrn == 'D' || coverage_ptrn == 'C') return 'N';
-    if (ref_seq == read_seq) return 'R';
+    // covering but repeats are not bounded -> can't characterize target indel
+    if (covering_ptrn == 'C') return 'N';
 
-    return 'x'; 
-
-
-
-
-
-
-
-
-
-
-
+    // non-covering case that is safe to reject       
+    if ((covering_ptrn == 'D') 
+        && ((ref_allele_len == 1) || (rpos + ref_allele_len < aln_start))) return 'N';
+    
+    bool has_target = false;
+    int d = dist_to_non_target_variant(has_target,
+                                       pos,
+                                       target, 
+                                       variants,
+                                       unspliced_local_reference_start, 
+                                       unspliced_local_reference_end,
+                                       indexed_local_reference);
+    
+    if (has_target) return 'T';
+       
+    
+    return 'k';
 
 }
 

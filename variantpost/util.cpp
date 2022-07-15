@@ -256,7 +256,7 @@ void left_align(int & pos,
     std::string & longer_allele = (is_ins) ? alt : ref;
     std::string & shorter_allele = (is_ins) ? ref : alt;
 
-    while (is_rotatable(longer_allele) & (unspliced_local_reference_start < pos)) {
+    while (is_rotatable(longer_allele) && (unspliced_local_reference_start < pos)) {
         to_left(pos, longer_allele, shorter_allele, indexed_local_reference);
     }
 }
@@ -305,7 +305,7 @@ void right_align(int & pos, int & variant_end_pos,
                  indexed_local_reference);
         ++pos;
     }
-    while (is_rotatable(longer_allele) & (pos < unspliced_local_reference_end));
+    while (is_rotatable(longer_allele) && (pos < unspliced_local_reference_end));
      
     // undo the last right shift
     to_left(pos, longer_allele, shorter_allele, indexed_local_reference);
