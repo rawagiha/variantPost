@@ -16,6 +16,13 @@ struct ParsedRead {
     std::vector<std::pair<char, int>> cigar_vector;
     int aln_start;
     int aln_end;
+    int read_start;
+    int read_end;
+    int covering_start;
+    int covering_end;
+    int start_offset;
+    int end_offset;
+    char covering_ptrn;
     std::string read_seq;
     std::string ref_seq;
     std::string base_qualities;

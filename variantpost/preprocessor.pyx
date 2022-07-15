@@ -115,6 +115,7 @@ def preprocess(
     reads = fetch_reads(bam, chrom, pos, chrom_len, window, exclude_duplicates)
     print("I/O by pysam", time.time() - tt)
 
+    print(unspliced_local_reference, unspliced_local_reference_start)
     if downsample_thresh < 0:
         sample_factor = 1.0
     else:
