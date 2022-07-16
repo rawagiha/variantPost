@@ -25,6 +25,7 @@ char classify_covering(const int lpos, const int pos, const int rpos,
                        const int start_offset, const int end_offset,
                        int & covering_start, int & covering_end,
                        const std::vector<std::pair<int, int>> & unspl_segments,
+                       const std::vector<std::pair<int, int>> & spl_segments,
                        const std::vector<Variant> & variants);
 
 
@@ -58,23 +59,24 @@ char classify_local_pattern(const char covering_ptrn,
 
 pileup::ParsedRead::ParsedRead
 ( 
-    const int & unspliced_local_reference_start,
-    const int & unspliced_local_reference_end,
+    const int unspliced_local_reference_start,
+    const int unspliced_local_reference_end,
     const std::string & unspliced_local_reference,
     const std::string & read_name,
-    const bool & is_reverse,
+    const bool is_reverse,
     const std::string & cigar_string,
-    const int & aln_start,
-    const int & aln_end,
+    const int aln_start,
+    const int aln_end,
     const std::string & read_seq,
     const std::string & ref_seq_default,
     const std::vector<int> & q,
-    const int & mapq,
+    const int mapq,
     const Variant & target,
-    const int & lpos,
-    const int & pos,
-    const int & rpos,
-    const bool & is_shiftable,
+    const int ref_allele_len,
+    const int lpos,
+    const int pos,
+    const int rpos,
+    const bool is_shiftable,
     const std::map<int, char> & indexed_local_reference
 ) : read_name(read_name), is_reverse(is_reverse), cigar_string(cigar_string),
     aln_start(aln_start),  aln_end(aln_end), read_seq(read_seq), mapq(mapq)
@@ -107,9 +109,12 @@ pileup::ParsedRead::ParsedRead
     // check: splice pattern
     std::vector<std::pair<int, int>> un_spliced_segments;
     std::vector<std::pair<int, int>> spliced_segments;
-    parse_splice_pattern(un_spliced_segments, spliced_segments, cigar_vector, read_start, read_end);
+    parse_splice_pattern(un_spliced_segments, spliced_segments, 
+                         cigar_vector, read_start, read_end);
 
     
+    covering_start = 0;
+    covering_end = 0;
     if (ref_seq.empty()) {
         covering_ptrn = 'X'; // X: disqualified flag 
     }
@@ -126,29 +131,27 @@ pileup::ParsedRead::ParsedRead
         covering_ptrn = classify_covering(lpos, pos, rpos, is_shiftable,
                                           start_offset, end_offset,
                                           covering_start, covering_end,
-                                          un_spliced_segments, variants);
+                                          un_spliced_segments, spliced_segments, 
+                                          variants);
     
     }
-
     
-    // check: worth analyzing? 
-    char res = classify_local_pattern(covering_ptrn, 
-                                      ref_seq, read_seq,
-                                      lpos, pos, rpos, 
-                                      aln_start, aln_end,
-                                      start_offset, end_offset, 
-                                      covering_start, covering_end,
-                                      target.ref_len,
-                                      target,
-                                      variants,
-                                      unspliced_local_reference_start,
-                                      unspliced_local_reference_end,
-                                      indexed_local_reference);          
+    // check: local non-reference base pattern 
+    char local_ptrn = classify_local_pattern(covering_ptrn, 
+                                             ref_seq, read_seq,
+                                             lpos, pos, rpos, 
+                                             aln_start, aln_end,
+                                             start_offset, end_offset, 
+                                             covering_start, covering_end,
+                                             ref_allele_len,
+                                             target,
+                                             variants,
+                                             unspliced_local_reference_start,
+                                             unspliced_local_reference_end,
+                                             indexed_local_reference);          
                                                                                                                                                  
-  
-    
-    
-    //if (!is_reverse) std::cout << read_name << "  " << cov << " " << is_reverse << " " << start_offset << " " << end_offset << std::endl;
+    if (is_reverse)
+    std::cout << read_name << "  " << is_reverse << " " << " " << covering_ptrn << " " << local_ptrn <<  " " << covering_start << " " << covering_end << std::endl;
 
     // read evaluations
     // test if clipped
@@ -219,10 +222,10 @@ void pileup::parse_pileup
                              unspliced_local_reference_start, unspliced_local_reference_end );
 
     // target variant
-    Variant trgt = Variant(pos, ref, alt);
-    
-    int lpos = trgt.get_leftmost_pos(unspliced_local_reference_start, aa);
-    int rpos = trgt.get_rightmost_pos(unspliced_local_reference_end, aa);
+    Variant target = Variant(pos, ref, alt);
+    int ref_allele_len = target.ref_len;
+    int lpos = target.get_leftmost_pos(unspliced_local_reference_start, aa);
+    int rpos = target.get_rightmost_pos(unspliced_local_reference_end, aa);
     bool is_shiftable = (lpos != rpos) ? true : false;
 
     //Variant v = Variant( "1", 241661227,  "A",  "ATTT");
@@ -248,7 +251,8 @@ void pileup::parse_pileup
                                    ref_seqs[i],
                                    quals[i],
                                    mapqs[i],
-                                   trgt,
+                                   target,
+                                   ref_allele_len,
                                    lpos,
                                    pos,
                                    rpos,
@@ -326,25 +330,37 @@ std::vector<pileup::ParsedRead> get_gapped_seed_reads(std::vector<pileup::Parsed
 }
 
 
-//@Function
+//@function
 //    check how the read covers the locus of interest
-//@Return
+//@return
 //    'A' : covering
 //    'D' : non covering (but may contain target (e.g. del))
+//    'X' : disqulified (completely within intron)
 //
 //    applicable shiftable target only
 //    'B' : covering with non-ref bases
 //       -> may support the target
 //    'C' : covering with ref-bases only
 //       -> undetermined if this read supports the target
-//-------------------------------------------------------
+//-------------------------------------------------------------------------------
 char classify_covering(const int lpos, const int pos, const int rpos,
                        const bool is_shiftable,
                        const int start_offset, const int end_offset,
                        int & covering_start, int & covering_end,
                        const std::vector<std::pair<int, int>> & unspl_segments,
+                       const std::vector<std::pair<int, int>> & spl_segments,
                        const std::vector<Variant> & variants)
 {
+    
+    // fly through
+    if (!spl_segments.empty()) {
+        for (auto & segment : spl_segments) {
+            if (segment.first < lpos && rpos < segment.second) {
+                return 'X';
+            }
+        }
+    }
+   
     size_t i = 0;
     size_t last = unspl_segments.size() - 1;
 
@@ -357,7 +373,8 @@ char classify_covering(const int lpos, const int pos, const int rpos,
             if (ordered(covering_start, pos, covering_end)) {
                 return 'A';
             }
-        } else {
+        } 
+        else {
             // repeats bounded
             if (covering_start <= lpos && rpos + 1 <= covering_end) {
                 return 'A';
@@ -398,45 +415,22 @@ char classify_covering(const int lpos, const int pos, const int rpos,
     return 'D';
 }
 
-/*
-inline char is_locally_ref(int pos, 
-                           int aln_start,
-                           int aln_end,
-                           int start_offset,
-                           int end_offset,
-                           int read_len, 
-                           const std::vector<Variant> & variants,
-                           const int unspliced_local_reference_start,
-                           const int unspliced_local_reference_end,
-                           const std::map<int, char> & indexed_local_reference){
-    
-    bool is_lefty = (std::abs(pos - aln_start) < std::abs(aln_end - pos)) ? true : false;
-    
-    // clip patterns
-    if (start_offset && end_offset) return 'Y';
-    if (is_lefty && start_offset) return 'Y';
-    if (!is_lefty && end_offset) return 'Y';
 
-    double distance_thersh = read_len / 10; 
-    for (auto & variant : variants) {
-        int lp = variant.get_leftmost_pos(unspliced_local_reference_start, indexed_local_reference);
-        int rp = variant.get_rightmost_pos(unspliced_local_reference_end, indexed_local_reference);
-        if (std::abs(pos - lp) < distance_thersh || std::abs(pos - rp) < distance_thersh) {
-            return 'Y';
-        } 
-    
-    return 'N';
-}
-*/
-
-inline int dist_to_non_target_variant(bool & has_target,
-                                      const int pos, 
-                                      const Variant & target,
-                                      const std::vector<Variant> & variants,
-                                      const int unspliced_local_reference_start,
-                                      const int unspliced_local_reference_end,
-                                      const std::map<int, char> & indexed_local_reference){
-    
+//@function 
+//   measure the distance to the nearest varaint that is non-target
+//   check if the read has the target that is already aligned
+//@return
+//   dist to the nearest non-target variant (may be zero->multiallelelic)
+//   INT_MAX if no variants in the read 
+//----------------------------------------------------------------------------------------
+int dist_to_non_target_variant(bool & has_target,
+                               const int pos, 
+                               const Variant & target,
+                               const std::vector<Variant> & variants,
+                               const int unspliced_local_reference_start,
+                               const int unspliced_local_reference_end,
+                               const std::map<int, char> & indexed_local_reference)
+{    
     if (variants.empty()) return INT_MAX;
     
     std::vector<int> dist;
@@ -449,8 +443,10 @@ inline int dist_to_non_target_variant(bool & has_target,
             has_target = true;
         }
         else {
-            int lp = variant.get_leftmost_pos(unspliced_local_reference_start, indexed_local_reference);
-            int rp = variant.get_rightmost_pos(unspliced_local_reference_end, indexed_local_reference);
+            int lp = variant.get_leftmost_pos(unspliced_local_reference_start, 
+                                              indexed_local_reference);
+            int rp = variant.get_rightmost_pos(unspliced_local_reference_end, 
+                                               indexed_local_reference);
             int ld = std::abs(pos - lp);
             int rd = std::abs(rp - pos);
             if (ld < rd) {
@@ -468,6 +464,70 @@ inline int dist_to_non_target_variant(bool & has_target,
     else {
         return *std::min_element(dist.begin(), dist.end());
     }
+}
+
+char classify_clip_pattern (int & dist_to_clip,
+                            int pos, 
+                            int aln_start,
+                            int aln_end,
+                            int start_offset,
+                            int end_offset,
+                            int covering_start,
+                            int covering_end)
+{
+    dist_to_clip = INT_MAX;
+
+    //upclipped
+    if (!start_offset && !end_offset) return 'U';
+    
+    // spliced side check
+    bool is_left_spliced = (aln_start < covering_start) ? true : false;
+    bool is_right_spliced = (covering_end < aln_end) ? true : false;
+    
+    int lt_dist = std::abs(pos - aln_start);
+    int rt_dist = std::abs(aln_end - pos);
+    bool is_lefty = (lt_dist < rt_dist) ? true : false;
+
+
+    // both side clipped
+    if (start_offset && end_offset){
+        // target is middle exon
+        if (is_left_spliced && is_right_spliced) {
+            return 'U';
+        }
+        else if (is_lefty) {
+            dist_to_clip = lt_dist;
+            return 'L';            
+        }
+        else {
+            dist_to_clip = rt_dist;
+            return 'R';
+        }
+    }
+    
+    //left-only clipped
+    if (start_offset) {
+        if (is_left_spliced) {
+            return 'U';
+        }
+        else {
+            dist_to_clip = lt_dist;
+            return 'L';
+        }
+     }
+
+    //right-only clipped
+    if (end_offset) {
+        if (is_right_spliced) {
+            return 'U';
+        }
+        else {
+            dist_to_clip = rt_dist;
+            return 'R';
+        }
+     }
+
+     return 'U';
 }
 
 char classify_local_pattern(const char covering_ptrn,
@@ -493,27 +553,73 @@ char classify_local_pattern(const char covering_ptrn,
     //trivial cases
     if (ref_seq == read_seq) return 'N';
     if (covering_ptrn == 'X') return 'N'; 
-    
+    if (covering_ptrn == 'B') return 'B';
+       
     // covering but repeats are not bounded -> can't characterize target indel
     if (covering_ptrn == 'C') return 'N';
 
     // non-covering case that is safe to reject       
-    if ((covering_ptrn == 'D') 
-        && ((ref_allele_len == 1) || (rpos + ref_allele_len < aln_start))) return 'N';
+    //if ((covering_ptrn == 'D') 
+    //    && ((ref_allele_len == 1) || (rpos + ref_allele_len < aln_start))) return 'N';
     
     bool has_target = false;
-    int d = dist_to_non_target_variant(has_target,
-                                       pos,
-                                       target, 
-                                       variants,
-                                       unspliced_local_reference_start, 
-                                       unspliced_local_reference_end,
-                                       indexed_local_reference);
+    int d2var = dist_to_non_target_variant(has_target,
+                                           pos,
+                                           target, 
+                                           variants,
+                                           unspliced_local_reference_start, 
+                                           unspliced_local_reference_end,
+                                           indexed_local_reference);
     
-    if (has_target) return 'T';
-       
+    if (has_target) return 'A';
     
-    return 'k';
-
+    //multiallellic
+    if (!d2var) return 'B';
+    
+    int d2clip;
+    char clip_ptrn = classify_clip_pattern (d2clip,
+                                            pos, 
+                                            aln_start,
+                                            aln_end,
+                                            start_offset,
+                                            end_offset,
+                                            covering_start,
+                                            covering_end);
+    
+    double variant_free_dist = read_seq.length() / 5; //20% len
+    double clip_free_dist = read_seq.length() / 2; //50% len
+    
+    if (covering_ptrn == 'D') {
+        if (covering_end < pos) {
+            if (clip_ptrn == 'R' || (d2var <= variant_free_dist)) {
+                return 'B';
+            }
+        }
+        else if (pos < covering_start) {
+            if (clip_ptrn == 'L' || (d2var <= variant_free_dist)) {
+                return 'B';
+            }
+        }
+        
+        return 'N';
+    }
+    else {
+        if (clip_ptrn == 'U') {
+            if (variant_free_dist < d2var) {
+                return 'N';
+            }
+            else {
+                return 'B';
+            }
+        }
+        else {
+            if ((variant_free_dist < d2var) && (clip_free_dist < d2clip)) {
+                return 'N';
+            }
+            else {
+                return 'B';
+            }
+        }
+    }
 }
 

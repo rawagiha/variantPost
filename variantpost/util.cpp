@@ -106,6 +106,7 @@ void parse_splice_pattern(std::vector<std::pair<int, int>> & exons,
 
 
 // returns a list of intron start and stop positions (inclusive: [start, start])
+/*
 std::vector<std::pair<int, int>> get_introns ( const std::vector<std::pair<char, int>> &cigar_vector, const int aln_start ) {
 
   std::vector<std::pair<int, int>> introns;
@@ -143,6 +144,7 @@ std::vector<std::pair<int, int>> get_introns ( const std::vector<std::pair<char,
     }
   }
 }
+*/
 
 // fit local referenece to read alignment
 // not considered del??

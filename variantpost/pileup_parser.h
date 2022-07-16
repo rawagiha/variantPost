@@ -34,23 +34,24 @@ struct ParsedRead {
     bool is_target;
     std::string variant_str;
 
-    ParsedRead(const int & unspliced_local_reference_start, 
-               const int & unspliced_local_reference_end,
+    ParsedRead(const int  unspliced_local_reference_start, 
+               const int  unspliced_local_reference_end,
                const std::string & unspliced_local_reference, 
                const std::string & read_name,
-               const bool & is_reverse, 
+               const bool  is_reverse, 
                const std::string & cigar_string,
-               const int & aln_start, 
-               const int & aln_end, 
+               const int  aln_start, 
+               const int  aln_end, 
                const std::string & read_seq,
                const std::string & ref_seq, 
                const std::vector<int> & qualities, 
-               const int & mapq,
+               const int  mapq,
                const Variant & target, // target
-               const int & lpos,
-               const int & pos,
-               const int & rpos,
-               const bool & is_shiftable,
+               const int ref_allele_len,
+               const int  lpos,
+               const int  pos,
+               const int  rpos,
+               const bool  is_shiftable,
                const std::map<int, char> &  indexed_local_reference //std::map<int, char> & indexed_local_reference
 
     );
