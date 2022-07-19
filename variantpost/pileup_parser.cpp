@@ -137,33 +137,24 @@ pileup::ParsedRead::ParsedRead
     }
     
     // check: local non-reference base pattern 
-    char local_ptrn = classify_local_pattern(covering_ptrn, 
-                                             ref_seq, read_seq,
-                                             lpos, pos, rpos, 
-                                             aln_start, aln_end,
-                                             start_offset, end_offset, 
-                                             covering_start, covering_end,
-                                             ref_allele_len,
-                                             target,
-                                             variants,
-                                             unspliced_local_reference_start,
-                                             unspliced_local_reference_end,
-                                             indexed_local_reference);          
+    local_ptrn = classify_local_pattern(covering_ptrn, 
+                                        ref_seq, read_seq,
+                                        lpos, pos, rpos, 
+                                        aln_start, aln_end,
+                                        start_offset, end_offset, 
+                                        covering_start, covering_end,
+                                        ref_allele_len,
+                                        target,
+                                        variants,
+                                        unspliced_local_reference_start,
+                                        unspliced_local_reference_end,
+                                        indexed_local_reference);          
                                                                                                                                                  
-    if (is_reverse)
-    std::cout << read_name << "  " << is_reverse << " " << " " << covering_ptrn << " " << local_ptrn <<  " " << covering_start << " " << covering_end << std::endl;
+    //if (!is_reverse)
+    //std::cout << read_name << "  " << is_reverse << " " << " " << covering_ptrn << " " << local_ptrn <<  " " << covering_start << " " << covering_end << std::endl;
 
     // read evaluations
     // test if clipped
-
-    if (read_name == "HISEQ:45:C2MKUACXX:1:1105:3122:96546") {
-        std::cout << "yes!!" << std::endl;
-        std::cout << variants.empty() << std::endl;
-        for (auto & v : variants) {
-            std::cout << v.pos << " " << v.ref << " " << v.alt << std::endl;
-        }
-    }
-
     bool is_soft = ( cigar_string.find( 'S' ) != std::string::npos ) ? true : false;
     bool is_hard = ( cigar_string.find( 'S' ) != std::string::npos ) ? true : false;
     bool is_clipped = ( is_soft || is_hard ) ? true : false;
@@ -184,9 +175,6 @@ pileup::ParsedRead::ParsedRead
 
             // do for spl ptrn and clipping(pos only) -> rename to event_str
             variant_str += (std::to_string(v.pos) + "_" + v.ref + "_" + v.alt + ";");
-            if (!is_target) {
-                is_target = target.is_equivalent(v, unspliced_local_reference_start, indexed_local_reference);
-            }
         }
 
         //
@@ -228,16 +216,6 @@ void pileup::parse_pileup
     int rpos = target.get_rightmost_pos(unspliced_local_reference_end, aa);
     bool is_shiftable = (lpos != rpos) ? true : false;
 
-    //Variant v = Variant( "1", 241661227,  "A",  "ATTT");
-    //                    unspliced_local_reference_start, unspliced_local_reference_end, aa );
-    //Variant vv = Variant( "1", 241661228,  "T",  "TTTT");
-    //                    unspliced_local_reference_start, unspliced_local_reference_end, aa );
-
-    //std::cout << v.is_equivalent(vv, unspliced_local_reference_start, aa) << std::endl;
-
-    //std::cout << v.get_rightmost_pos(unspliced_local_reference_end, aa ) << " onaji " << vv.get_leftmost_pos( unspliced_local_reference_start, aa) << std::endl;
-    //for (auto i : aa) std::cout << i.first << " : " << i.second  << std::endl;
-
     for ( size_t i = 0; i < pileup_size; ++i ) {
         parsed_reads.emplace_back( unspliced_local_reference_start,
                                    unspliced_local_reference_end,
@@ -262,25 +240,22 @@ void pileup::parse_pileup
 
     }
 
-    int h = 0;
+    int g = 0;
     for (auto & read : parsed_reads) {
-        if (read.is_target) {
-            h += 1;
-            //std::cout << read.read_name << " " << read.is_reverse << std::endl;
-        } else {
-            //std::cout << read.read_name_ << " " << read.is_reverse_ << " " << read.cigar_string_ << std::endl;
+        if (read.local_ptrn == 'A') {
+            g += 1;
         }
     }
-    std::cout << h << " num of target read" << std::endl;
+    std::cout << g << " num of target read---" << std::endl;
 
-    if ( h > 0 ) {
+    if ( g > 0 ) {
         std::vector<pileup::ParsedRead> j = get_gapped_seed_reads(parsed_reads, 6);
         std::vector<std::string> seed_read = {j[0].read_seq, j[0].base_qualities};
 
-        std::cout << j[0].read_seq << "  " << j[0].base_qualities << std::endl;
+        //std::cout << j[0].read_seq << "  " << j[0].base_qualities << std::endl;
         std::vector<std::vector<std::string>> _reads;
         for ( size_t i = 1; i < 6; ++i) {
-            std::cout << j[i].read_seq << "  " << j[i].base_qualities << std::endl;
+          //  std::cout << j[i].read_seq << "  " << j[i].base_qualities << std::endl;
             std::vector<std::string> r = {j[i].read_seq, j[i].base_qualities};
             _reads.push_back(r);
         }
@@ -290,9 +265,6 @@ void pileup::parse_pileup
 
         sw::flatten_reads(seed_read, _reads);
     }
-    // for (auto & read : j) {
-    //     std::cout << read.aln_start_ << "  " << read.aln_end_ << std::endl;
-    // }
 }
 
 // select gapped_seed
@@ -305,7 +277,7 @@ std::vector<pileup::ParsedRead> get_gapped_seed_reads(std::vector<pileup::Parsed
     std::vector<std::string> variant_ptrns;
 
     for (auto & read : parsed_reads) {
-        if ( read.is_target ) {
+        if ( read.local_ptrn == 'A' ) {
             target_reads.push_back(read);
             variant_ptrns.push_back(read.variant_str);
         }
@@ -433,6 +405,12 @@ int dist_to_non_target_variant(bool & has_target,
 {    
     if (variants.empty()) return INT_MAX;
     
+    
+    // adjust for del and mnv
+    int offset = (target.ref_len - 1);
+    int p = target.pos;
+    int _p = p + offset;
+
     std::vector<int> dist;
     for (auto & variant : variants) {
         bool is_target = target.is_equivalent(variant, 
@@ -444,21 +422,32 @@ int dist_to_non_target_variant(bool & has_target,
         }
         else {
             int lp = variant.get_leftmost_pos(unspliced_local_reference_start, 
-                                              indexed_local_reference);
+                                          indexed_local_reference);
             int rp = variant.get_rightmost_pos(unspliced_local_reference_end, 
-                                               indexed_local_reference);
-            int ld = std::abs(pos - lp);
-            int rd = std::abs(rp - pos);
-            if (ld < rd) {
-                dist.push_back(ld);
+                                           indexed_local_reference);
+            int _rp = rp + (variant.ref_len - 1); 
+        
+            if (_rp <= p) {
+                dist.push_back(p - _rp);
+            }
+            else if (_p <= lp) {
+                dist.push_back(lp - _p);
             }
             else {
-                dist.push_back(rd);
+                int ld = std::abs(pos - lp);
+                int rd = std::abs(rp - pos);
+            
+                if (ld < rd) {
+                    dist.push_back(ld);
+                }
+                else {
+                    dist.push_back(rd);
+                }
             }
         }
     }
    
-    if (dist.empty()){ 
+    if (dist.empty()) { 
         return INT_MAX;
     }
     else {
@@ -504,9 +493,8 @@ char classify_clip_pattern (int & dist_to_clip,
             return 'R';
         }
     }
-    
     //left-only clipped
-    if (start_offset) {
+    else if (start_offset) {
         if (is_left_spliced) {
             return 'U';
         }
@@ -515,9 +503,8 @@ char classify_clip_pattern (int & dist_to_clip,
             return 'L';
         }
      }
-
     //right-only clipped
-    if (end_offset) {
+    else  {
         if (is_right_spliced) {
             return 'U';
         }
@@ -525,9 +512,7 @@ char classify_clip_pattern (int & dist_to_clip,
             dist_to_clip = rt_dist;
             return 'R';
         }
-     }
-
-     return 'U';
+    }
 }
 
 char classify_local_pattern(const char covering_ptrn,
@@ -563,6 +548,11 @@ char classify_local_pattern(const char covering_ptrn,
     //    && ((ref_allele_len == 1) || (rpos + ref_allele_len < aln_start))) return 'N';
     
     bool has_target = false;
+    
+    //TODO
+    //make int num_var < thresh <= 10
+    //mind case where deletion can annotate wrongly long dist
+    //use this to flag potentially cplx event 
     int d2var = dist_to_non_target_variant(has_target,
                                            pos,
                                            target, 
@@ -570,10 +560,10 @@ char classify_local_pattern(const char covering_ptrn,
                                            unspliced_local_reference_start, 
                                            unspliced_local_reference_end,
                                            indexed_local_reference);
-    
+   
     if (has_target) return 'A';
     
-    //multiallellic
+    // partial match to target (cplx case) or multiallelic 
     if (!d2var) return 'B';
     
     int d2clip;

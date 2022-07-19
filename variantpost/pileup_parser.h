@@ -22,7 +22,6 @@ struct ParsedRead {
     int covering_end;
     int start_offset;
     int end_offset;
-    char covering_ptrn;
     std::string read_seq;
     std::string ref_seq;
     std::string base_qualities;
@@ -32,6 +31,9 @@ struct ParsedRead {
     bool is_clipped;
     bool is_ref_seq;
     bool is_target;
+    //bool may_be_complex;
+    char covering_ptrn;
+    char local_ptrn;
     std::string variant_str;
 
     ParsedRead(const int  unspliced_local_reference_start, 
