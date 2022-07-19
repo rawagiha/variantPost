@@ -31,7 +31,7 @@ struct ParsedRead {
     bool is_clipped;
     bool is_ref_seq;
     bool is_target;
-    //bool may_be_complex;
+    bool may_be_complex;
     char covering_ptrn;
     char local_ptrn;
     std::string variant_str;

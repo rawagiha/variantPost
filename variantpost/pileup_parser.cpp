@@ -6,6 +6,7 @@
 #include <utility>
 #include <iostream>
 #include <climits>
+#include <algorithm>
 
 #include "util.h"
 #include "swlib.h"
@@ -31,7 +32,8 @@ char classify_covering(const int lpos, const int pos, const int rpos,
 
 
 // check local non-ref base pattern
-char classify_local_pattern(const char covering_ptrn,
+char classify_local_pattern(bool & may_be_complex,
+                            const char covering_ptrn,
                             const std::string & ref_seq,
                             const std::string & read_seq,
                             const int lpos,
@@ -137,7 +139,9 @@ pileup::ParsedRead::ParsedRead
     }
     
     // check: local non-reference base pattern 
-    local_ptrn = classify_local_pattern(covering_ptrn, 
+    may_be_complex = false;
+    local_ptrn = classify_local_pattern(may_be_complex,
+                                        covering_ptrn, 
                                         ref_seq, read_seq,
                                         lpos, pos, rpos, 
                                         aln_start, aln_end,
@@ -150,8 +154,8 @@ pileup::ParsedRead::ParsedRead
                                         unspliced_local_reference_end,
                                         indexed_local_reference);          
                                                                                                                                                  
-    //if (!is_reverse)
-    //std::cout << read_name << "  " << is_reverse << " " << " " << covering_ptrn << " " << local_ptrn <<  " " << covering_start << " " << covering_end << std::endl;
+    if (!is_reverse)
+    std::cout << read_name << "  " << is_reverse << " " << " " << covering_ptrn << " " << local_ptrn <<  " " << covering_start << " " << covering_end << " " << may_be_complex << std::endl;
 
     // read evaluations
     // test if clipped
@@ -515,7 +519,8 @@ char classify_clip_pattern (int & dist_to_clip,
     }
 }
 
-char classify_local_pattern(const char covering_ptrn,
+char classify_local_pattern(bool & may_be_complex,
+                            const char covering_ptrn,
                             const std::string & ref_seq,
                             const std::string & read_seq,
                             const int lpos,
@@ -543,16 +548,7 @@ char classify_local_pattern(const char covering_ptrn,
     // covering but repeats are not bounded -> can't characterize target indel
     if (covering_ptrn == 'C') return 'N';
 
-    // non-covering case that is safe to reject       
-    //if ((covering_ptrn == 'D') 
-    //    && ((ref_allele_len == 1) || (rpos + ref_allele_len < aln_start))) return 'N';
-    
     bool has_target = false;
-    
-    //TODO
-    //make int num_var < thresh <= 10
-    //mind case where deletion can annotate wrongly long dist
-    //use this to flag potentially cplx event 
     int d2var = dist_to_non_target_variant(has_target,
                                            pos,
                                            target, 
@@ -560,11 +556,6 @@ char classify_local_pattern(const char covering_ptrn,
                                            unspliced_local_reference_start, 
                                            unspliced_local_reference_end,
                                            indexed_local_reference);
-   
-    if (has_target) return 'A';
-    
-    // partial match to target (cplx case) or multiallelic 
-    if (!d2var) return 'B';
     
     int d2clip;
     char clip_ptrn = classify_clip_pattern (d2clip,
@@ -576,8 +567,17 @@ char classify_local_pattern(const char covering_ptrn,
                                             covering_start,
                                             covering_end);
     
-    double variant_free_dist = read_seq.length() / 5; //20% len
-    double clip_free_dist = read_seq.length() / 2; //50% len
+    // supply later??
+    int read_len = read_seq.length();
+    double cplx_thresh = 10;
+    double variant_free_dist = read_len / 5; //20%
+    double clip_free_dist = read_len / 2; //50% 
+    
+    if (d2var <= cplx_thresh || d2clip <= 2 * cplx_thresh) may_be_complex = true;
+                      
+
+    if (has_target) return 'A';
+    if (!d2var) return 'B';  // partial match to target for cplx or multiallelic
     
     if (covering_ptrn == 'D') {
         if (covering_end < pos) {
