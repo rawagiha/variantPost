@@ -53,10 +53,11 @@ char classify_local_pattern(bool & may_be_complex,
                             const std::map<int, char> & indexed_local_reference);
 
 
-
-// read evaluate func (ref_seq, clipping, worth_realn)
-// covering checker
-
+// non-reference base patterns to string
+std::string non_ref_pattern_str(std::vector<Variant> & variants, 
+                                std::vector<std::pair<int, int>> & spliced_segments, 
+                                int aln_start, int start_offset, 
+                                int aln_end, int end_offset);
 
 
 pileup::ParsedRead::ParsedRead
@@ -95,20 +96,17 @@ pileup::ParsedRead::ParsedRead
     read_end = aln_end + end_offset;
 
 
-    // assign: ref seq
+    //ref seq
     if (cigar_string.find('N') != std::string::npos) {
         ref_seq = ref_seq_default;
-        is_spliced = true;
     } else {
-        // ref_seq may be empty if near/on analysis window boundary
+        //ref_seq may be empty if near/on analysis window boundary
         ref_seq = get_read_wise_ref_seq(aln_start, aln_end,
                                         unspliced_local_reference_start, 
                                         unspliced_local_reference);
-        is_spliced = false;
     }
 
-    
-    // check: splice pattern
+    //splice pattern
     std::vector<std::pair<int, int>> un_spliced_segments;
     std::vector<std::pair<int, int>> spliced_segments;
     parse_splice_pattern(un_spliced_segments, spliced_segments, 
@@ -121,7 +119,7 @@ pileup::ParsedRead::ParsedRead
         covering_ptrn = 'X'; // X: disqualified flag 
     }
     else {
-        // assign: variants already aligned
+        //variants already aligned
         variants = find_mapped_variants(aln_start, aln_end, 
                                         ref_seq, read_seq, 
                                         cigar_vector, 
@@ -129,7 +127,7 @@ pileup::ParsedRead::ParsedRead
                                         unspliced_local_reference_end,
                                         indexed_local_reference);
         
-        // check: covering pattern (indel position shift considered)
+        //check covering pattern (indel position shift considered)
         covering_ptrn = classify_covering(lpos, pos, rpos, is_shiftable,
                                           start_offset, end_offset,
                                           covering_start, covering_end,
@@ -138,7 +136,7 @@ pileup::ParsedRead::ParsedRead
     
     }
     
-    // check: local non-reference base pattern 
+    //classify local non-reference base pattern 
     may_be_complex = false;
     local_ptrn = classify_local_pattern(may_be_complex,
                                         covering_ptrn, 
@@ -154,35 +152,14 @@ pileup::ParsedRead::ParsedRead
                                         unspliced_local_reference_end,
                                         indexed_local_reference);          
                                                                                                                                                  
-    if (!is_reverse)
-    std::cout << read_name << "  " << is_reverse << " " << " " << covering_ptrn << " " << local_ptrn <<  " " << covering_start << " " << covering_end << " " << may_be_complex << std::endl;
-
-    // read evaluations
-    // test if clipped
-    bool is_soft = ( cigar_string.find( 'S' ) != std::string::npos ) ? true : false;
-    bool is_hard = ( cigar_string.find( 'S' ) != std::string::npos ) ? true : false;
-    bool is_clipped = ( is_soft || is_hard ) ? true : false;
-
-
-    // test if read seq == reference
-    is_ref_seq = (ref_seq == read_seq) ? true : false;
-    
-
     base_qualities = to_fastq_qual( q );
-
     
-    if ( 1) {
-
-        // test if target is aligned
-        is_target = false;
-        for (auto & v : variants) {
-
-            // do for spl ptrn and clipping(pos only) -> rename to event_str
-            variant_str += (std::to_string(v.pos) + "_" + v.ref + "_" + v.alt + ";");
-        }
-
-        //
-
+    if (local_ptrn != 'N') {
+        //string to summarize local non-reference base & splice pattern 
+        non_ref_ptrn_str = non_ref_pattern_str(variants,
+                                               spliced_segments,
+                                               aln_start, start_offset,
+                                               aln_end, end_offset);    
     }
 }
 
@@ -283,7 +260,7 @@ std::vector<pileup::ParsedRead> get_gapped_seed_reads(std::vector<pileup::Parsed
     for (auto & read : parsed_reads) {
         if ( read.local_ptrn == 'A' ) {
             target_reads.push_back(read);
-            variant_ptrns.push_back(read.variant_str);
+            variant_ptrns.push_back(read.non_ref_ptrn_str);
         }
     }
 
@@ -291,7 +268,7 @@ std::vector<pileup::ParsedRead> get_gapped_seed_reads(std::vector<pileup::Parsed
 
 
     for (auto & read : target_reads) {
-        if ( read.variant_str == commonest_ptrn ) {
+        if ( read.non_ref_ptrn_str == commonest_ptrn ) {
             seed_candidates.push_back(read);
         }
     }
@@ -393,13 +370,14 @@ char classify_covering(const int lpos, const int pos, const int rpos,
 
 
 //@function 
-//   measure the distance to the nearest varaint that is non-target
+//   measure the distance to the nearest variant that is not the-already-aligned target.
 //   check if the read has the target that is already aligned
 //@return
 //   dist to the nearest non-target variant (may be zero->multiallelelic)
 //   INT_MAX if no variants in the read 
 //----------------------------------------------------------------------------------------
 int dist_to_non_target_variant(bool & has_target,
+                               bool & has_gteq_five_indel,
                                const int pos, 
                                const Variant & target,
                                const std::vector<Variant> & variants,
@@ -414,13 +392,17 @@ int dist_to_non_target_variant(bool & has_target,
     int offset = (target.ref_len - 1);
     int p = target.pos;
     int _p = p + offset;
-
+    
     std::vector<int> dist;
     for (auto & variant : variants) {
         bool is_target = target.is_equivalent(variant, 
                                               unspliced_local_reference_start, 
                                               indexed_local_reference);
         
+        if (!has_gteq_five_indel) {
+            has_gteq_five_indel = (std::max({variant.ref_len, variant.alt_len}) >= 5);
+        }
+
         if (is_target) {
             has_target = true;
         }
@@ -459,6 +441,14 @@ int dist_to_non_target_variant(bool & has_target,
     }
 }
 
+//@function
+//   classify softclip location relative to target pos
+//   clipping in non-target exon are annotate as unclipped
+//@return 
+//   'U': unclipped (non-target exon may be clipped)
+//   'L': target pos is closer to the left clipping
+//   'R': target pos is closer to the right clippping
+//------------------------------------------------------------------------   
 char classify_clip_pattern (int & dist_to_clip,
                             int pos, 
                             int aln_start,
@@ -480,7 +470,6 @@ char classify_clip_pattern (int & dist_to_clip,
     int lt_dist = std::abs(pos - aln_start);
     int rt_dist = std::abs(aln_end - pos);
     bool is_lefty = (lt_dist < rt_dist) ? true : false;
-
 
     // both side clipped
     if (start_offset && end_offset){
@@ -519,6 +508,14 @@ char classify_clip_pattern (int & dist_to_clip,
     }
 }
 
+//@function
+//  classify if the read is worth further analysis
+//  also check for possible involvement of complex event
+//@return
+//  'A': has target variant (already aligned)
+//  'B': may have target (worth analyzing)
+//  'N': not worth further check
+//----------------------------------------------------------------------------
 char classify_local_pattern(bool & may_be_complex,
                             const char covering_ptrn,
                             const std::string & ref_seq,
@@ -549,7 +546,9 @@ char classify_local_pattern(bool & may_be_complex,
     if (covering_ptrn == 'C') return 'N';
 
     bool has_target = false;
+    bool has_gteq_five_indel = false;
     int d2var = dist_to_non_target_variant(has_target,
+                                           has_gteq_five_indel,
                                            pos,
                                            target, 
                                            variants,
@@ -567,15 +566,15 @@ char classify_local_pattern(bool & may_be_complex,
                                             covering_start,
                                             covering_end);
     
-    // supply later??
     int read_len = read_seq.length();
     double cplx_thresh = 10;
     double variant_free_dist = read_len / 5; //20%
     double clip_free_dist = read_len / 2; //50% 
     
-    if (d2var <= cplx_thresh || d2clip <= 2 * cplx_thresh) may_be_complex = true;
-                      
-
+    if (has_gteq_five_indel 
+        || d2var <= cplx_thresh 
+        || d2clip <= 2 * cplx_thresh) may_be_complex = true;
+                   
     if (has_target) return 'A';
     if (!d2var) return 'B';  // partial match to target for cplx or multiallelic
     
@@ -613,3 +612,24 @@ char classify_local_pattern(bool & may_be_complex,
     }
 }
 
+std::string non_ref_pattern_str(std::vector<Variant> & variants, 
+                                std::vector<std::pair<int, int>> & spliced_segments, 
+                                int aln_start, int start_offset, 
+                                int aln_end, int end_offset)
+{
+    std::string str;
+    for (auto & variant : variants) {
+        str += (std::to_string(variant.pos) + "_" + variant.ref + "_" + variant.alt + ";");
+    } 
+    
+    for (auto & segment : spliced_segments) {
+        str += ("spl=" + std::to_string(segment.first) 
+                 + "-" + std::to_string(segment.second) + ";");
+    }
+    
+    if (start_offset) str += ("lt_clip_end=" + std::to_string(aln_start - 1) + ";");
+    if (end_offset) str += ("rt_clip_start=" + std::to_string(aln_end + 1));
+
+    return str;
+}
+                                                                            

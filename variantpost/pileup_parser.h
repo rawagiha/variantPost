@@ -26,15 +26,15 @@ struct ParsedRead {
     std::string ref_seq;
     std::string base_qualities;
     int mapq;
-    bool is_spliced;
+    //bool is_spliced;
     std::vector<Variant> variants;
-    bool is_clipped;
-    bool is_ref_seq;
-    bool is_target;
+   // bool is_clipped;
+    //bool is_ref_seq;
+    //bool is_target;
     bool may_be_complex;
     char covering_ptrn;
     char local_ptrn;
-    std::string variant_str;
+    std::string non_ref_ptrn_str;
 
     ParsedRead(const int  unspliced_local_reference_start, 
                const int  unspliced_local_reference_end,

@@ -155,7 +155,6 @@ def preprocess(
         #read_seqs.push_back(read.query_sequence.encode()) 
 
         if b"N" in cigar_string:
-            
             cigar_list = cigar_ptrn.findall(cigar_string)
             ref_seqs.append(
                 get_spliced_reference_seq(
