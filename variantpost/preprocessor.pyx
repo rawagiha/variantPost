@@ -3,7 +3,6 @@ import random
 import numpy as np
 import time
 
-
 #from libcpp.string cimport string
 #from libcpp.vector cimport vector
 #from libcpp cimport bool as bool_t
@@ -115,6 +114,7 @@ def preprocess(
     reads = fetch_reads(bam, chrom, pos, chrom_len, window, exclude_duplicates)
     print("I/O by pysam", time.time() - tt)
 
+    tt = time.time()
     if downsample_thresh < 0:
         sample_factor = 1.0
     else:
@@ -122,15 +122,16 @@ def preprocess(
 
     #reads = [read for read in reads if "N" not in read.cigarstring]
     
-    read_names = []  #
     
+    
+    read_names = []  #
     are_reverse = [] #
     cigar_strings = [] #
-    aln_starts = []  #
+    aln_starts = [] #
     aln_ends = []     #
     read_seqs = []  #
     #cdef vector[string] read_seqs 
-    ref_seqs = [] #
+    #ref_seqs = [b""] #
     qual_seqs = [] #
     mapqs = [] #
     
@@ -140,39 +141,49 @@ def preprocess(
     cdef bytes cigar_string
     cdef int aln_start, aln_end
     
+    #read_names = [b""] * n 
+    #are_reverse = [False] * n
+    #cigar_strings = [b""] * n
+    #read_seqs = [b""] * n 
+    
+    ref_seqs = [b""] * n 
+    
+    
     for i in range(n):
         
         read = reads[i]
         cigar_string = read.cigarstring.encode()
+        
         read_names.append(read.query_name.encode())
+        #read_names[i] = read.query_name.encode()
+        
         are_reverse.append(read.is_reverse)
+        #are_reverse[i] = read.is_reverse
+
         aln_start = read.reference_start + 1
         aln_end = read.reference_end
+        
         cigar_strings.append(cigar_string)
+        #cigar_strings[i] = cigar_string
+
         aln_starts.append(aln_start)
         aln_ends.append(aln_end)
+        
         read_seqs.append(read.query_sequence.encode())
+        #read_seqs[i] = read.query_sequence.encode()
+        
         #read_seqs.push_back(read.query_sequence.encode()) 
 
         if b"N" in cigar_string:
             cigar_list = cigar_ptrn.findall(cigar_string)
-            ref_seqs.append(
-                get_spliced_reference_seq(
-                    chrom,
-                    aln_start,
-                    cigar_list,
-                    fasta,
-                )
-            )
-        
-
-        else:
-            ref_seqs.append(b"")
+            ref_seqs[i] = get_spliced_reference_seq(chrom, aln_start, cigar_list, fasta)
         
         qual_seqs.append(read.query_qualities)
         mapqs.append(read.mapping_quality)
         
         i += 1
+    
+    print("looping done for {} iterations".format(n), time.time() - tt)
     return (
         read_names,
         are_reverse,
@@ -180,6 +191,7 @@ def preprocess(
         aln_starts,
         aln_ends,
         read_seqs,
+        #a,
         ref_seqs,
         qual_seqs,
         mapqs,

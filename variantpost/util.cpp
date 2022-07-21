@@ -251,7 +251,7 @@ inline void to_left(int & pos,
 
 void left_align(int & pos, 
                 std::string & ref, std::string & alt, 
-                bool is_ins,
+                const bool is_ins,
                 const int unspliced_local_reference_start,
                 const std::map<int, char> & indexed_local_reference)
 {
@@ -262,6 +262,13 @@ void left_align(int & pos,
         to_left(pos, longer_allele, shorter_allele, indexed_local_reference);
     }
 }
+
+
+void Variant::left_aln(const int unspliced_local_reference_start,
+                       const std::map<int, char> & indexed_local_reference)
+{
+    left_align(pos, ref, alt, is_ins, unspliced_local_reference_start, indexed_local_reference);
+}         
 
 
 int Variant::get_leftmost_pos(const int unspliced_local_reference_start, 
@@ -294,7 +301,7 @@ inline void to_right(int & variant_end_pos,
 
 void right_align(int & pos, int & variant_end_pos, 
                  std::string & ref, std::string & alt, 
-                 bool is_ins,
+                 const bool is_ins,
                  const int unspliced_local_reference_end,
                  const std::map<int, char> & indexed_local_reference)
 {

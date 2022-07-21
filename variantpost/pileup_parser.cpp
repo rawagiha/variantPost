@@ -192,6 +192,8 @@ void pileup::parse_pileup
 
     // target variant
     Variant target = Variant(pos, ref, alt);
+    target.left_aln(unspliced_local_reference_start, aa);
+    
     int ref_allele_len = target.ref_len;
     int lpos = target.get_leftmost_pos(unspliced_local_reference_start, aa);
     int rpos = target.get_rightmost_pos(unspliced_local_reference_end, aa);
@@ -305,7 +307,7 @@ char classify_covering(const int lpos, const int pos, const int rpos,
                        const std::vector<Variant> & variants)
 {
     
-    // fly through
+    // fly through (shiftable case considered)
     if (!spl_segments.empty()) {
         for (auto & segment : spl_segments) {
             if (segment.first < lpos && rpos < segment.second) {

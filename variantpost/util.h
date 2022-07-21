@@ -75,6 +75,7 @@ struct Variant {
 
 
     */
+    void left_aln(const int unspliced_local_reference_start, const std::map<int, char> & indexed_local_reference); 
     bool is_shiftable(const std::map<int, char> & indexed_local_reference) const;
     int get_leftmost_pos(const int unspliced_local_reference_start, const std::map<int, char> & indexed_local_reference) const;
     int get_rightmost_pos(const int unspliced_local_reference_end, const std::map<int, char> & indexed_local_reference) const;
