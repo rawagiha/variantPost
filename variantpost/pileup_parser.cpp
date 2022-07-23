@@ -180,7 +180,8 @@ void pileup::parse_pileup
     const std::vector<std::string> & read_seqs,
     const std::vector<std::string> & ref_seqs,
     const std::vector<std::vector<int>> & quals,
-    const std::vector<int> & mapqs 
+    const std::vector<int> & mapqs,
+    const std::vector<bool> & is_from_first_bam 
 )
 {
     size_t pileup_size = read_names.size();

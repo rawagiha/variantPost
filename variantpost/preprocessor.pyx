@@ -88,11 +88,53 @@ def make_qual_seq(qual_arr):
     a += 33
     return a.tobytes().decode("utf-8")
 
+
+
+
+cdef void  process(object read, 
+                         str chrom, 
+                         object fasta, 
+                         list read_names, 
+                         list are_reverse, 
+                         list cigar_strings, 
+                         list aln_starts, 
+                         list aln_ends, 
+                         list read_seqs, 
+                         list ref_seqs, 
+                         list qual_seqs, 
+                         list mapqs, 
+                         list is_primary, bint is_secondary):
+    cdef bytes cigar_string = read.cigarstring.encode()
+    
+    read_names.append(read.query_name.encode())
+    are_reverse.append(read.is_reverse)
+    
+    cdef int aln_start = read.reference_start + 1
+    
+    cigar_strings.append(cigar_string)
+    aln_starts.append(aln_start)
+    aln_ends.append(read.reference_end)
+    read_seqs.append(read.query_sequence.encode())
+    if b"N" in cigar_string:
+        cigar_list = cigar_ptrn.findall(cigar_string)
+        ref_seqs.append(get_spliced_reference_seq(chrom, aln_start, cigar_list, fasta))
+    else:
+        ref_seqs.append(b"")
+    qual_seqs.append(read.query_qualities)
+    mapqs.append(read.mapping_quality)
+    
+    if is_secondary:
+        is_primary.append(False)
+    else:
+        is_primary.append(True)
+
+
 def preprocess(
     chrom,
     pos,
     chrom_len,
     bam,
+    second_bam,
     unspliced_local_reference,
     unspliced_local_reference_start,
     fasta,
@@ -121,32 +163,25 @@ def preprocess(
     ref_seqs = []
     qual_seqs = [] #
     mapqs = [] #
+    are_first_bam = [] # from primary bam
     
-    cdef object read
+    #cdef object read
     cdef bytes cigar_string
     cdef int aln_start, aln_end
-       
+    
     for read in reads: 
         
-        cigar_string = read.cigarstring.encode()
-        read_names.append(read.query_name.encode())
-        are_reverse.append(read.is_reverse)
-        aln_start = read.reference_start + 1
-        cigar_strings.append(cigar_string)
-        aln_starts.append(aln_start)
-        aln_ends.append(read.reference_end)
-        read_seqs.append(read.query_sequence.encode())
-
-        if b"N" in cigar_string:
-            cigar_list = cigar_ptrn.findall(cigar_string)
-            ref_seqs.append(get_spliced_reference_seq(chrom, aln_start, cigar_list, fasta))
-        else:
-            ref_seqs.append(b"")
-
-        qual_seqs.append(read.query_qualities)
-        mapqs.append(read.mapping_quality)
+        process(read, chrom, fasta, read_names, are_reverse, cigar_strings, 
+                aln_starts, aln_ends, read_seqs, ref_seqs, qual_seqs, mapqs, are_first_bam, False)
     
-        #print("looping done for {} iterations".format(99), time.time() - tt)
+    if second_bam:
+        reads = fetch_reads(bam, chrom, pos, chrom_len, window, exclude_duplicates)
+        
+        for read in reads:
+            process(read, chrom, fasta, read_names, are_reverse, cigar_strings,
+                    aln_starts, aln_ends, read_seqs, ref_seqs, qual_seqs, mapqs, are_first_bam, True)
+    
+    
     return (
         read_names,
         are_reverse,
@@ -157,4 +192,5 @@ def preprocess(
         ref_seqs,
         qual_seqs,
         mapqs,
+        are_first_bam
     )

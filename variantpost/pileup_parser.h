@@ -75,7 +75,8 @@ void parse_pileup( const std::string &,
                    const std::vector<std::string> &, 
                    const std::vector<std::string> &,
                    const std::vector<std::vector<int>> &, 
-                   const std::vector<int> & 
+                   const std::vector<int> &,
+                   const std::vector<bool> &
 );
 
 } // end of namespace "pileup"

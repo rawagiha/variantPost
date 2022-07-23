@@ -18,6 +18,7 @@ cdef void  test_it(
             vector[string] &,
             vector[string] &,           
             vector[vector[int]] &, 
-            vector[int] & 
+            vector[int] &,
+            vector[bool_t] &
 )
 

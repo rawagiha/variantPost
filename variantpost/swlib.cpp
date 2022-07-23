@@ -79,7 +79,26 @@ std::vector<std::string> decompose_cigar_string( const std::string &
     return cigarette;
 }
 
-bool is_gap( std::string cigar_itr )
+
+inline std::vector<std::string> _decompose_cigar_string(const std::string & cigar_string)
+{
+    std::vector<std::string> cigarette;
+    
+    size_t pos = 0;
+    size_t newpos = 0;
+    const size_t len = cigar_string.size();
+    
+    while (pos < len) {
+        newpos = cigar_string.find_first_of("MIDNSHPX=", pos) + 1;
+        cigarette.push_back(cigar_string.substr(pos, newpos - pos));
+        pos = newpos;
+    }
+    
+    return cigarette; 
+}
+
+
+inline bool is_gap( std::string cigar_itr )
 {
     return (
                ( cigar_itr.find( "I" ) != std::string::npos )
@@ -181,7 +200,7 @@ std::vector<sw::ParsedVariant> sw::find_variants( const sw::Alignment &
         const uint32_t & genomic_ref_start )
 {
 
-    std::vector<std::string> cigarette = decompose_cigar_string(
+    std::vector<std::string> cigarette = _decompose_cigar_string(
             alignment.cigar_string );
     std::vector<sw::ParsedVariant> variants;
 
@@ -473,7 +492,7 @@ void pairwise_stitch( std::deque<BaseCount> & consensus,
     sw::Alignment aln = sw::align( read1, read2, match_score, mismatch_penalty,
                                    gap_open_penalty, gap_extention_penalty );
 
-    std::vector<std::string> cigar_vec = decompose_cigar_string(
+    std::vector<std::string> cigar_vec = _decompose_cigar_string(
             aln.cigar_string );
     
     const int read1_begin = aln.ref_begin;

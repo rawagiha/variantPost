@@ -19,7 +19,8 @@ cdef extern from "pileup_parser.h" namespace "pileup":
             vector[string] &,
             vector[string] &,           
             vector[vector[int]] &, 
-            vector[int] & 
+            vector[int] &,
+            vector[bool_t] &
     )
 
 
@@ -40,6 +41,7 @@ cdef void test_it(
     vector[string] & ref_seqs,
     vector[vector[int]] & quals,
     vector[int] & mapqs,
+    vector[bool_t] & are_first_bam,
 ):
 
     parse_pileup(
@@ -59,4 +61,5 @@ cdef void test_it(
         ref_seqs,
         quals,
         mapqs,
+        are_first_bam
     )
