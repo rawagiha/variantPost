@@ -4,7 +4,7 @@
 #include <deque>
 #include <vector>
 #include <iterator>
-#include <regex>
+//#include <regex>
 #include <random>
 #include <string.h>
 
@@ -57,7 +57,7 @@ sw::Alignment sw::align( const std::string & ref,
     return alignment;
 }
 
-
+/*
 //@Function:
 //      Parse CIGAR to a list. 60=2D8I32=1S -> [60=, 2D, 8I, 32=, 1S]
 std::vector<std::string> decompose_cigar_string( const std::string &
@@ -78,7 +78,7 @@ std::vector<std::string> decompose_cigar_string( const std::string &
 
     return cigarette;
 }
-
+*/
 
 inline std::vector<std::string> _decompose_cigar_string(const std::string & cigar_string)
 {
@@ -111,7 +111,7 @@ inline bool is_gap( std::string cigar_itr )
 //      Check if there exist consecutive gaps (I or D)
 //      [60=, 2D, 8I, 32=, 1S] -> true
 //      [60=, 6I, 2X, 32=, 1S] -> false
-bool has_consecutive_gap( const std::vector<std::string> & cigarette )
+bool has_consecutive_gap(const std::vector<std::string> & cigarette)
 {
     bool prev_is_gap = false;
     for ( std::vector<std::string>::const_iterator itr = cigarette.begin();
@@ -320,14 +320,14 @@ char bases[5] = {'A', 'C', 'G', 'T', 'N'};
 static char bases[5] = {'A', 'C', 'G', 'T', 'N'};
 
 template <typename T>
-std::vector<int> get_max_indices( const T & arr )
+std::vector<int> get_max_indices(const T & arr)
 {
     std::vector<int> indices;
 
-    auto it = std::max_element( std::begin( arr ), std::end( arr ) );
-    while ( it != std::end( arr ) ) {
-        indices.push_back( std::distance( std::begin( arr ), it ) );
-        it = std::find( std::next( it ), std::end( arr ), *it );
+    auto it = std::max_element(std::begin(arr), std::end(arr));
+    while (it != std::end(arr)) {
+        indices.push_back(std::distance(std::begin(arr), it));
+        it = std::find(std::next(it), std::end(arr), *it);
     }
     return indices;
 }
@@ -341,11 +341,11 @@ struct BaseCount {
 
     BaseCount() {}
 
-    BaseCount( char base, char qual )
+    BaseCount(char base, char qual)
     {
-        double _qual = static_cast<double>( qual );
+        double _qual = static_cast<double>(qual);
 
-        switch ( base ) {
+        switch (base) {
         case 'A':
             a = _qual;
             ++a_cnt;
@@ -369,11 +369,11 @@ struct BaseCount {
         }
     }
 
-    void add( char base, char qual )
+    void add(char base, char qual)
     {
-        int _qual = static_cast<int>( qual );
+        int _qual = static_cast<int>(qual);
 
-        switch ( base ) {
+        switch (base) {
         case 'A':
             a += _qual;
             ++a_cnt;
@@ -402,18 +402,18 @@ struct BaseCount {
         double counts[] = {a_cnt, c_cnt, g_cnt, t_cnt, n_cnt};
         double quals[] = {a, c, g, t, n};
 
-        std::vector<int> max_cnt_indices = get_max_indices( counts );
+        std::vector<int> max_cnt_indices = get_max_indices(counts);
 
         int max_idx;
         if ( max_cnt_indices.size() > 1 ) {
-            std::vector<int> max_qual_indices = get_max_indices( quals );
+            std::vector<int> max_qual_indices = get_max_indices(quals);
             max_idx = max_qual_indices[0];
         }
         else {
             max_idx = max_cnt_indices[0];
         }
 
-        std::vector<char> ret = {bases[max_idx], static_cast<char>( quals[max_idx] / counts[max_idx] )};
+        std::vector<char> ret = {bases[max_idx], static_cast<char>(quals[max_idx] / counts[max_idx])};
 
         return ret;
     }
@@ -523,7 +523,7 @@ void pairwise_stitch( std::deque<BaseCount> & consensus,
         mqual2 = qual2.substr( read2_begin, m_len );
     }
     else {
-        // not stitchable
+        // not stitchable -> reconsider
     }
 
 

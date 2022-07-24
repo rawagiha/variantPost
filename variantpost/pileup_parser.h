@@ -5,6 +5,8 @@
 #include <string>
 #include <vector>
 #include <utility>
+#include <unordered_map>
+
 #include "util.h"
 
 namespace pileup {
@@ -54,7 +56,7 @@ struct ParsedRead {
                const int  pos,
                const int  rpos,
                const bool  is_shiftable,
-               const std::map<int, char> &  indexed_local_reference //std::map<int, char> & indexed_local_reference
+               const std::unordered_map<int, char> &  indexed_local_reference //std::map<int, char> & indexed_local_reference
 
     );
 

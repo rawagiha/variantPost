@@ -35,7 +35,7 @@ void parse_splice_pattern(std::vector<std::pair<int, int>> & exons,
                           const int end);
 
 
-std::map<int, char> reference_by_position( const std::string &
+std::unordered_map<int, char> reference_by_position( const std::string &
         unspliced_local_reference, int unspliced_local_reference_start,
         int unspliced_local_reference_end );
 
@@ -75,11 +75,11 @@ struct Variant {
 
 
     */
-    void left_aln(const int unspliced_local_reference_start, const std::map<int, char> & indexed_local_reference); 
-    bool is_shiftable(const std::map<int, char> & indexed_local_reference) const;
-    int get_leftmost_pos(const int unspliced_local_reference_start, const std::map<int, char> & indexed_local_reference) const;
-    int get_rightmost_pos(const int unspliced_local_reference_end, const std::map<int, char> & indexed_local_reference) const;
-    bool is_equivalent(const Variant & v, const int unspliced_local_reference_start, const std::map<int, char> & indexed_local_reference) const;
+    void left_aln(const int unspliced_local_reference_start, const std::unordered_map<int, char> & indexed_local_reference); 
+    bool is_shiftable(const std::unordered_map<int, char> & indexed_local_reference) const;
+    int get_leftmost_pos(const int unspliced_local_reference_start, const std::unordered_map<int, char> & indexed_local_reference) const;
+    int get_rightmost_pos(const int unspliced_local_reference_end, const std::unordered_map<int, char> & indexed_local_reference) const;
+    bool is_equivalent(const Variant & v, const int unspliced_local_reference_start, const std::unordered_map<int, char> & indexed_local_reference) const;
     //void say_hi(const Variant & j) const;
 
     //bool operator == ( const Variant & rhs ) const;
@@ -93,7 +93,7 @@ std::vector<Variant> find_mapped_variants( const int aln_start,
         //const std::string & chrom,
         const int & unspliced_local_reference_start,
         const int & unspliced_local_reference_end,
-        const std::map<int, char> & indexed_local_reference );
+        const std::unordered_map<int, char> & indexed_local_reference );
 
 
 #endif

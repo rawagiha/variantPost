@@ -7,6 +7,7 @@
 #include <iostream>
 #include <climits>
 #include <algorithm>
+#include <unordered_map>
 
 #include "util.h"
 #include "swlib.h"
@@ -50,7 +51,7 @@ char classify_local_pattern(bool & may_be_complex,
                             const std::vector<Variant> & variants,
                             const int unspliced_local_reference_start,
                             const int unspliced_local_reference_end,
-                            const std::map<int, char> & indexed_local_reference);
+                            const std::unordered_map<int, char> & indexed_local_reference);
 
 
 // non-reference base patterns to string
@@ -80,7 +81,7 @@ pileup::ParsedRead::ParsedRead
     const int pos,
     const int rpos,
     const bool is_shiftable,
-    const std::map<int, char> & indexed_local_reference
+    const std::unordered_map<int, char> & indexed_local_reference
 ) : read_name(read_name), is_reverse(is_reverse), cigar_string(cigar_string),
     aln_start(aln_start),  aln_end(aln_end), read_seq(read_seq), mapq(mapq)
 {
@@ -188,7 +189,7 @@ void pileup::parse_pileup
 
     std::vector<pileup::ParsedRead> parsed_reads;
 
-    std::map<int, char> aa = reference_by_position( unspliced_local_reference,
+    std::unordered_map<int, char> aa = reference_by_position( unspliced_local_reference,
                              unspliced_local_reference_start, unspliced_local_reference_end );
 
     // target variant
@@ -386,7 +387,7 @@ int dist_to_non_target_variant(bool & has_target,
                                const std::vector<Variant> & variants,
                                const int unspliced_local_reference_start,
                                const int unspliced_local_reference_end,
-                               const std::map<int, char> & indexed_local_reference)
+                               const std::unordered_map<int, char> & indexed_local_reference)
 {    
     if (variants.empty()) return INT_MAX;
     
@@ -537,7 +538,7 @@ char classify_local_pattern(bool & may_be_complex,
                             const std::vector<Variant> & variants,
                             const int unspliced_local_reference_start,
                             const int unspliced_local_reference_end,
-                            const std::map<int, char> & indexed_local_reference
+                            const std::unordered_map<int, char> & indexed_local_reference
                             )
 {
     //trivial cases
