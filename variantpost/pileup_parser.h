@@ -62,7 +62,7 @@ struct ParsedRead {
 
 };
 
-void parse_pileup( const std::string &,
+std::string parse_pileup( const std::string &,
                    int,
                    const std::string &,
                    const std::string &,

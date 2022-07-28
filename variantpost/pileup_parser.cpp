@@ -53,13 +53,11 @@ char classify_local_pattern(bool & may_be_complex,
                             const int unspliced_local_reference_end,
                             const std::unordered_map<int, char> & indexed_local_reference);
 
-
 // non-reference base patterns to string
 std::string non_ref_pattern_str(std::vector<Variant> & variants, 
                                 std::vector<std::pair<int, int>> & spliced_segments, 
                                 int aln_start, int start_offset, 
                                 int aln_end, int end_offset);
-
 
 pileup::ParsedRead::ParsedRead
 ( 
@@ -85,7 +83,6 @@ pileup::ParsedRead::ParsedRead
 ) : read_name(read_name), is_reverse(is_reverse), cigar_string(cigar_string),
     aln_start(aln_start),  aln_end(aln_end), read_seq(read_seq), mapq(mapq)
 {
-
     cigar_vector = to_cigar_vector(cigar_string);
 
     std::pair<char, int> first_cigar = cigar_vector[0];
@@ -95,7 +92,6 @@ pileup::ParsedRead::ParsedRead
     read_start = aln_start - start_offset;
     end_offset = (last_cigar.first == 'S') ? last_cigar.second : 0;
     read_end = aln_end + end_offset;
-
 
     //ref seq
     if (cigar_string.find('N') != std::string::npos) {
@@ -113,7 +109,6 @@ pileup::ParsedRead::ParsedRead
     parse_splice_pattern(un_spliced_segments, spliced_segments, 
                          cigar_vector, read_start, read_end);
 
-    
     covering_start = 0;
     covering_end = 0;
     if (ref_seq.empty()) {
@@ -164,10 +159,10 @@ pileup::ParsedRead::ParsedRead
     }
 }
 
-void pileup::parse_pileup
+std::string  pileup::parse_pileup
 (
     const std::string & chrom,
-    int pos, //lpos?
+    int pos, 
     const std::string & ref,
     const std::string & alt,
     int unspliced_local_reference_start,
@@ -225,31 +220,52 @@ void pileup::parse_pileup
 
     }
 
-    int g = 0;
+    std::vector<pileup::ParsedRead> targets;
+    std::vector<pileup::ParsedRead> candidates;
+    std::vector<pileup::ParsedRead> non_targets; 
+    
     for (auto & read : parsed_reads) {
         if (read.local_ptrn == 'A') {
-            g += 1;
+            targets.push_back(read);
         }
+        else if (read.local_ptrn == 'B') {
+            candidates.push_back(read);
+        }
+        else if ((read.covering_ptrn == 'A') & (read.local_ptrn == 'N')) {
+            non_targets.push_back(read);
+        } 
     }
-    std::cout << g << " num of target read---" << std::endl;
 
-    if ( g > 0 ) {
+    
+    //if with 'A' -> do contig job -> gapless aln -> make return
+    //if with 'B' -> assem?  
+    //if w/o 'A' and 'B' -> make return
+    
+    
+    std::cout << targets.size() << " num of target reads ---" << std::endl;
+    std::cout << candidates.size() << " num of worth-cheking reads ---" << std::endl;
+    std::cout << non_targets.size() << " num of worth-cheking reads ---" << std::endl;
+    
+    if ( targets.size() > 0 ) {
         std::vector<pileup::ParsedRead> j = get_gapped_seed_reads(parsed_reads, 6);
         std::vector<std::string> seed_read = {j[0].read_seq, j[0].base_qualities};
-
         //std::cout << j[0].read_seq << "  " << j[0].base_qualities << std::endl;
         std::vector<std::vector<std::string>> _reads;
-        for ( size_t i = 1; i < 6; ++i) {
+        
+        if (j.size() > 1) {
+            for ( size_t i = 1; i < 6; ++i) {
           //  std::cout << j[i].read_seq << "  " << j[i].base_qualities << std::endl;
-            std::vector<std::string> r = {j[i].read_seq, j[i].base_qualities};
-            _reads.push_back(r);
+                std::vector<std::string> r = {j[i].read_seq, j[i].base_qualities};
+                _reads.push_back(r);
+            }
+
+            sw::flatten_reads(seed_read, _reads);
         }
-
-        //std::vector<std::string> lll = {"TAAATTTATGTAAATCACTTTGGACCCAGCATGTCCTTAGGTTTTACCCATTCGTCAAACTGCTCTGCTGTGAGATAGCCAAGTTCGATAGCAGTTTCCTTTAAGGTTGATCCATTTTTTTTGTGTGCTGTCTTAGCAATCTTTGCTGCCTTGTCATACCCTGAAGAAAAAATAAAAAGACGACATATGGGTTAGCAGTGA", "@E@JJJJJJJJJJJEHIIJJJJJJJJJJJJJJJJJJJJJJJJJJGHCECGEGJJJJJJIJJJIIJJJIJHHJJJJJJJJJJJHJJJJJJJJJJJJIJJJJHJJJJJJJJJJJJJJJJJJJJJIJIJIIJIHJJJJGHIJJJJJJHEIHJIJJJJIJJJJHJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJE@"};
-        //std::vector<std::vector<std::string>> _pp = {{"TTTCATTATAAATTTATGTAAATCACTTTGGACCCAGCATGTCCTTAGGTTTTACCCATTCGTCAAACTGCTCTGCTGTGAGATAGCCAAGTTCGATAGCAGTTTCCTTTAAGGTTGATCCATTTTTTTTGTGTGCTGTCT", "KFK<7KKKKFAKKKKKKKKKKKKF<KKKKKFAKKKFKKKKKKKKKKKKKKFKKFFKKFKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKA"}};
-
-        sw::flatten_reads(seed_read, _reads);
     }
+    
+    //[[read_names], [orientations], [are_countable], [are_targets], [are_from_bam1], [tar_pos], [tar_alt], [tar_ref], [contig]] 
+    
+    return "done";
 }
 
 // select gapped_seed
@@ -549,6 +565,14 @@ char classify_local_pattern(bool & may_be_complex,
     // covering but repeats are not bounded -> can't characterize target indel
     if (covering_ptrn == 'C') return 'N';
 
+    // no overlapping with target lt-most and rt-most positions  
+    if (covering_ptrn == 'D') {
+        if (((rpos + ref_allele_len) < covering_start) 
+            || (covering_end < lpos)) {
+            return 'N';
+        }
+    }
+    
     bool has_target = false;
     bool has_gteq_five_indel = false;
     int d2var = dist_to_non_target_variant(has_target,

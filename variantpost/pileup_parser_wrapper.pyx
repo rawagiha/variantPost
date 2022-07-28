@@ -3,7 +3,7 @@ from libcpp.vector cimport vector
 from libcpp cimport bool as bool_t
 
 cdef extern from "pileup_parser.h" namespace "pileup":
-    void  parse_pileup(
+    string  parse_pileup(
             string &,
             int,
             string &,
@@ -24,7 +24,7 @@ cdef extern from "pileup_parser.h" namespace "pileup":
     )
 
 
-cdef void test_it(
+cdef string test_it(
     string & chrom,
     int pos, 
     string & ref, 
@@ -44,7 +44,7 @@ cdef void test_it(
     vector[bool_t] & are_first_bam,
 ):
 
-    parse_pileup(
+    res = parse_pileup(
         chrom,
         pos, 
         ref, 
@@ -63,3 +63,5 @@ cdef void test_it(
         mapqs,
         are_first_bam
     )
+    
+    return res

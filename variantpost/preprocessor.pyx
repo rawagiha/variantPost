@@ -40,8 +40,8 @@ cdef object fetch_reads(object bam, str chrom, int pos, int chrom_len, int windo
     reads = bam.fetch(
         chrom, max(0, pos - window), min(pos + window, chrom_len), until_eof=False
     )
-    #return (read for read in reads if is_qualified_read(read, exclude_duplicates, i))
-    return (read for read in reads if is_qualified_read(read, exclude_duplicates))
+    return [read for read in reads if is_qualified_read(read, exclude_duplicates)]
+    #return (read for read in reads if is_qualified_read(read, exclude_duplicates))
 
 
 def downsampler(chrom, pos, bam, downsample_thresh, reads):
@@ -169,18 +169,19 @@ def preprocess(
     cdef bytes cigar_string
     cdef int aln_start, aln_end
     
+    ttt = time.time()
     for read in reads: 
         
         process(read, chrom, fasta, read_names, are_reverse, cigar_strings, 
                 aln_starts, aln_ends, read_seqs, ref_seqs, qual_seqs, mapqs, are_first_bam, False)
-    
+    print("prep--", time.time() - tt)
+      
     if second_bam:
         reads = fetch_reads(bam, chrom, pos, chrom_len, window, exclude_duplicates)
         
         for read in reads:
             process(read, chrom, fasta, read_names, are_reverse, cigar_strings,
                     aln_starts, aln_ends, read_seqs, ref_seqs, qual_seqs, mapqs, are_first_bam, True)
-    
     
     return (
         read_names,

@@ -239,11 +239,13 @@ inline bool is_rotatable(const std::string & allele)
 
 
 inline void to_left(int & pos, 
+                    int & variant_end_pos,
                     std::string & longer_allele,
                     std::string & shorter_allele,
                     const std::unordered_map<int, char> & indexed_local_reference)
 {
     --pos;
+    --variant_end_pos;
     char prev_base = indexed_local_reference.at(pos);
     longer_allele.pop_back();
     longer_allele.insert(0, 1, prev_base);
@@ -251,7 +253,8 @@ inline void to_left(int & pos,
 }
 
 
-void left_align(int & pos, 
+void left_align(int & pos,
+                int & variant_end_pos, 
                 std::string & ref, std::string & alt, 
                 const bool is_ins,
                 const int unspliced_local_reference_start,
@@ -261,7 +264,7 @@ void left_align(int & pos,
     std::string & shorter_allele = (is_ins) ? ref : alt;
 
     while (is_rotatable(longer_allele) && (unspliced_local_reference_start < pos)) {
-        to_left(pos, longer_allele, shorter_allele, indexed_local_reference);
+        to_left(pos, variant_end_pos, longer_allele, shorter_allele, indexed_local_reference);
     }
 }
 
@@ -269,7 +272,7 @@ void left_align(int & pos,
 void Variant::left_aln(const int unspliced_local_reference_start,
                        const std::unordered_map<int, char> & indexed_local_reference)
 {
-    left_align(pos, ref, alt, is_ins, unspliced_local_reference_start, indexed_local_reference);
+    left_align(pos, variant_end_pos, ref, alt, is_ins, unspliced_local_reference_start, indexed_local_reference);
 }         
 
 
@@ -279,10 +282,11 @@ int Variant::get_leftmost_pos(const int unspliced_local_reference_start,
     if (is_substitute) return pos;   
     
     int pos_ = pos;
+    int variant_end_pos_ = variant_end_pos;
     std::string ref_ = ref;
     std::string alt_ = alt;
 
-    left_align(pos_, ref_, alt_, is_ins, 
+    left_align(pos_, variant_end_pos_, ref_, alt_, is_ins, 
                unspliced_local_reference_start, indexed_local_reference);
 
     return pos_;
@@ -317,9 +321,9 @@ void right_align(int & pos, int & variant_end_pos,
         ++pos;
     }
     while (is_rotatable(longer_allele) && (pos < unspliced_local_reference_end));
-     
+    
     // undo the last right shift
-    to_left(pos, longer_allele, shorter_allele, indexed_local_reference);
+    to_left(pos, variant_end_pos, longer_allele, shorter_allele, indexed_local_reference);
 }
 
 
@@ -390,6 +394,7 @@ bool Variant::is_equivalent(const Variant & other,
 
     if (var_len_0 == var_len_1){
         int pos_ = other.pos;
+        int varient_end_pos_ = other.variant_end_pos;
         std::string ref_ = other.ref;
         std::string alt_ = other.alt;
         
@@ -397,7 +402,7 @@ bool Variant::is_equivalent(const Variant & other,
             return ((pos == pos_) & (ref == ref_) & (alt == alt_));
         } 
         else {
-            left_align(pos_, ref_, alt_, other.is_ins, 
+            left_align(pos_, varient_end_pos_, ref_, alt_, other.is_ins, 
                        unspliced_local_reference_start, 
                        indexed_local_reference);
             
