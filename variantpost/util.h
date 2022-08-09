@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <unordered_map>
 
+#include "fasta/Fasta.h"
 
 template<typename A, typename B, typename C>
 bool ordered(const A & a, const B & b, const C & c)
@@ -24,9 +25,14 @@ std::string to_fastq_qual( const std::vector<int> & arr_qual );
 std::vector<std::pair<char, int>> to_cigar_vector( const std::string &
                                cigar_string );
 
-std::string get_read_wise_ref_seq( int aln_start, int aln_end,
-                                   int unspliced_local_reference_start,
-                                   const std::string & unspliced_local_reference );
+std::string get_unspliced_ref_seq(const int aln_start, const int aln_end,
+                                  const int unspliced_local_reference_start,
+                                  const std::string & unspliced_local_reference);
+
+std::string get_spliced_ref_seq(const std::string & chrom, const int aln_start,
+                                const std::vector<std::pair<char, int>> & cigar_vector,
+                                FastaReference & fr);
+
 
 void parse_splice_pattern(std::vector<std::pair<int, int>> & exons,
                           std::vector<std::pair<int, int>> & introns,

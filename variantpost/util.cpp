@@ -7,7 +7,7 @@
 #include <unordered_map>
 
 #include "util.h"
-
+#include "fasta/Fasta.h"
 
 // select most frequent str
 // ------------------------------------------------------------
@@ -150,15 +150,16 @@ std::vector<std::pair<int, int>> get_introns ( const std::vector<std::pair<char,
 // not considered del??
 // do we need this??
 //-----------------------------------------------------------------------------
-std::string get_read_wise_ref_seq ( int aln_start, int aln_end,
-                                    int unspliced_local_reference_start,
-                                    const std::string &unspliced_local_reference ) {
+std::string get_unspliced_ref_seq(const int aln_start, const int aln_end,
+                                  const int unspliced_local_reference_start,
+                                  const std::string &unspliced_local_reference) 
+{
   int start_idx = aln_start - unspliced_local_reference_start;
   size_t expected_ref_len = aln_end - aln_start + 1;
    
-  if ( start_idx >= 0 ){
-    std::string fitted_ref = unspliced_local_reference.substr ( start_idx, expected_ref_len );
-    if ( fitted_ref.size() == expected_ref_len ) {
+  if (start_idx >= 0) {
+    std::string fitted_ref = unspliced_local_reference.substr(start_idx, expected_ref_len);
+    if (fitted_ref.size() == expected_ref_len) {
         return fitted_ref;
     }
   }
@@ -167,6 +168,42 @@ std::string get_read_wise_ref_seq ( int aln_start, int aln_end,
   return "";
 }
 
+
+// get spliced referecen
+// ----------------------------------------------------------------------------
+std::string get_spliced_ref_seq(const std::string & chrom, const int aln_start, 
+                                const std::vector<std::pair<char, int>> & cigar_vector,
+                                FastaReference & fr)
+{
+    
+    int curr_pos = aln_start - 1;
+    
+    char op;
+    int op_len;
+    std::string ref_seq;
+    for (const auto & c : cigar_vector) {
+        op = c.first;
+        op_len = c.second;
+        
+        switch (op) {
+            case 'M':
+            case 'X':
+            case 'D':
+                ref_seq += fr.getSubSequence(chrom, curr_pos, op_len);
+                curr_pos += op_len;
+                break;
+            case 'N':
+                curr_pos += op_len;
+                break;
+            default:
+                break;
+
+        }
+
+    }
+    
+    return ref_seq;     
+}
 
 // mapping genomic pos -> reference base
 //-----------------------------------------------------------------------------

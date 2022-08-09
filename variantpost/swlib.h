@@ -3,6 +3,7 @@
 
 #include <string>
 #include <vector>
+#include <utility>
 #include <string.h>
 
 namespace sw {
@@ -51,8 +52,8 @@ std::vector<ParsedVariant> find_variants(
     const uint32_t & genomic_ref_start = 0 );
 
 
-std::string flatten_reads( const std::vector<std::string> seed_read,
-                           const std::vector<std::vector<std::string>> & reads );
+std::string flatten_reads( const std::pair<std::string, std::string> seed_read,
+                           const std::vector<std::pair<std::string, std::string>> & reads );
 } //end of namespace "sw"
 
 #endif

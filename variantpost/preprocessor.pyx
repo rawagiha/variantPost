@@ -4,6 +4,7 @@ import numpy as np
 import time
 import cython
 
+
 #from libcpp.string cimport string
 #from libcpp.vector cimport vector
 #from libcpp cimport bool as bool_t
@@ -25,7 +26,7 @@ def edit_chrom_prefix(chrom, bam):
             return "chr" + chrom
 
 
-cdef bint is_qualified_read(object read, bint exclude_duplicates):
+cdef bint is_qualified_read(read, bint exclude_duplicates):
     
     if exclude_duplicates:
         if read.cigarstring and (not read.is_duplicate) and  (not read.is_secondary) and (not read.is_supplementary) and read.reference_end:
@@ -36,10 +37,12 @@ cdef bint is_qualified_read(object read, bint exclude_duplicates):
     
     return False
 
-cdef object fetch_reads(object bam, str chrom, int pos, int chrom_len, int window, bint exclude_duplicates):
+cdef object fetch_reads(bam, str chrom, int pos, int chrom_len, int window, bint exclude_duplicates):
+    out = []
     reads = bam.fetch(
         chrom, max(0, pos - window), min(pos + window, chrom_len), until_eof=False
     )
+    
     return [read for read in reads if is_qualified_read(read, exclude_duplicates)]
     #return (read for read in reads if is_qualified_read(read, exclude_duplicates))
 
@@ -91,9 +94,9 @@ def make_qual_seq(qual_arr):
 
 
 
-cdef void  process(object read, 
+cdef void  process(read, 
                          str chrom, 
-                         object fasta, 
+                         fasta, 
                          list read_names, 
                          list are_reverse, 
                          list cigar_strings, 
@@ -115,11 +118,11 @@ cdef void  process(object read,
     aln_starts.append(aln_start)
     aln_ends.append(read.reference_end)
     read_seqs.append(read.query_sequence.encode())
-    if b"N" in cigar_string:
-        cigar_list = cigar_ptrn.findall(cigar_string)
-        ref_seqs.append(get_spliced_reference_seq(chrom, aln_start, cigar_list, fasta))
-    else:
-        ref_seqs.append(b"")
+   # if b"N" in cigar_string:
+   #     cigar_list = cigar_ptrn.findall(cigar_string)
+   #     ref_seqs.append(get_spliced_reference_seq(chrom, aln_start, cigar_list, fasta))
+   # else:
+    #ref_seqs.append(b"")
     qual_seqs.append(read.query_qualities)
     mapqs.append(read.mapping_quality)
     
@@ -154,33 +157,67 @@ def preprocess(
     else:
         reads, sample_factor = downsampler(chrom, pos, bam, downsample_thresh, reads)
     
-    read_names = []  #
-    are_reverse = [] #
-    cigar_strings = [] #
-    aln_starts = [] #
-    aln_ends = []     #
-    read_seqs = []  #
-    ref_seqs = []
-    qual_seqs = [] #
+    cdef int n = len(reads)
+
+    read_names = []   #
+    #read_names = [None] * n   #
+    are_reverse = []  #
+    #are_reverse = [None] * n
+    cigar_strings = []  #
+    #cigar_strings = [None] * n  #
+    aln_starts = []  #
+    #aln_starts = [None] * n  #
+    aln_ends = []      #
+    #aln_ends = [None] * n      #
+    read_seqs = []   #
+    #read_seqs = [None] * n   #
+    ref_seqs = [] 
+    #ref_seqs = [b""] * n 
+    qual_seqs = []  #
+    #qual_seqs = [None]  *n #
     mapqs = [] #
+    #mapqs = [None] * n #
     are_first_bam = [] # from primary bam
+    #are_first_bam = [None] * n # from primary bam
     
     #cdef object read
-    cdef bytes cigar_string
+    #cdef bytes cigar_string
     cdef int aln_start, aln_end
     
     ttt = time.time()
+    #cdef int i = 0
+    
+    #for i, read in enumerate(reads):
+   # 
+   #     read_names[i] = read.query_name.encode() 
+   #     are_reverse[i] =  read.is_reverse
+   #     
+   #     cigar_string = read.cigarstring.encode()
+   #     aln_start = read.reference_start + 1
+   #     
+   #     cigar_strings[i] = cigar_string
+   #     aln_starts[i] = aln_start
+   #     aln_ends[i] = read.reference_end
+   #     read_seqs[i] = read.query_sequence.encode()
+   #     if b"N" in cigar_string:
+   #         cigar_list = cigar_ptrn.findall(cigar_string)
+   #         ref_seqs[i] = get_spliced_reference_seq(chrom, aln_start, cigar_list, fasta)        
+   #     qual_seqs[i] = read.query_qualities
+   #     mapqs[i] = read.mapping_quality
+    
     for read in reads: 
-        
+       
         process(read, chrom, fasta, read_names, are_reverse, cigar_strings, 
                 aln_starts, aln_ends, read_seqs, ref_seqs, qual_seqs, mapqs, are_first_bam, False)
     print("prep--", time.time() - tt)
-      
+     
+     
     if second_bam:
-        reads = fetch_reads(bam, chrom, pos, chrom_len, window, exclude_duplicates)
+        _reads = fetch_reads(second_bam, chrom, pos, chrom_len, window, exclude_duplicates)
         
-        for read in reads:
-            process(read, chrom, fasta, read_names, are_reverse, cigar_strings,
+        print(len(_reads))
+        for _read in _reads:
+            process(_read, chrom, fasta, read_names, are_reverse, cigar_strings,
                     aln_starts, aln_ends, read_seqs, ref_seqs, qual_seqs, mapqs, are_first_bam, True)
     
     return (
@@ -190,7 +227,7 @@ def preprocess(
         aln_starts,
         aln_ends,
         read_seqs,
-        ref_seqs,
+        #ref_seqs,
         qual_seqs,
         mapqs,
         are_first_bam

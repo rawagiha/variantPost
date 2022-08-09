@@ -1,11 +1,11 @@
 from .preprocessor import preprocess
-from variantpost.pileup_parser_wrapper cimport test_it
+from variantpost.processor_wrapper cimport test_it
 
 import time
 
 class VariantAlignment(object):
     def __init__(
-        self, variant, bam, second_bam=None, window=200, exclude_duplicates=True, downsample_thresh=-1
+        self, variant, bam, second_bam=None, window=200, exclude_duplicates=True, downsample_thresh=-1, base_quality_threshold=20
     ):
 
         (
@@ -32,6 +32,10 @@ class VariantAlignment(object):
         
         t = time.time()
 
+        ##########
+        fastafile = variant.reference.filename
+        #########
+        
         #processed reads for c++ wrapper
         reads = preprocess(
             chrom,
@@ -50,7 +54,14 @@ class VariantAlignment(object):
         tt = time.time()
         print(tt -t, "preprosess")
 
-        res = test_it(chrom.encode(), pos, ref.encode(), alt.encode(), unspliced_local_reference_start, unspliced_local_reference_end, unspliced_local_reference.encode("utf-8"), reads[0], reads[1], reads[2], reads[3], reads[4], reads[5], reads[6], reads[7], reads[8], reads[9])
+        res = test_it(fastafile,
+                      chrom.encode(), 
+                      pos, ref.encode(), alt.encode(),
+                      base_quality_threshold, 
+                      unspliced_local_reference_start, 
+                      unspliced_local_reference_end, 
+                      #unspliced_local_reference.encode("utf-8"), 
+                      reads[0], reads[1], reads[2], reads[3], reads[4], reads[5], reads[6], reads[7], reads[8]) #refseq removed
 
         print(time.time() - tt, "c++ time")
         print(time.time() - t, "total varaln --- {}".format(res))

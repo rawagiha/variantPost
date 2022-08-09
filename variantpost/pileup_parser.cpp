@@ -11,17 +11,12 @@
 
 #include "util.h"
 #include "swlib.h"
+#include "read_merger.h"
 #include "pileup_parser.h"
+#include "fasta/Fasta.h"
 
 
-
-/* read filter */
-
-
-std::vector<pileup::ParsedRead> get_gapped_seed_reads(std::vector<pileup::ParsedRead> & parsed_reads, size_t n);
-
-
-//check covering pattern
+// check covering pattern
 char classify_covering(const int lpos, const int pos, const int rpos,
                        const bool is_shiftable, 
                        const int start_offset, const int end_offset,
@@ -34,6 +29,7 @@ char classify_covering(const int lpos, const int pos, const int rpos,
 
 // check local non-ref base pattern
 char classify_local_pattern(bool & may_be_complex,
+                            char & clip_ptrn,
                             const char covering_ptrn,
                             const std::string & ref_seq,
                             const std::string & read_seq,
@@ -53,24 +49,37 @@ char classify_local_pattern(bool & may_be_complex,
                             const int unspliced_local_reference_end,
                             const std::unordered_map<int, char> & indexed_local_reference);
 
+
+// check base quals
+double dirty_rate(const char base_qual_thresh, const std::string & base_qualities);
+
 // non-reference base patterns to string
 std::string non_ref_pattern_str(std::vector<Variant> & variants, 
                                 std::vector<std::pair<int, int>> & spliced_segments, 
                                 int aln_start, int start_offset, 
                                 int aln_end, int end_offset);
 
-pileup::ParsedRead::ParsedRead
+
+// select seed reads for assembly
+std::vector<std::pair<std::string, std::string>> get_seed_reads
+(
+    const std::vector<ParsedRead> & targets, 
+    size_t n = 5
+);
+
+// ParsedRead constuctor
+ParsedRead::ParsedRead
 ( 
     const int unspliced_local_reference_start,
     const int unspliced_local_reference_end,
     const std::string & unspliced_local_reference,
+    const char base_qual_thresh,
     const std::string & read_name,
     const bool is_reverse,
     const std::string & cigar_string,
     const int aln_start,
     const int aln_end,
     const std::string & read_seq,
-    const std::string & ref_seq_default,
     const std::vector<int> & q,
     const int mapq,
     const Variant & target,
@@ -79,7 +88,9 @@ pileup::ParsedRead::ParsedRead
     const int pos,
     const int rpos,
     const bool is_shiftable,
-    const std::unordered_map<int, char> & indexed_local_reference
+    const std::unordered_map<int, char> & indexed_local_reference,
+    const std::string & chrom,
+    FastaReference & fr
 ) : read_name(read_name), is_reverse(is_reverse), cigar_string(cigar_string),
     aln_start(aln_start),  aln_end(aln_end), read_seq(read_seq), mapq(mapq)
 {
@@ -95,10 +106,10 @@ pileup::ParsedRead::ParsedRead
 
     //ref seq
     if (cigar_string.find('N') != std::string::npos) {
-        ref_seq = ref_seq_default;
+        ref_seq = get_spliced_ref_seq(chrom, aln_start, cigar_vector, fr);
+    
     } else {
-        //ref_seq may be empty if near/on analysis window boundary
-        ref_seq = get_read_wise_ref_seq(aln_start, aln_end,
+        ref_seq = get_unspliced_ref_seq(aln_start, aln_end,
                                         unspliced_local_reference_start, 
                                         unspliced_local_reference);
     }
@@ -129,12 +140,12 @@ pileup::ParsedRead::ParsedRead
                                           covering_start, covering_end,
                                           un_spliced_segments, spliced_segments, 
                                           variants);
-    
     }
     
     //classify local non-reference base pattern 
     may_be_complex = false;
     local_ptrn = classify_local_pattern(may_be_complex,
+                                        clip_ptrn,
                                         covering_ptrn, 
                                         ref_seq, read_seq,
                                         lpos, pos, rpos, 
@@ -148,7 +159,7 @@ pileup::ParsedRead::ParsedRead
                                         unspliced_local_reference_end,
                                         indexed_local_reference);          
                                                                                                                                                  
-    base_qualities = to_fastq_qual( q );
+    base_qualities = to_fastq_qual(q);
     
     if (local_ptrn != 'N') {
         //string to summarize local non-reference base & splice pattern 
@@ -157,56 +168,76 @@ pileup::ParsedRead::ParsedRead
                                                aln_start, start_offset,
                                                aln_end, end_offset);    
     }
+    
+    if (local_ptrn == 'B') {
+        dirty_base_rate = dirty_rate(base_qual_thresh, base_qualities);
+    }
+    else dirty_base_rate = 0.0;
 }
 
-std::string  pileup::parse_pileup
+
+void parse_pileup
 (
+    std::vector<ParsedRead> & targets,
+    std::vector<ParsedRead> & candidates,
+    std::vector<ParsedRead> & non_targets,         
+    const std::string & fastafile,
     const std::string & chrom,
     int pos, 
     const std::string & ref,
     const std::string & alt,
+    int base_quality_threshold,
     int unspliced_local_reference_start,
     int unspliced_local_reference_end,
-    const std::string & unspliced_local_reference,
+    //const std::string & unspliced_local_reference,
     const std::vector<std::string> & read_names,
     const std::vector<bool> & are_reverse,
     const std::vector<std::string> & cigar_strings,
     const std::vector<int> & aln_starts,
     const std::vector<int> & aln_ends,
     const std::vector<std::string> & read_seqs,
-    const std::vector<std::string> & ref_seqs,
+    //const std::vector<std::string> & ref_seqs,
     const std::vector<std::vector<int>> & quals,
     const std::vector<int> & mapqs,
     const std::vector<bool> & is_from_first_bam 
 )
 {
-    size_t pileup_size = read_names.size();
-
-    std::vector<pileup::ParsedRead> parsed_reads;
-
-    std::unordered_map<int, char> aa = reference_by_position( unspliced_local_reference,
-                             unspliced_local_reference_start, unspliced_local_reference_end );
-
+    // prep reference 
+    FastaReference fr;
+    fr.open(fastafile);
+    std::string unspliced_local_reference = fr.getSubSequence(chrom, 
+                                                              unspliced_local_reference_start - 1, 
+                                                              unspliced_local_reference_end - unspliced_local_reference_start + 1); 
+    
+    std::unordered_map<int, char> aa = reference_by_position(unspliced_local_reference,
+                                                             unspliced_local_reference_start,
+                                                             unspliced_local_reference_end);
+    
     // target variant
     Variant target = Variant(pos, ref, alt);
     target.left_aln(unspliced_local_reference_start, aa);
-    
     int ref_allele_len = target.ref_len;
     int lpos = target.get_leftmost_pos(unspliced_local_reference_start, aa);
     int rpos = target.get_rightmost_pos(unspliced_local_reference_end, aa);
     bool is_shiftable = (lpos != rpos) ? true : false;
-
+                
+    
+    // parse reads
+    char base_qual_thresh = static_cast<char>(base_quality_threshold + 33);
+    size_t pileup_size = read_names.size(); 
+    std::vector<ParsedRead> parsed_reads;
     for ( size_t i = 0; i < pileup_size; ++i ) {
         parsed_reads.emplace_back( unspliced_local_reference_start,
                                    unspliced_local_reference_end,
                                    unspliced_local_reference,
+                                   base_qual_thresh,
                                    read_names[i],
                                    are_reverse[i],
                                    cigar_strings[i],
                                    aln_starts[i],
                                    aln_ends[i],
                                    read_seqs[i],
-                                   ref_seqs[i],
+                                   //ref_seqs[i],
                                    quals[i],
                                    mapqs[i],
                                    target,
@@ -215,14 +246,16 @@ std::string  pileup::parse_pileup
                                    pos,
                                    rpos,
                                    is_shiftable,
-                                   aa
+                                   aa,
+                                   chrom,
+                                   fr
                                  );
 
     }
 
-    std::vector<pileup::ParsedRead> targets;
-    std::vector<pileup::ParsedRead> candidates;
-    std::vector<pileup::ParsedRead> non_targets; 
+    //std::vector<pileup::ParsedRead> targets;
+    //std::vector<pileup::ParsedRead> candidates;
+    //std::vector<pileup::ParsedRead> non_targets; 
     
     for (auto & read : parsed_reads) {
         if (read.local_ptrn == 'A') {
@@ -236,71 +269,94 @@ std::string  pileup::parse_pileup
         } 
     }
 
-    
-    //if with 'A' -> do contig job -> gapless aln -> make return
-    //if with 'B' -> assem?  
-    //if w/o 'A' and 'B' -> make return
-    
-    
+    /*
     std::cout << targets.size() << " num of target reads ---" << std::endl;
     std::cout << candidates.size() << " num of worth-cheking reads ---" << std::endl;
-    std::cout << non_targets.size() << " num of worth-cheking reads ---" << std::endl;
+    std::cout << non_targets.size() << " num of nontarget reads ---" << std::endl;
     
-    if ( targets.size() > 0 ) {
-        std::vector<pileup::ParsedRead> j = get_gapped_seed_reads(parsed_reads, 6);
-        std::vector<std::string> seed_read = {j[0].read_seq, j[0].base_qualities};
-        //std::cout << j[0].read_seq << "  " << j[0].base_qualities << std::endl;
-        std::vector<std::vector<std::string>> _reads;
-        
-        if (j.size() > 1) {
-            for ( size_t i = 1; i < 6; ++i) {
-          //  std::cout << j[i].read_seq << "  " << j[i].base_qualities << std::endl;
-                std::vector<std::string> r = {j[i].read_seq, j[i].base_qualities};
-                _reads.push_back(r);
-            }
-
-            sw::flatten_reads(seed_read, _reads);
+   
+    int dirty_cnt = 0;
+    if (candidates.size() > 0) {
+        for (auto & read : candidates) {
+            if (is_dirty(base_qual_thresh, read.base_qualities)) ++dirty_cnt;
         }
-    }
+        
+        std::cout << "dirties: " << dirty_cnt << std::endl; 
+    } 
+     
+      
     
+    std::string _contig;
+    size_t target_pileup_size = targets.size();
+    
+    if (target_pileup_size > 0) {
+        if (target_pileup_size == 1) {
+            _contig = targets[0].read_seq;
+        } 
+        else {
+            std::vector<std::pair<std::string, std::string>> seeds = get_seed_reads(targets);
+            if (seeds.size() > 1) {
+                std::vector<std::pair<std::string, std::string>> _others = {seeds.begin() + 1, seeds.end()};
+                _contig = sw::flatten_reads(seeds[0], _others);
+            }
+            else {
+                _contig = seeds[0].first; 
+            }
+        }
+
+        //get_ref N case
+        
+        // _contig to ref
+        // match candidates to _contig
+            
+
+    }
+    else if (candidates.size() > 0) {
+        // not straightforward case  
+    }
+    else {
+        // not found case -> return analysis result
+    }
+
+
     //[[read_names], [orientations], [are_countable], [are_targets], [are_from_bam1], [tar_pos], [tar_alt], [tar_ref], [contig]] 
     
     return "done";
+    */   
 }
 
 // select gapped_seed
 
-std::vector<pileup::ParsedRead> get_gapped_seed_reads(std::vector<pileup::ParsedRead> & parsed_reads, size_t n = 5)
+std::vector<std::pair<std::string, std::string>> get_seed_reads
+(
+    const std::vector<ParsedRead> & targets, 
+    size_t n
+)
 {
-
-    std::vector<pileup::ParsedRead> target_reads;
-    std::vector<pileup::ParsedRead> seed_candidates;
-    std::vector<std::string> variant_ptrns;
-
-    for (auto & read : parsed_reads) {
-        if ( read.local_ptrn == 'A' ) {
-            target_reads.push_back(read);
-            variant_ptrns.push_back(read.non_ref_ptrn_str);
-        }
+    
+    std::vector<std::string> non_ref_ptrns;
+    for (auto & read : targets) {
+        non_ref_ptrns.push_back(read.non_ref_ptrn_str);
+    }
+    const std::string commonest_ptrn = find_commonest_str(non_ref_ptrns);
+    
+    std::vector<std::pair<std::string, std::string>> seed_candidates;
+    for (auto & read : targets) {
+        if (read.non_ref_ptrn_str == commonest_ptrn) {
+            seed_candidates.emplace_back(read.read_seq, read.base_qualities);
+        }    
     }
 
-    std::string commonest_ptrn = find_commonest_str(variant_ptrns);
-
-
-    for (auto & read : target_reads) {
-        if ( read.non_ref_ptrn_str == commonest_ptrn ) {
-            seed_candidates.push_back(read);
-        }
-    }
-
-    if (seed_candidates.size() > n) {
-        std::shuffle(seed_candidates.begin(), seed_candidates.end(), std::default_random_engine(123));
-        std::vector<pileup::ParsedRead> tmp(seed_candidates.begin(), seed_candidates.begin() + n);
+    if (seed_candidates.size() > n) { 
+        std::shuffle(seed_candidates.begin(), 
+                     seed_candidates.end(), 
+                     std::default_random_engine(123));
+        std::vector<std::pair<std::string, std::string>> tmp(seed_candidates.begin(), 
+                                                             seed_candidates.begin() + n);
         return tmp;
     }
-
-    return seed_candidates;
-}
+    else return seed_candidates;   
+}        
 
 
 //@function
@@ -537,6 +593,7 @@ char classify_clip_pattern (int & dist_to_clip,
 //  'N': not worth further check
 //----------------------------------------------------------------------------
 char classify_local_pattern(bool & may_be_complex,
+                            char & clip_ptrn,
                             const char covering_ptrn,
                             const std::string & ref_seq,
                             const std::string & read_seq,
@@ -585,14 +642,14 @@ char classify_local_pattern(bool & may_be_complex,
                                            indexed_local_reference);
     
     int d2clip;
-    char clip_ptrn = classify_clip_pattern (d2clip,
-                                            pos, 
-                                            aln_start,
-                                            aln_end,
-                                            start_offset,
-                                            end_offset,
-                                            covering_start,
-                                            covering_end);
+    clip_ptrn = classify_clip_pattern (d2clip,
+                                       pos, 
+                                       aln_start,
+                                       aln_end,
+                                       start_offset,
+                                       end_offset,
+                                       covering_start,
+                                       covering_end);
     
     int read_len = read_seq.length();
     double cplx_thresh = 10;
@@ -639,6 +696,15 @@ char classify_local_pattern(bool & may_be_complex,
         }
     }
 }
+
+
+double dirty_rate(const char base_qual_thresh, const std::string & base_qualities){
+    double dirty_base_cnt = 0.0;
+    for (const char & c : base_qualities) {
+        if (c <= base_qual_thresh) dirty_base_cnt += 1.0;
+    }
+    return dirty_base_cnt / base_qualities.length(); 
+} 
 
 std::string non_ref_pattern_str(std::vector<Variant> & variants, 
                                 std::vector<std::pair<int, int>> & spliced_segments, 

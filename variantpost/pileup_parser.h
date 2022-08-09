@@ -8,8 +8,7 @@
 #include <unordered_map>
 
 #include "util.h"
-
-namespace pileup {
+#include "fasta/Fasta.h"
 
 struct ParsedRead {
     std::string read_name;
@@ -36,18 +35,21 @@ struct ParsedRead {
     bool may_be_complex;
     char covering_ptrn;
     char local_ptrn;
+    char clip_ptrn;
+    double dirty_base_rate;
     std::string non_ref_ptrn_str;
 
     ParsedRead(const int  unspliced_local_reference_start, 
                const int  unspliced_local_reference_end,
                const std::string & unspliced_local_reference, 
+               const char base_qual_thresh,
                const std::string & read_name,
                const bool  is_reverse, 
                const std::string & cigar_string,
                const int  aln_start, 
                const int  aln_end, 
                const std::string & read_seq,
-               const std::string & ref_seq, 
+               //const std::string & ref_seq, 
                const std::vector<int> & qualities, 
                const int  mapq,
                const Variant & target, // target
@@ -56,31 +58,35 @@ struct ParsedRead {
                const int  pos,
                const int  rpos,
                const bool  is_shiftable,
-               const std::unordered_map<int, char> &  indexed_local_reference //std::map<int, char> & indexed_local_reference
-
+               const std::unordered_map<int, char> &  indexed_local_reference, //std::map<int, char> & indexed_local_reference
+               const std::string & chrom,
+               FastaReference & fr
     );
 
 };
 
-std::string parse_pileup( const std::string &,
+void parse_pileup( std::vector<ParsedRead> &,
+                   std::vector<ParsedRead> &,
+                   std::vector<ParsedRead> &,
+                   const std::string &,
+                   const std::string &,
                    int,
                    const std::string &,
                    const std::string &,
                    int, 
                    int,
-                   const std::string &, 
+                   int,
+                   //const std::string &, 
                    const std::vector<std::string> &,
                    const std::vector<bool> &, 
                    const std::vector<std::string> &,
                    const std::vector<int> &, 
                    const std::vector<int> &,
                    const std::vector<std::string> &, 
-                   const std::vector<std::string> &,
+                   //const std::vector<std::string> &,
                    const std::vector<std::vector<int>> &, 
                    const std::vector<int> &,
                    const std::vector<bool> &
 );
-
-} // end of namespace "pileup"
 
 #endif
