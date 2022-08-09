@@ -37,4 +37,4 @@ extensions = [
     ),
 ]
 
-setup(cmdclass={"build_ext": BuildExt}, ext_modules=cythonize(extensions))
+setup(cmdclass={"build_ext": BuildExt}, ext_modules=cythonize(extensions, annotate=False))

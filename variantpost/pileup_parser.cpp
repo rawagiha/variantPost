@@ -11,7 +11,6 @@
 
 #include "util.h"
 #include "swlib.h"
-#include "read_merger.h"
 #include "pileup_parser.h"
 #include "fasta/Fasta.h"
 
