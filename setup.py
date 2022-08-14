@@ -32,6 +32,7 @@ extensions = [
             "variantpost/ssw/ssw_cpp.cpp",
             "variantpost/fasta/Fasta.cpp",
             "variantpost/fasta/split.cpp",
+            "variantpost/aligned_variant.cpp",
         ],
         language="c++",
     ),
