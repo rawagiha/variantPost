@@ -11,6 +11,7 @@
 #include "fasta/Fasta.h"
 
 struct ParsedRead {
+    bool is_from_first;
     std::string read_name;
     bool is_reverse;
     std::string cigar_string;
@@ -27,29 +28,32 @@ struct ParsedRead {
     std::string ref_seq;
     std::string base_qualities;
     int mapq;
-    //bool is_spliced;
     std::vector<Variant> variants;
-   // bool is_clipped;
-    //bool is_ref_seq;
-    //bool is_target;
+    std::vector<std::pair<int, int>> un_spliced_segments;
+    std::vector<std::pair<int, int>> spliced_segments;
     bool may_be_complex;
+    int target_aligned_pos;
+    std::string target_aligned_ref;
+    std::string target_aligned_alt;
     char covering_ptrn;
     char local_ptrn;
     char clip_ptrn;
     double dirty_base_rate;
     std::string non_ref_ptrn_str;
 
+    ParsedRead();
+
     ParsedRead(const int  unspliced_local_reference_start, 
                const int  unspliced_local_reference_end,
                const std::string & unspliced_local_reference, 
                const char base_qual_thresh,
+               const bool is_from_first, 
                const std::string & read_name,
-               const bool  is_reverse, 
+               const bool is_reverse, 
                const std::string & cigar_string,
                const int  aln_start, 
                const int  aln_end, 
                const std::string & read_seq,
-               //const std::string & ref_seq, 
                const std::vector<int> & qualities, 
                const int  mapq,
                const Variant & target, // target

@@ -16,8 +16,6 @@ bool ordered(const A & a, const B & b, const C & c)
     return (a <= b) && (b <= c);
 }
 
-
-
 std::string find_commonest_str(const std::vector<std::string> & arr_str);
 
 std::string to_fastq_qual( const std::vector<int> & arr_qual );
@@ -33,17 +31,21 @@ std::string get_spliced_ref_seq(const std::string & chrom, const int aln_start,
                                 const std::vector<std::pair<char, int>> & cigar_vector,
                                 FastaReference & fr);
 
-
 void parse_splice_pattern(std::vector<std::pair<int, int>> & exons,
                           std::vector<std::pair<int, int>> & introns,
                           const std::vector<std::pair<char, int>> & cigar_vector,
                           const int start,
                           const int end);
 
-
 std::unordered_map<int, char> reference_by_position( const std::string &
         unspliced_local_reference, int unspliced_local_reference_start,
         int unspliced_local_reference_end );
+
+struct RefSeq {
+    std::string seq;
+    int start;      //1-based first base pos
+    int stop;       //1-based last base pos
+};
 
 struct Variant {
     //std::string chrom;

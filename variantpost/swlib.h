@@ -54,6 +54,11 @@ std::vector<ParsedVariant> find_variants(
 
 std::string flatten_reads( const std::pair<std::string, std::string> seed_read,
                            const std::vector<std::pair<std::string, std::string>> & reads );
+
+
+bool is_compatible(const std::string & contig,
+                   const std::string & query,
+                   const std::vector<std::pair<int, int>> & decomposed_contig);
 } //end of namespace "sw"
 
 #endif

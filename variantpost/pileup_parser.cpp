@@ -25,10 +25,12 @@ char classify_covering(const int lpos, const int pos, const int rpos,
                        const std::vector<Variant> & variants);
 
 
-
 // check local non-ref base pattern
 char classify_local_pattern(bool & may_be_complex,
                             char & clip_ptrn,
+                            int & target_aligned_pos,
+                            std::string & target_aligned_ref,
+                            std::string & target_aligned_alt,
                             const char covering_ptrn,
                             const std::string & ref_seq,
                             const std::string & read_seq,
@@ -52,6 +54,7 @@ char classify_local_pattern(bool & may_be_complex,
 // check base quals
 double dirty_rate(const char base_qual_thresh, const std::string & base_qualities);
 
+
 // non-reference base patterns to string
 std::string non_ref_pattern_str(std::vector<Variant> & variants, 
                                 std::vector<std::pair<int, int>> & spliced_segments, 
@@ -59,20 +62,16 @@ std::string non_ref_pattern_str(std::vector<Variant> & variants,
                                 int aln_end, int end_offset);
 
 
-// select seed reads for assembly
-std::vector<std::pair<std::string, std::string>> get_seed_reads
-(
-    const std::vector<ParsedRead> & targets, 
-    size_t n = 5
-);
-
 // ParsedRead constuctor
+ParsedRead::ParsedRead() {};
+
 ParsedRead::ParsedRead
 ( 
     const int unspliced_local_reference_start,
     const int unspliced_local_reference_end,
     const std::string & unspliced_local_reference,
     const char base_qual_thresh,
+    const bool is_from_first,
     const std::string & read_name,
     const bool is_reverse,
     const std::string & cigar_string,
@@ -90,8 +89,9 @@ ParsedRead::ParsedRead
     const std::unordered_map<int, char> & indexed_local_reference,
     const std::string & chrom,
     FastaReference & fr
-) : read_name(read_name), is_reverse(is_reverse), cigar_string(cigar_string),
-    aln_start(aln_start),  aln_end(aln_end), read_seq(read_seq), mapq(mapq)
+) : is_from_first(is_from_first), read_name(read_name), is_reverse(is_reverse), 
+    cigar_string(cigar_string), aln_start(aln_start),  aln_end(aln_end), 
+    read_seq(read_seq), mapq(mapq)
 {
     cigar_vector = to_cigar_vector(cigar_string);
 
@@ -113,9 +113,6 @@ ParsedRead::ParsedRead
                                         unspliced_local_reference);
     }
 
-    //splice pattern
-    std::vector<std::pair<int, int>> un_spliced_segments;
-    std::vector<std::pair<int, int>> spliced_segments;
     parse_splice_pattern(un_spliced_segments, spliced_segments, 
                          cigar_vector, read_start, read_end);
 
@@ -143,8 +140,14 @@ ParsedRead::ParsedRead
     
     //classify local non-reference base pattern 
     may_be_complex = false;
+    target_aligned_pos = -1;
+    target_aligned_ref = "N";
+    target_aligned_alt = "N";
     local_ptrn = classify_local_pattern(may_be_complex,
                                         clip_ptrn,
+                                        target_aligned_pos,
+                                        target_aligned_ref,
+                                        target_aligned_alt,
                                         covering_ptrn, 
                                         ref_seq, read_seq,
                                         lpos, pos, rpos, 
@@ -186,8 +189,8 @@ void parse_pileup
     const std::string & ref,
     const std::string & alt,
     int base_quality_threshold,
-    int unspliced_local_reference_start,
-    int unspliced_local_reference_end,
+    int unspl_loc_ref_start,
+    int unspl_loc_ref_end,
     //const std::string & unspliced_local_reference,
     const std::vector<std::string> & read_names,
     const std::vector<bool> & are_reverse,
@@ -204,20 +207,20 @@ void parse_pileup
     // prep reference 
     FastaReference fr;
     fr.open(fastafile);
-    std::string unspliced_local_reference = fr.getSubSequence(chrom, 
-                                                              unspliced_local_reference_start - 1, 
-                                                              unspliced_local_reference_end - unspliced_local_reference_start + 1); 
+    std::string unspl_loc_ref = fr.getSubSequence(chrom, 
+                                                  unspl_loc_ref_start - 1, 
+                                                  unspl_loc_ref_end - unspl_loc_ref_start + 1); 
     
-    std::unordered_map<int, char> aa = reference_by_position(unspliced_local_reference,
-                                                             unspliced_local_reference_start,
-                                                             unspliced_local_reference_end);
+    std::unordered_map<int, char> aa = reference_by_position(unspl_loc_ref,
+                                                             unspl_loc_ref_start,
+                                                             unspl_loc_ref_end);
     
     // target variant
     Variant target = Variant(pos, ref, alt);
-    target.left_aln(unspliced_local_reference_start, aa);
+    target.left_aln(unspl_loc_ref_start, aa);
     int ref_allele_len = target.ref_len;
-    int lpos = target.get_leftmost_pos(unspliced_local_reference_start, aa);
-    int rpos = target.get_rightmost_pos(unspliced_local_reference_end, aa);
+    int lpos = target.get_leftmost_pos(unspl_loc_ref_start, aa);
+    int rpos = target.get_rightmost_pos(unspl_loc_ref_end, aa);
     bool is_shiftable = (lpos != rpos) ? true : false;
                 
     
@@ -226,10 +229,11 @@ void parse_pileup
     size_t pileup_size = read_names.size(); 
     std::vector<ParsedRead> parsed_reads;
     for ( size_t i = 0; i < pileup_size; ++i ) {
-        parsed_reads.emplace_back( unspliced_local_reference_start,
-                                   unspliced_local_reference_end,
-                                   unspliced_local_reference,
+        parsed_reads.emplace_back( unspl_loc_ref_start,
+                                   unspl_loc_ref_end,
+                                   unspl_loc_ref,
                                    base_qual_thresh,
+                                   is_from_first_bam[i],
                                    read_names[i],
                                    are_reverse[i],
                                    cigar_strings[i],
@@ -252,10 +256,6 @@ void parse_pileup
 
     }
 
-    //std::vector<pileup::ParsedRead> targets;
-    //std::vector<pileup::ParsedRead> candidates;
-    //std::vector<pileup::ParsedRead> non_targets; 
-    
     for (auto & read : parsed_reads) {
         if (read.local_ptrn == 'A') {
             targets.push_back(read);
@@ -268,95 +268,7 @@ void parse_pileup
         } 
     }
 
-    /*
-    std::cout << targets.size() << " num of target reads ---" << std::endl;
-    std::cout << candidates.size() << " num of worth-cheking reads ---" << std::endl;
-    std::cout << non_targets.size() << " num of nontarget reads ---" << std::endl;
-    
-   
-    int dirty_cnt = 0;
-    if (candidates.size() > 0) {
-        for (auto & read : candidates) {
-            if (is_dirty(base_qual_thresh, read.base_qualities)) ++dirty_cnt;
-        }
-        
-        std::cout << "dirties: " << dirty_cnt << std::endl; 
-    } 
-     
-      
-    
-    std::string _contig;
-    size_t target_pileup_size = targets.size();
-    
-    if (target_pileup_size > 0) {
-        if (target_pileup_size == 1) {
-            _contig = targets[0].read_seq;
-        } 
-        else {
-            std::vector<std::pair<std::string, std::string>> seeds = get_seed_reads(targets);
-            if (seeds.size() > 1) {
-                std::vector<std::pair<std::string, std::string>> _others = {seeds.begin() + 1, seeds.end()};
-                _contig = sw::flatten_reads(seeds[0], _others);
-            }
-            else {
-                _contig = seeds[0].first; 
-            }
-        }
-
-        //get_ref N case
-        
-        // _contig to ref
-        // match candidates to _contig
-            
-
-    }
-    else if (candidates.size() > 0) {
-        // not straightforward case  
-    }
-    else {
-        // not found case -> return analysis result
-    }
-
-
-    //[[read_names], [orientations], [are_countable], [are_targets], [are_from_bam1], [tar_pos], [tar_alt], [tar_ref], [contig]] 
-    
-    return "done";
-    */   
 }
-
-// select gapped_seed
-
-std::vector<std::pair<std::string, std::string>> get_seed_reads
-(
-    const std::vector<ParsedRead> & targets, 
-    size_t n
-)
-{
-    
-    std::vector<std::string> non_ref_ptrns;
-    for (auto & read : targets) {
-        non_ref_ptrns.push_back(read.non_ref_ptrn_str);
-    }
-    const std::string commonest_ptrn = find_commonest_str(non_ref_ptrns);
-    
-    std::vector<std::pair<std::string, std::string>> seed_candidates;
-    for (auto & read : targets) {
-        if (read.non_ref_ptrn_str == commonest_ptrn) {
-            seed_candidates.emplace_back(read.read_seq, read.base_qualities);
-        }    
-    }
-
-    if (seed_candidates.size() > n) { 
-        std::shuffle(seed_candidates.begin(), 
-                     seed_candidates.end(), 
-                     std::default_random_engine(123));
-        std::vector<std::pair<std::string, std::string>> tmp(seed_candidates.begin(), 
-                                                             seed_candidates.begin() + n);
-        return tmp;
-    }
-    else return seed_candidates;   
-}        
-
 
 //@function
 //    check how the read covers the locus of interest
@@ -453,6 +365,9 @@ char classify_covering(const int lpos, const int pos, const int rpos,
 //----------------------------------------------------------------------------------------
 int dist_to_non_target_variant(bool & has_target,
                                bool & has_gteq_five_indel,
+                               int & target_aligned_pos,
+                               std::string & target_aligned_ref,
+                               std::string & target_aligned_alt, 
                                const int pos, 
                                const Variant & target,
                                const std::vector<Variant> & variants,
@@ -469,7 +384,7 @@ int dist_to_non_target_variant(bool & has_target,
     int _p = p + offset;
     
     std::vector<int> dist;
-    for (auto & variant : variants) {
+    for (const auto & variant : variants) {
         bool is_target = target.is_equivalent(variant, 
                                               unspliced_local_reference_start, 
                                               indexed_local_reference);
@@ -480,6 +395,9 @@ int dist_to_non_target_variant(bool & has_target,
 
         if (is_target) {
             has_target = true;
+            target_aligned_pos = variant.pos;
+            target_aligned_ref = variant.ref;
+            target_aligned_alt = variant.alt;
         }
         else {
             int lp = variant.get_leftmost_pos(unspliced_local_reference_start, 
@@ -593,6 +511,9 @@ char classify_clip_pattern (int & dist_to_clip,
 //----------------------------------------------------------------------------
 char classify_local_pattern(bool & may_be_complex,
                             char & clip_ptrn,
+                            int & target_aligned_pos,
+                            std::string & target_aligned_ref,
+                            std::string & target_aligned_alt,
                             const char covering_ptrn,
                             const std::string & ref_seq,
                             const std::string & read_seq,
@@ -633,6 +554,9 @@ char classify_local_pattern(bool & may_be_complex,
     bool has_gteq_five_indel = false;
     int d2var = dist_to_non_target_variant(has_target,
                                            has_gteq_five_indel,
+                                           target_aligned_pos,
+                                           target_aligned_ref,
+                                           target_aligned_alt,
                                            pos,
                                            target, 
                                            variants,

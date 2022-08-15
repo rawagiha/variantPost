@@ -169,7 +169,7 @@ std::string get_unspliced_ref_seq(const int aln_start, const int aln_end,
 }
 
 
-// get spliced referecen
+// get spliced reference
 // ----------------------------------------------------------------------------
 std::string get_spliced_ref_seq(const std::string & chrom, const int aln_start, 
                                 const std::vector<std::pair<char, int>> & cigar_vector,
@@ -205,6 +205,19 @@ std::string get_spliced_ref_seq(const std::string & chrom, const int aln_start,
     return ref_seq;     
 }
 
+/*
+// get contig reference
+//----------------------------------------------------------------------------------
+std::string get_contig_reference(const std::string & unspliced_local_reference,
+                                 const int unspliced_local_reference_start,
+                                 const std::string & commonest_non_ref_ptrn,
+                                 FastaReference & fr,
+                                 std::vector<std::pair<char, int>> & cigar_vector,
+                                 int & contig_start)
+{
+}
+*/
+
 // mapping genomic pos -> reference base
 //-----------------------------------------------------------------------------
 std::unordered_map<int, char> reference_by_position(const std::string & unspliced_local_reference, 
@@ -224,39 +237,6 @@ std::unordered_map<int, char> reference_by_position(const std::string & unsplice
 
   return indexed_local_reference;
 }
-
-
-// simplified Variant object used in C++ codes
-// ----------------------------------------------------------------------------
-/*
-Variant::Variant( const std::string & chrom,
-                  const int pos,
-                  const std::string & ref,
-                  const std::string & alt,
-                  const int unspliced_local_reference_start,
-                  const int unspliced_local_reference_end,
-                  const std::map<int, char> & indexed_local_reference )
-{
-    chrom_ = chrom;
-    pos_ = pos;
-    ref_ = ref;
-    alt_ = alt;
-    unspliced_local_reference_start_ = unspliced_local_reference_start;
-    unspliced_local_reference_end_ = unspliced_local_reference_end;
-    indexed_local_reference_ = indexed_local_reference;
-
-
-    ref_len_ = ref_.size();
-    alt_len_ = alt_.size();
-
-    is_substitute_ = ( alt_len_ == ref_len_ );
-    is_ins_ = ( alt_len_ > ref_len_ );
-    is_del_ = ( alt_len_ < ref_len_ );
-
-    variant_end_pos_ = pos_ + ref_len_;
-
-}
-*/
 
 Variant::Variant 
 (    int pos, 
@@ -451,51 +431,6 @@ bool Variant::is_equivalent(const Variant & other,
     }
 } 
 
-
-/*
-bool Variant::operator == ( const Variant & rhs ) const
-{
-    std::string lhs_ref = ref_;
-    std::string lhs_alt = alt_;
-    int lhs_pos = pos_;
-
-    std::string rhs_alt = rhs.alt_;
-    std::string rhs_ref = rhs.ref_;
-    int rhs_pos = rhs.pos_;
-
-    left_align( lhs_pos, lhs_ref, lhs_alt, is_ins_,
-                unspliced_local_reference_start_, indexed_local_reference_ );
-    left_align( rhs_pos, rhs_ref, rhs_alt, rhs.is_ins_,
-                unspliced_local_reference_start_, indexed_local_reference_ );
-
-    return ( ( lhs_pos == rhs_pos ) & ( lhs_ref == rhs_ref ) &
-             ( lhs_alt == rhs_alt ) );
-}
-*/
-
-// parse mapping to find Variant
-//------------------------------------------------------------------------------
-
-/*
-inline void append_snv( std::vector<Variant> & variants,
-                        const int ref_idx, const int read_idx, const int pos,
-                        const std::string & ref_seq, const std::string & read_seq,
-                        const std::string & chrom,
-                        const int & unspliced_local_reference_start,
-                        const int & unspliced_local_reference_end,
-                        const std::map<int, char> & indexed_local_reference )
-{
-    std::string ref = ref_seq.substr( ref_idx, 1 );
-    std::string alt = read_seq.substr( read_idx, 1 );
-
-    if ( ref != alt ) {
-        variants.emplace_back( chrom, pos, ref, alt,
-                               unspliced_local_reference_start, unspliced_local_reference_end,
-                               indexed_local_reference );
-    }
-
-}
-*/
 
 std::vector<Variant> find_mapped_variants ( const int aln_start,
     const int aln_end, const std::string &ref_seq, const std::string &read_seq,

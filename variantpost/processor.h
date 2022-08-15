@@ -7,8 +7,30 @@
 
 namespace pp {
 
+struct ProcessedPileup {
+    std::string contig;
+    int target_pos;
+    std::string ref;
+    std::string alt;
+    std::vector<std::string> read_names;
+    std::vector<bool> are_reverse;
+    std::vector<bool> are_target;
+    std::vector<bool> are_from_first_bam;
 
-std::string  process_pileup(const std::string &,
+    ProcessedPileup();
+    ProcessedPileup(const std::string & contig,
+                    const int target_pos,
+                    const std::string ref,
+                    const std::string alt,
+                    std::vector<std::string> & read_names,
+                    std::vector<bool> & are_reverse,
+                    std::vector<bool> & are_target,
+                    std::vector<bool> & are_from_first_bam
+    );
+};
+
+
+ProcessedPileup  process_pileup(const std::string &,
                    const std::string &,
                    int,
                    const std::string &,

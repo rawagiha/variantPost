@@ -11,7 +11,7 @@
 
 #include "ssw/ssw_cpp.h"
 #include "swlib.h"
-
+#include "util.h"
 
 sw::Alignment::Alignment( uint16_t __alignment_score, int32_t  __ref_begin,
                           int32_t  __ref_end, int32_t  __query_begin, int32_t  __query_end,
@@ -192,13 +192,73 @@ void edit_cigar( std::vector<std::string> & cigarette )
     std::swap( cigarette, tmp );
 }
 
-
-bool is_compatible(const sw::Alignment & alignment) 
+// test if query read is compatible to contig
+bool sw::is_compatible(const std::string & contig,
+                   const std::string & query,
+                   const std::vector<std::pair<int, int>> & decomposed_contig) 
 {
-    return true;
+    //contig layout
+    const int lt_end_idx = decomposed_contig[0].second - 1;
+    const int rt_start_idx = decomposed_contig[2].first;
+   
+    
+    //gap-less aln
+    const int match_score = 3;
+    const int mismatch_penalty = 10;
+    const int gap_open_penalty = query.size();
+    const int gap_extention_penalty = 1;
+    sw::Alignment alignment = sw::align(contig, query, match_score, mismatch_penalty,
+                                        gap_open_penalty, gap_extention_penalty);
+    const int ref_start = alignment.ref_begin;
+    const int ref_end = alignment.ref_end;
+
+    // dosen't overlap the critical (target) region
+    if ((ref_end <= lt_end_idx) || (rt_start_idx <= ref_start)) {
+        return false;
+    } 
+    
+    char op;
+    int op_len;
+    int i = ref_start;
+    int j = 0;
+    int n_mismatched_bases = 0;  
+    std::vector<std::pair<char, int>> cigar_vec = to_cigar_vector(alignment.cigar_string);
+    for (const auto & c : cigar_vec) {
+         op = c.first;
+         op_len = c.second;
+         
+         switch (op) {
+            case 'M':
+            case '=':
+                i += op_len;
+                j = i;
+                break;
+            case 'X':
+                while ((lt_end_idx <= j) && (j <= rt_start_idx) && (j <= (i + op_len))) {
+                    ++n_mismatched_bases;
+                    ++j;
+                }
+                 
+                i += op_len;     
+                j = i;
+                break;
+            default:
+                break;
+         }        
+            
+    }
+    
+    int critical_aln_start = std::max(ref_start, lt_end_idx);
+    int critical_aln_end = std::min(rt_start_idx, ref_end);
+    int n_total_bases = critical_aln_end - critical_aln_start + 1;
+    
+    //mismatche rate in critical region
+    double mitmatch_rate = n_mismatched_bases / static_cast<double>(n_total_bases); 
+    if (mitmatch_rate > 0.334) {
+        return false;
+    }
+    else return true;
 }
-
-
 
 std::vector<sw::ParsedVariant> sw::find_variants( const sw::Alignment &
         alignment,
@@ -586,10 +646,6 @@ void pairwise_stitch(std::deque<BaseCount> & consensus,
    
 }
 
-
-//std::string sw::flatten_reads( const std::vector<std::string> seed_read,
-//                               const std::vector<std::vector<std::string>> & reads )
-
 std::string sw::flatten_reads( const std::pair<std::string, std::string> seed_read,
                                const std::vector<std::pair<std::string, std::string>> & reads )
 {
@@ -614,13 +670,8 @@ std::string sw::flatten_reads( const std::pair<std::string, std::string> seed_re
         BaseCount c = consensus[i];
         ans += c.get_consensus().first;
         qual += c.get_consensus().second;
-        //std::cout << static_cast<int>( c.get_consensus()[1] ) << ", ";
     }
 
     return ans;
-    //std::cout << ans << std::endl;
-    //std::cout << qual << std::endl;
-
-    //return "str";
 }
 

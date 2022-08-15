@@ -3,7 +3,30 @@ from libcpp.vector cimport vector
 from libcpp cimport bool as bool_t
 
 cdef extern from "processor.h" namespace "pp":
-    string  process_pileup(
+    
+    cdef cppclass ProcessedPileup:
+        
+        ProcessedPileup() except +
+        ProcessedPileup(string &, 
+                        int,
+                        string &,
+                        string &,
+                        vector[string] &,
+                        vector[bool_t] &,
+                        vector[bool_t] &,
+                        vector[bool_t] &) except +
+        
+        string contig
+        int target_pos
+        string ref, alt
+        vector[string] read_names
+        vector[bool_t] are_reverse                             
+        vector[bool_t] are_target
+        vector[bool_t] are_from_first_bam
+    
+    
+    
+    ProcessedPileup  process_pileup(
             string &,
             string &,
             int,
@@ -70,4 +93,7 @@ cdef string test_it(
         are_first_bam
     )
     
-    return res
+    #res is not a python obj..
+    
+    print(res.contig) 
+    return "aaa"
