@@ -1,6 +1,7 @@
 #include <vector>
 #include <string>
 
+#include "util.h"
 #include "processor.h"
 #include "pileup_parser.h"
 #include "aligned_variant.h"
@@ -54,35 +55,45 @@ pp::ProcessedPileup  pp::process_pileup(
     std::vector<ParsedRead> candidates;
     std::vector<ParsedRead> non_targets; 
 
+    FastaReference fr;
+    fr.open(fastafile);
+
     parse_pileup(targets, candidates, non_targets,
-                         fastafile,
-                         chrom, pos, ref, alt,
-                         base_quality_threshold,
-                         unspliced_local_reference_start,
-                         unspliced_local_reference_end,
-                         read_names,
-                         are_reverse,
-                         cigar_strings,
-                         aln_starts,
-                         aln_ends,
-                         read_seqs,
-                         quals,
-                         mapqs,
-                         is_from_first_bam);
+                 fr,
+                 chrom, pos, ref, alt,
+                 base_quality_threshold,
+                 unspliced_local_reference_start,
+                 unspliced_local_reference_end,
+                 read_names,
+                 are_reverse,
+                 cigar_strings,
+                 aln_starts,
+                 aln_ends,
+                 read_seqs,
+                 quals,
+                 mapqs,
+                 is_from_first_bam);
     
     std::string contig = "";
+    
     int target_pos = pos;
     std::string target_ref = ref;
     std::string target_alt = alt;
+    Variant target(pos, ref, alt);
     
+    std::string minimal_repeat = target.minimal_repeat_unit();
+     
     if (targets.size() > 0) {
-         process_aligned_target(contig,
-                               target_pos,
-                               target_ref,
-                               target_alt,
-                               targets,
-                               candidates,
-                               non_targets);
+         process_aligned_target(chrom,
+                                fr,
+                                contig,
+                                target_pos,
+                                target_ref,
+                                target_alt,
+                                minimal_repeat,
+                                targets,
+                                candidates,
+                                non_targets);
     }
     else if (candidates.size() > 0) {
         //candidate processor

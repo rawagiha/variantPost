@@ -1,12 +1,14 @@
 #ifndef UTIL_H
 #define UTIL_H
 
+#include <set>
 #include <map>
 #include <string>
 #include <vector>
 #include <utility>
 #include <algorithm>
 #include <unordered_map>
+#include <unordered_set>
 
 #include "fasta/Fasta.h"
 
@@ -88,6 +90,7 @@ struct Variant {
     int get_leftmost_pos(const int unspliced_local_reference_start, const std::unordered_map<int, char> & indexed_local_reference) const;
     int get_rightmost_pos(const int unspliced_local_reference_end, const std::unordered_map<int, char> & indexed_local_reference) const;
     bool is_equivalent(const Variant & v, const int unspliced_local_reference_start, const std::unordered_map<int, char> & indexed_local_reference) const;
+    std::string minimal_repeat_unit() const;
     //void say_hi(const Variant & j) const;
 
     //bool operator == ( const Variant & rhs ) const;
@@ -95,13 +98,26 @@ struct Variant {
 };
 
 
-std::vector<Variant> find_mapped_variants( const int aln_start,
-        const int aln_end, const std::string & ref_seq, const std::string & read_seq,
-        const std::vector<std::pair<char, int>> & cigar_vector,
-        //const std::string & chrom,
-        const int & unspliced_local_reference_start,
-        const int & unspliced_local_reference_end,
-        const std::unordered_map<int, char> & indexed_local_reference );
+std::vector<Variant> find_mapped_variants(const int aln_start, const int aln_end, 
+                                          const std::string & ref_seq, 
+                                          const std::string & read_seq,
+                                          const std::string & base_qualities,
+                                          const std::vector<std::pair<char, int>> & cigar_vector,
+                                          std::string & non_ref_quals);
+
+
+int count_repeats(const std::string & ptrn, const std::string & seq);
+
+std::set<std::string> make_kmers(const std::string & seq, const size_t k);
+
+std::unordered_map<std::string, int> generate_kmer(const std::string & seq, 
+                                                      const size_t k,
+                                                      std::unordered_set<std::string> & kmers);
+
+double euclidean_dist(const std::string & query,
+                      const size_t k,
+                      const std::unordered_map<std::string, int> & subject_kmer_cnt,
+                      const std::unordered_set<std::string> & subject_kmers);
 
 
 #endif

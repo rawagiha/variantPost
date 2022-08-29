@@ -57,8 +57,12 @@ std::string flatten_reads( const std::pair<std::string, std::string> seed_read,
 
 
 bool is_compatible(const std::string & contig,
+                   const std::string & ref_contig,
                    const std::string & query,
-                   const std::vector<std::pair<int, int>> & decomposed_contig);
+                   const std::vector<std::pair<int, int>> & decomposed_contig,
+                   const std::string & repeat_unit,
+                   const int expected_num_repeats,
+                   const std::pair<int, int> & boundary_indexes);
 } //end of namespace "sw"
 
 #endif

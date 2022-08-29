@@ -52,7 +52,7 @@ char classify_local_pattern(bool & may_be_complex,
 
 
 // check base quals
-double dirty_rate(const char base_qual_thresh, const std::string & base_qualities);
+double dirty_rate(const char base_qual_thresh, const std::string & base_qualities, const int read_len);
 
 
 // non-reference base patterns to string
@@ -116,6 +116,10 @@ ParsedRead::ParsedRead
     parse_splice_pattern(un_spliced_segments, spliced_segments, 
                          cigar_vector, read_start, read_end);
 
+    
+    std::string non_ref_quals = "";
+    base_qualities = to_fastq_qual(q);
+    
     covering_start = 0;
     covering_end = 0;
     if (ref_seq.empty()) {
@@ -124,11 +128,9 @@ ParsedRead::ParsedRead
     else {
         //variants already aligned
         variants = find_mapped_variants(aln_start, aln_end, 
-                                        ref_seq, read_seq, 
+                                        ref_seq, read_seq, base_qualities,
                                         cigar_vector, 
-                                        unspliced_local_reference_start, 
-                                        unspliced_local_reference_end,
-                                        indexed_local_reference);
+                                        non_ref_quals);
         
         //check covering pattern (indel position shift considered)
         covering_ptrn = classify_covering(lpos, pos, rpos, is_shiftable,
@@ -160,8 +162,6 @@ ParsedRead::ParsedRead
                                         unspliced_local_reference_start,
                                         unspliced_local_reference_end,
                                         indexed_local_reference);          
-                                                                                                                                                 
-    base_qualities = to_fastq_qual(q);
     
     if (local_ptrn != 'N') {
         //string to summarize local non-reference base & splice pattern 
@@ -172,7 +172,7 @@ ParsedRead::ParsedRead
     }
     
     if (local_ptrn == 'B') {
-        dirty_base_rate = dirty_rate(base_qual_thresh, base_qualities);
+        dirty_base_rate = dirty_rate(base_qual_thresh, non_ref_quals, read_seq.size());
     }
     else dirty_base_rate = 0.0;
 }
@@ -183,7 +183,7 @@ void parse_pileup
     std::vector<ParsedRead> & targets,
     std::vector<ParsedRead> & candidates,
     std::vector<ParsedRead> & non_targets,         
-    const std::string & fastafile,
+    FastaReference & fr,
     const std::string & chrom,
     int pos, 
     const std::string & ref,
@@ -205,8 +205,6 @@ void parse_pileup
 )
 {
     // prep reference 
-    FastaReference fr;
-    fr.open(fastafile);
     std::string unspl_loc_ref = fr.getSubSequence(chrom, 
                                                   unspl_loc_ref_start - 1, 
                                                   unspl_loc_ref_end - unspl_loc_ref_start + 1); 
@@ -222,7 +220,6 @@ void parse_pileup
     int lpos = target.get_leftmost_pos(unspl_loc_ref_start, aa);
     int rpos = target.get_rightmost_pos(unspl_loc_ref_end, aa);
     bool is_shiftable = (lpos != rpos) ? true : false;
-                
     
     // parse reads
     char base_qual_thresh = static_cast<char>(base_quality_threshold + 33);
@@ -621,12 +618,12 @@ char classify_local_pattern(bool & may_be_complex,
 }
 
 
-double dirty_rate(const char base_qual_thresh, const std::string & base_qualities){
+double dirty_rate(const char base_qual_thresh, const std::string & non_ref_quals, const int read_len){
     double dirty_base_cnt = 0.0;
-    for (const char & c : base_qualities) {
+    for (const char & c : non_ref_quals) {
         if (c <= base_qual_thresh) dirty_base_cnt += 1.0;
     }
-    return dirty_base_cnt / base_qualities.length(); 
+    return dirty_base_cnt / read_len; 
 } 
 
 std::string non_ref_pattern_str(std::vector<Variant> & variants, 

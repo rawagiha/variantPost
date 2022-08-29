@@ -1,10 +1,13 @@
+#include <set>
 #include <map>
+#include <cmath>
 #include <string>
 #include <vector>
 #include <utility>
 #include <iostream>
 #include <algorithm>
 #include <unordered_map>
+#include <unordered_set>
 
 #include "util.h"
 #include "fasta/Fasta.h"
@@ -64,6 +67,25 @@ cigar_string ) {
   return cigarette;
 }
 
+int count_repeats(const std::string & ptrn,
+                  const std::string & seq)
+{
+    int ptrn_len = ptrn.size();
+    int seq_len = seq.size();
+    
+    int i = 0;
+    int n = 0;
+    while (ptrn_len * i < seq_len) {
+        std::string sub_seq = seq.substr(ptrn_len * i, std::min(ptrn_len, seq_len - (ptrn_len * i)));
+        if (ptrn == sub_seq) {
+            ++n;
+            ++i;
+        }
+        else return n;
+    }
+
+    return n;
+}
 
 
 void parse_splice_pattern(std::vector<std::pair<int, int>> & exons,
@@ -104,47 +126,6 @@ void parse_splice_pattern(std::vector<std::pair<int, int>> & exons,
     exons.emplace_back(curr_pos, end);
 }   
 
-
-// returns a list of intron start and stop positions (inclusive: [start, start])
-/*
-std::vector<std::pair<int, int>> get_introns ( const std::vector<std::pair<char, int>> &cigar_vector, const int aln_start ) {
-
-  std::vector<std::pair<int, int>> introns;
-
-  char operation;
-  int operation_len;
-  //int current_pos = aln_start - 1;
-  int current_pos = aln_start;
-  for ( std::vector<std::pair<char, int>>::const_iterator itr =
-          cigar_vector.begin();
-        itr != cigar_vector.end(); ++itr ) {
-
-    operation = ( *itr ).first;
-    operation_len = ( *itr ).second;
-
-    switch ( operation ) {
-      case 'M':
-        current_pos += operation_len;
-        break;
-      case '=':
-        current_pos += operation_len;
-        break;
-      case 'X':
-        current_pos += operation_len;
-        break;
-      case 'I':
-        break;
-      case 'D':
-        current_pos += operation_len;
-        break;
-      case 'N':
-        break;
-      default:
-        break;
-    }
-  }
-}
-*/
 
 // fit local referenece to read alignment
 // not considered del??
@@ -205,18 +186,6 @@ std::string get_spliced_ref_seq(const std::string & chrom, const int aln_start,
     return ref_seq;     
 }
 
-/*
-// get contig reference
-//----------------------------------------------------------------------------------
-std::string get_contig_reference(const std::string & unspliced_local_reference,
-                                 const int unspliced_local_reference_start,
-                                 const std::string & commonest_non_ref_ptrn,
-                                 FastaReference & fr,
-                                 std::vector<std::pair<char, int>> & cigar_vector,
-                                 int & contig_start)
-{
-}
-*/
 
 // mapping genomic pos -> reference base
 //-----------------------------------------------------------------------------
@@ -432,74 +401,169 @@ bool Variant::is_equivalent(const Variant & other,
 } 
 
 
-std::vector<Variant> find_mapped_variants ( const int aln_start,
-    const int aln_end, const std::string &ref_seq, const std::string &read_seq,
-    const std::vector<std::pair<char, int>> &cigar_vector,
-    //const std::string &chrom,
-    const int &unspliced_local_reference_start,
-    const int &unspliced_local_reference_end,
-    const std::unordered_map<int, char> &indexed_local_reference ) {
-  
-  std::vector<Variant> variants;
-
-  if ( read_seq == ref_seq ) {
-     return variants;
-  }
-
-  char operation;
-  int operation_len;
-  int ref_idx=0;
-  int read_idx=0;
-  int pos = aln_start;
-
-  for ( std::vector<std::pair<char, int>>::const_iterator itr =
-          cigar_vector.begin();
-        itr != cigar_vector.end(); ++itr ) {
-
-    operation = ( *itr ).first;
-    operation_len = ( *itr ).second;
-
-    switch ( operation ) {
-      case 'M':
-      case 'X':
-      case '=':
-        for ( int i = 0; i < operation_len; ++i ) {
-
-          std::string ref = ref_seq.substr ( ref_idx, 1 );
-          std::string alt = read_seq.substr ( read_idx, 1 );
-
-          // snv
-          if ( ref != alt ) {
-            variants.emplace_back ( pos, ref, alt );
-          }
-          ++ref_idx;
-          ++read_idx;
-          ++pos;
-        }
-        break;
-      case 'I':
-        variants.emplace_back ( pos - 1, ref_seq.substr ( ref_idx - 1, 1 ),
-                                ref_seq.substr ( ref_idx - 1, 1 ) + read_seq.substr ( read_idx,
-                                    operation_len ) );
-        read_idx += operation_len;
-        break;
-      case 'D':
-        variants.emplace_back ( pos - 1, ref_seq.substr ( ref_idx - 1,
-                                1 + operation_len ), ref_seq.substr ( ref_idx - 1, 1 ) );
-        ref_idx += operation_len;
-        pos += operation_len;
-        break;
-      case 'N':
-        pos += operation_len;
-        break;
-      case 'S':
-        read_idx += ( operation_len );
-        break;
-      case 'H':
-      case 'P':
-        //
-        break;
+std::string Variant::minimal_repeat_unit() const
+{
+    std::string seq = "";
+    if (is_substitute) seq = alt;
+    if (is_ins) seq = alt.substr(1, alt_len - 1);
+    if (is_del) seq = ref.substr(1, ref_len - 1);
+    
+    int seq_size = seq.size();
+    if (seq_size < 2) {
+        return seq;
     }
-  }
-  return variants;
+    else {
+        int mid_len = (int)seq_size / 2;
+
+        int step = 1;
+        while (step <= mid_len) {
+            std::vector<std::string> tandems;
+            for (int i = 0; step * i < seq_size; ++i) {
+                tandems.push_back(seq.substr(step * i, std::min(step, seq_size - (step * i))));    
+            }
+            std::sort(tandems.begin(), tandems.end());
+            tandems.erase(std::unique(tandems.begin(), tandems.end()),  tandems.end());
+            if (tandems.size() == 1) return tandems[0];
+            else ++step;    
+        }
+    }
+    return seq;
+}
+
+std::vector<Variant> find_mapped_variants(const int aln_start, const int aln_end, 
+                                          const std::string & ref_seq, 
+                                          const std::string & read_seq,
+                                          const std::string & base_qualities,
+                                          const std::vector<std::pair<char, int>> & cigar_vector,
+                                          std::string & non_ref_quals) 
+{
+    std::vector<Variant> variants;
+
+    if (read_seq == ref_seq) return variants;
+    
+    char op;
+    int op_len;
+    int ref_idx = 0;
+    int read_idx = 0;
+    int pos = aln_start;
+
+    for (std::vector<std::pair<char, int>>::const_iterator itr =
+        cigar_vector.begin();
+        itr != cigar_vector.end(); ++itr) {
+
+        op = (*itr).first;
+        op_len = (*itr).second;
+
+        switch (op) {
+            case 'M':
+            case 'X':
+            case '=':
+                for (int i = 0; i < op_len; ++i) {
+                    // snv
+                    std::string ref = ref_seq.substr(ref_idx, 1);
+                    std::string alt = read_seq.substr(read_idx, 1);
+                    if (ref != alt) {
+                        variants.emplace_back(pos, ref, alt); 
+                        non_ref_quals += base_qualities.substr(read_idx, 1);
+                    }
+                    ++ref_idx;
+                    ++read_idx;
+                    ++pos;
+                }
+                break;
+            case 'I':
+                variants.emplace_back(pos - 1, 
+                                      ref_seq.substr(ref_idx - 1, 1),
+                                      ref_seq.substr(ref_idx - 1, 1) + read_seq.substr(read_idx, op_len));
+                
+                non_ref_quals += base_qualities.substr(read_idx, op_len);                 
+                read_idx += op_len;
+                break;
+            case 'D':
+                variants.emplace_back(pos - 1, 
+                                      ref_seq.substr(ref_idx - 1, 1 + op_len), 
+                                      ref_seq.substr(ref_idx - 1, 1));
+                ref_idx += op_len;
+                pos += op_len;
+                break;
+            case 'N':
+                pos += op_len;
+                break;
+            case 'S':
+                non_ref_quals += base_qualities.substr(read_idx, op_len);
+                read_idx += (op_len);
+                break;
+            case 'H':
+            case 'P':
+                //
+                break;
+        }
+    }
+    return variants;
+}
+
+std::set<std::string> make_kmers(const std::string & seq, const size_t k)
+{
+    size_t n = seq.size();
+    
+    std::set<std::string> kmers;
+    for (size_t i = 0; i < n - k; ++i) {
+        kmers.insert(seq.substr(i, k));
+    }
+
+    return kmers;
+}
+
+
+std::unordered_map<std::string, int> generate_kmer(const std::string & seq, 
+                                                   const size_t k,
+                                                   std::unordered_set<std::string> & kmers)
+{
+    size_t n = seq.size();
+    
+    std::vector<std::string> v;
+    std::unordered_map<std::string, int> kmer_cnt;
+    for (size_t i = 0; i < n - k; ++i) {
+        //++kmer_cnt[seq.substr(i, k)];
+        v.push_back(seq.substr(i, k));
+        kmers.insert(seq.substr(i, k));
+    }
+   
+    return kmer_cnt;
+}
+
+inline int kmer_cnt_lookup(const std::string & kmer, const std::unordered_map<std::string, int> & kmer_cnt)
+{
+   std::unordered_map<std::string, int>::const_iterator it = kmer_cnt.find(kmer);
+   if (it == kmer_cnt.end()) {
+       return 0;
+   }
+   else {
+       return (*it).second;
+   }
+}
+
+
+double euclidean_dist(const std::string & query,
+                      const size_t k,
+                      const std::unordered_map<std::string, int> & subject_kmer_cnt,
+                      const std::unordered_set<std::string> & subject_kmers)
+{
+    
+    std::unordered_set<std::string> union_kmers;
+    std::unordered_map<std::string, int> query_kmer_cnt = generate_kmer(query, k, union_kmers);
+    
+    /*
+    for (const auto & kmer : subject_kmers) union_kmers.insert(kmer);
+    
+    double dist = 0.0;
+    for (const auto & kmer : union_kmers) {
+        
+        double d = static_cast<double>(kmer_cnt_lookup(kmer, query_kmer_cnt) - kmer_cnt_lookup(kmer, subject_kmer_cnt));
+        dist += (d * d);
+    }
+    
+    return std::sqrt(dist);
+    */
+    return 0.1;
 }

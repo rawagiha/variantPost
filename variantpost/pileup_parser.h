@@ -72,7 +72,7 @@ struct ParsedRead {
 void parse_pileup( std::vector<ParsedRead> &,
                    std::vector<ParsedRead> &,
                    std::vector<ParsedRead> &,
-                   const std::string &,
+                   FastaReference &,
                    const std::string &,
                    int,
                    const std::string &,

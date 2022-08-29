@@ -194,41 +194,68 @@ void edit_cigar( std::vector<std::string> & cigarette )
 
 // test if query read is compatible to contig
 bool sw::is_compatible(const std::string & contig,
-                   const std::string & query,
-                   const std::vector<std::pair<int, int>> & decomposed_contig) 
+                       const std::string & ref_contig,
+                       const std::string & query,
+                       const std::vector<std::pair<int, int>> & decomposed_contig,
+                       const std::string & repeat_unit,
+                       const int expected_num_repeats,
+                       const std::pair<int, int> & boundary_indexes) 
 {
     //contig layout
     const int lt_end_idx = decomposed_contig[0].second - 1;
     const int rt_start_idx = decomposed_contig[2].first;
-   
-    
+      
     //gap-less aln
     const int match_score = 3;
     const int mismatch_penalty = 10;
-    const int gap_open_penalty = query.size();
-    const int gap_extention_penalty = 1;
+    const int gap_open_penalty = 255;
+    const int gap_extention_penalty = 255;
     sw::Alignment alignment = sw::align(contig, query, match_score, mismatch_penalty,
                                         gap_open_penalty, gap_extention_penalty);
     const int ref_start = alignment.ref_begin;
     const int ref_end = alignment.ref_end;
+    
+    // still has gap
+    std::string cigar_string = alignment.cigar_string;
+    size_t found_ins = cigar_string.find("I");
+    size_t found_del = cigar_string.find("D");
+    if ((found_ins != std::string::npos) || (found_del != std::string::npos)) {
+        return false;
+    }   
 
-    // dosen't overlap the critical (target) region
+    // doesn't overlap the critical (target) region
     if ((ref_end <= lt_end_idx) || (rt_start_idx <= ref_start)) {
         return false;
-    } 
+    }
     
+    // boundary not covered for repetitive cases
+    if (expected_num_repeats > 1) {
+        const int boundary_start = boundary_indexes.first;
+        const int boundary_end = boundary_indexes.second;
+
+        if ((boundary_start < ref_start) || (ref_end < boundary_end)) {
+            return false;
+        }
+        
+        const int read_start = alignment.query_begin;
+        
+        std::string repeats = query.substr((boundary_start + 1 - ref_start) + read_start);
+        int k = count_repeats(repeat_unit, repeats);
+        if (expected_num_repeats != k) return false;         
+                
+    }  
+
     char op;
     int op_len;
     int i = ref_start;
     int j = 0;
     int n_mismatched_bases = 0;  
-    std::vector<std::pair<char, int>> cigar_vec = to_cigar_vector(alignment.cigar_string);
+    std::vector<std::pair<char, int>> cigar_vec = to_cigar_vector(cigar_string);
     for (const auto & c : cigar_vec) {
          op = c.first;
          op_len = c.second;
          
          switch (op) {
-            case 'M':
             case '=':
                 i += op_len;
                 j = i;
@@ -254,10 +281,20 @@ bool sw::is_compatible(const std::string & contig,
     
     //mismatche rate in critical region
     double mitmatch_rate = n_mismatched_bases / static_cast<double>(n_total_bases); 
-    if (mitmatch_rate > 0.334) {
+    if (mitmatch_rate > 0.333) {
         return false;
     }
-    else return true;
+    else {
+        
+        sw::Alignment ref_alignment = sw::align(ref_contig, query, match_score, mismatch_penalty,
+                                            gap_open_penalty, gap_extention_penalty);
+        
+        if (alignment.alignment_score > ref_alignment.alignment_score) {
+            //std::cout << query << " " << n_mismatched_bases << " " << n_total_bases  << " " << alignment.cigar_string << std::endl; 
+            return true;
+        }
+        else return false;
+    }
 }
 
 std::vector<sw::ParsedVariant> sw::find_variants( const sw::Alignment &
