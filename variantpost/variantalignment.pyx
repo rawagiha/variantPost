@@ -5,7 +5,7 @@ import time
 
 class VariantAlignment(object):
     def __init__(
-        self, variant, bam, second_bam=None, window=200, exclude_duplicates=True, downsample_thresh=-1, base_quality_threshold=20
+        self, variant, bam, second_bam=None, window=200, exclude_duplicates=True, downsample_thresh=-1, base_quality_threshold=20, low_quality_base_rate_threshold=0.1, kmer_size=15, 
     ):
 
         (
@@ -58,6 +58,8 @@ class VariantAlignment(object):
                       chrom.encode(), 
                       pos, ref.encode(), alt.encode(),
                       base_quality_threshold, 
+                      low_quality_base_rate_threshold,
+                      kmer_size,
                       unspliced_local_reference_start, 
                       unspliced_local_reference_end, 
                       #unspliced_local_reference.encode("utf-8"), 

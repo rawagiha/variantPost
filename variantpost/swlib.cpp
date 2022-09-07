@@ -192,14 +192,22 @@ void edit_cigar( std::vector<std::string> & cigarette )
     std::swap( cigarette, tmp );
 }
 
-// test if query read is compatible to contig
-bool sw::is_compatible(const std::string & contig,
+char sw::match_to_contig(const std::string & query, const bool is_dirty_query,
+                         const std::string & contig_seq, const std::string & ref_contig_seq, const std::vector<std::pair<int, int>> & decomposed_contig, const bool is_dirty_contig,
+                         const int n_tandem_repeats, const std::string & repeat_unit, const std::string & rv_repeat_unit, const bool is_complete_tandem_repeat,
+                         const std::pair<int, int> & repeat_boundary)
+/*
+char sw::is_compatible(const std::string & contig,
                        const std::string & ref_contig,
                        const std::string & query,
                        const std::vector<std::pair<int, int>> & decomposed_contig,
                        const std::string & repeat_unit,
+                       const std::string & reversed_repeat_unit,
                        const int expected_num_repeats,
-                       const std::pair<int, int> & boundary_indexes) 
+                       const bool is_complete_tandem_repeat,
+                       const std::pair<int, int> & boundary_indexes,
+                       const bool is_dirty) 
+*/
 {
     //contig layout
     const int lt_end_idx = decomposed_contig[0].second - 1;
@@ -210,7 +218,9 @@ bool sw::is_compatible(const std::string & contig,
     const int mismatch_penalty = 10;
     const int gap_open_penalty = 255;
     const int gap_extention_penalty = 255;
-    sw::Alignment alignment = sw::align(contig, query, match_score, mismatch_penalty,
+    
+    //TODO -> do not creat alingment object each time. pass by referece.
+    sw::Alignment alignment = sw::align(contig_seq, query, match_score, mismatch_penalty,
                                         gap_open_penalty, gap_extention_penalty);
     const int ref_start = alignment.ref_begin;
     const int ref_end = alignment.ref_end;
@@ -219,49 +229,74 @@ bool sw::is_compatible(const std::string & contig,
     std::string cigar_string = alignment.cigar_string;
     size_t found_ins = cigar_string.find("I");
     size_t found_del = cigar_string.find("D");
-    if ((found_ins != std::string::npos) || (found_del != std::string::npos)) {
-        return false;
-    }   
-
-    // doesn't overlap the critical (target) region
-    if ((ref_end <= lt_end_idx) || (rt_start_idx <= ref_start)) {
-        return false;
-    }
+    if ((found_ins != std::string::npos) || (found_del != std::string::npos)) return 'F';
+       
+    // doesn't overlap the target region
+    if ((ref_end <= lt_end_idx) || (rt_start_idx <= ref_start)) return 'F';
+   
+    //TODO -> require covering both sides for deletions.
+    //     for ins, check lt-covering, rt-coveirng or both
     
-    // boundary not covered for repetitive cases
-    if (expected_num_repeats > 1) {
-        const int boundary_start = boundary_indexes.first;
-        const int boundary_end = boundary_indexes.second;
-
-        if ((boundary_start < ref_start) || (ref_end < boundary_end)) {
-            return false;
-        }
-        
+    
+    // checks for complete tandem repeat  
+    if (is_complete_tandem_repeat) 
+    { 
+        const int boundary_start = repeat_boundary.first;
         const int read_start = alignment.query_begin;
+
+        // must be bounded
+        if ((boundary_start < ref_start) || (ref_end < repeat_boundary.second)) return 'F';
         
-        std::string repeats = query.substr((boundary_start + 1 - ref_start) + read_start);
-        int k = count_repeats(repeat_unit, repeats);
-        if (expected_num_repeats != k) return false;         
+        std::string lt_fragment = query.substr(0, (boundary_start + 1 - ref_start) + read_start);
+        std::reverse(lt_fragment.begin(), lt_fragment.end());
+        int lt_rep = count_repeats(rv_repeat_unit, lt_fragment);
+
+        std::string rt_fragment = query.substr((boundary_start + 1 - ref_start) + read_start);
+        int rt_rep = count_repeats(repeat_unit, rt_fragment);
+
+        // must repeat exactly n times 
+        if (n_tandem_repeats != (lt_rep + rt_rep)) return 'F';         
                 
     }  
-
-    char op;
+    
+    // check with alignment against referece 
+    sw::Alignment ref_alignment = sw::align(ref_contig_seq, query, match_score, mismatch_penalty, gap_open_penalty, gap_extention_penalty);
+    
+    if (alignment.alignment_score > ref_alignment.alignment_score) 
+    {
+        return 'T';
+    }
+    else
+    {
+        if (is_dirty_query || is_dirty_contig) 
+        {   
+            return 'U';
+        } 
+        else
+        {
+            return 'F';
+        }
+    }
+    /*char op;
     int op_len;
     int i = ref_start;
     int j = 0;
     int n_mismatched_bases = 0;  
     std::vector<std::pair<char, int>> cigar_vec = to_cigar_vector(cigar_string);
-    for (const auto & c : cigar_vec) {
+    for (const auto & c : cigar_vec) 
+    {
          op = c.first;
          op_len = c.second;
          
-         switch (op) {
+         switch (op) 
+         {
             case '=':
                 i += op_len;
                 j = i;
                 break;
             case 'X':
-                while ((lt_end_idx <= j) && (j <= rt_start_idx) && (j <= (i + op_len))) {
+                while ((lt_end_idx <= j) && (j <= rt_start_idx) && (j <= (i + op_len))) 
+                {
                     ++n_mismatched_bases;
                     ++j;
                 }
@@ -282,19 +317,22 @@ bool sw::is_compatible(const std::string & contig,
     //mismatche rate in critical region
     double mitmatch_rate = n_mismatched_bases / static_cast<double>(n_total_bases); 
     if (mitmatch_rate > 0.333) {
-        return false;
+        return 'F';
     }
     else {
-        
         sw::Alignment ref_alignment = sw::align(ref_contig, query, match_score, mismatch_penalty,
-                                            gap_open_penalty, gap_extention_penalty);
+                                                gap_open_penalty, gap_extention_penalty);
         
         if (alignment.alignment_score > ref_alignment.alignment_score) {
-            //std::cout << query << " " << n_mismatched_bases << " " << n_total_bases  << " " << alignment.cigar_string << std::endl; 
-            return true;
+            return 'T';
         }
-        else return false;
+        else {
+            if (is_dirty) return 'T';
+            else return 'U';
+        }
+        
     }
+    */
 }
 
 std::vector<sw::ParsedVariant> sw::find_variants( const sw::Alignment &
@@ -441,9 +479,20 @@ std::vector<int> get_max_indices(const T & arr)
     return indices;
 }
 
+template<typename T>
+double average(const std::vector<T>  & v)
+{
+    if (v.empty()) return 0.0;
+    const double cnt = static_cast<double>(v.size());
+    return std::accumulate(v.begin(), v.end(), 0.0) / cnt;
+}
+
+
 struct BaseCount {
 
-    double a = 0.0, c = 0.0, g = 0.0, t = 0.0, n = 0.0;
+    //double a = 0.0, c = 0.0, g = 0.0, t = 0.0, n = 0.0;
+    std::vector<double> a, c, g, t, n;
+    
     double a_cnt = 0.0001, c_cnt = 0.0001, g_cnt = 0.0001, t_cnt = 0.0001,
            n_cnt = 0.0001;
 
@@ -452,26 +501,31 @@ struct BaseCount {
     BaseCount(char base, char qual)
     {
         double _qual = static_cast<double>(qual);
-
+        
         switch (base) {
         case 'A':
-            a = _qual;
+            //a = _qual;
+            a.push_back(_qual);
             ++a_cnt;
             break;
         case 'C':
-            c = _qual;
+            //c = _qual;
+            c.push_back(_qual);
             ++c_cnt;
             break;
         case 'G':
-            g = _qual;
+            //g = _qual;
+            g.push_back(_qual);
             ++g_cnt;
             break;
         case 'T':
-            t = _qual;
+            //t = _qual;
+            t.push_back(_qual);
             ++t_cnt;
             break;
         default:
-            n = _qual;
+            _qual = 33;
+            n.push_back(_qual);
             ++n_cnt;
             break;
         }
@@ -480,26 +534,31 @@ struct BaseCount {
     void add(char base, char qual)
     {
         int _qual = static_cast<int>(qual);
-
+        
         switch (base) {
         case 'A':
-            a += _qual;
+            //a += _qual;
+            a.push_back(_qual);
             ++a_cnt;
             break;
         case 'C':
-            c += _qual;
+            //c += _qual;
+            c.push_back(_qual);
             ++c_cnt;
             break;
         case 'G':
-            g += _qual;
+            //g += _qual;
+            g.push_back(_qual);
             ++g_cnt;
             break;
         case 'T':
-            t += _qual;
+            //t += _qual;
+            t.push_back(_qual);
             ++t_cnt;
             break;
         default:
-            n += _qual;
+            _qual = 33;
+            n.push_back(_qual);
             ++n_cnt;
             break;
         }
@@ -508,7 +567,9 @@ struct BaseCount {
     std::pair<char, char> get_consensus()
     {
         double counts[] = {a_cnt, c_cnt, g_cnt, t_cnt, n_cnt};
-        double quals[] = {a, c, g, t, n};
+        //double quals[] = {a, c, g, t, n};
+        double quals[] = {average(a), average(c), average(g), average(t), average(n)};
+
 
         std::vector<int> max_cnt_indices = get_max_indices(counts);
 
@@ -522,7 +583,8 @@ struct BaseCount {
         }
 
         //std::vector<char> ret = {bases[max_idx], static_cast<char>(quals[max_idx] / counts[max_idx])};
-        std::pair<char, char> ret {bases[max_idx], static_cast<char>(quals[max_idx] / counts[max_idx])};
+        //std::pair<char, char> ret {bases[max_idx], static_cast<char>(quals[max_idx] / counts[max_idx])};
+        std::pair<char, char> ret {bases[max_idx], static_cast<char>(quals[max_idx])};  
 
         return ret;
     }
@@ -621,6 +683,335 @@ void pairwise_merge(std::vector<BaseCount> & consensus,
 */
 
 
+/*
+void pairwise_stitch2(...)
+{
+    
+    //thresh
+    int n_exact_match_thresh = 10;
+
+    
+    std::string reference;
+    std::string query;
+    
+    // gap-less alignment
+    const int match_score = 3;
+    const int mismatch_penalty = 2;
+    const int gap_open_penalty = 255;
+    const int gap_extention_penalty = 1;
+
+    sw::Alignment aln = sw::align(reference, query, match_score, mismatch_penalty, gap_open_penalty, gap_extention_penalty);
+    
+    std::string cigar_string = aln.cigar_string;
+    if ((cigar_string.find("I") != std::string::npos) || (cigar_string.find("D") != std::string::npos)) 
+    {    
+        return; //gapped -> not stitchable
+    }
+
+    int longest_exact_match_len = 0;
+    std::vector<std::pair<char, int>> cigar_vec = to_cigar_vector(cigar_string);   
+    for (const auto & c : cigar_vec) 
+    {
+        if (c.first == '=') 
+        {    
+            if (longest_exact_match_len < c.second) 
+            {    
+                longest_exact_match_len = c.second;
+            }
+        }      
+    }    
+    if (longest_exact_match_len < n_exact_match_thresh)
+    {   
+        return; // too short exact match -> not stitchable
+    }
+    
+    const int r_begin = aln.ref_begin;
+    const int r_end = aln.ref_end
+    const int q_begin = aln.query_begin;
+    const int q_end = aln.query_end;
+    
+    const bool is_r_start_aligned = (!r_begin);
+    const bool is_q_start_aligned = (!q_begin);
+    const bool is_r_end_aligned = (r_end == (reference.size() - 1));
+    const bool is_q_end_aligned = (q_end == (query.size() - 1));
+
+    size_t mid_len = q_end - q_begin + 1;
+    
+    std::string lt_ext, mid, rt_ext;
+    if (is_r_start_aligned) 
+    {
+        lt_ext = query.substr(0, q_begin);
+        //do    
+    }
+    else if (is_q_end_aligned)
+    { 
+        
+    } 
+
+
+    
+    if (is_r_end_aligned)
+    {
+        rt_ext = query.substr(q_end + 1); 
+        is_rt_extendable = true;
+    }
+}   
+*/
+
+struct BaseCnt
+{
+    size_t a = 0, c = 0, g = 0, t = 0, n = 0;
+    std::vector<int> aq, cq, gq, tq, nq;
+    
+    void add(char base, char _qual)
+    {
+        int qual = static_cast<int>(_qual); 
+         
+        switch(base)
+        {
+        case 'A':
+            ++a;
+            aq.push_back(qual);   
+            break;
+        case 'C':
+            ++c;
+            cq.push_back(qual);
+            break;
+        case 'G':
+            ++g;
+            gq.push_back(qual);
+            break;
+        case 'T':
+            ++t;
+            tq.push_back(qual);
+            break;
+        default:
+            ++n;
+            nq.push_back(qual);
+            break; 
+        }
+    }
+
+    std::pair<char, char> get_consensus() const 
+    {
+        size_t counts[] = {a, c, g, t, n};
+        double quals[] = {average(aq), average(cq), average(gq), average(tq), average(nq)};
+
+        std::vector<int> max_cnt_indices = get_max_indices(counts);
+
+        int max_idx;
+        if (max_cnt_indices.size() > 1)
+        {
+            std::vector<int> max_qual_indices = get_max_indices(quals);
+            max_idx = max_qual_indices[0];
+        }
+        else max_idx = max_cnt_indices[0];
+        
+        return {bases[max_idx], static_cast<char>(quals[max_idx])};
+    }
+};
+
+struct Overlap
+{   
+    int index;
+    //int query_index;
+    int ref_start;
+    int ref_end;
+    int query_start;
+    int query_end;
+
+    Overlap(const int index, 
+            //const int query_index, 
+            const int ref_start, 
+            const int ref_end, 
+            const int query_start, 
+            const int query_end) : index(index), ref_start(ref_start), ref_end(ref_end), query_start(query_start), query_end(query_end) {}
+};
+
+
+std::vector<Overlap> find_overlaps(std::vector<std::string> & seqs)
+{
+    /* 
+    std::vector<std::string> ttt = {"GTGTATAAGGGACTCTGGATCCCAGAAGGTGAGAAAGTTAAAATTCCCGTCGCTATCAAGAGAAGCAACATCTCCGAAAGCAAACAAGCCAACAAGGNNNN",
+                                    "TTTTTTTTTTTTTTTTTTTTAAGGGACTCTGGATCCCAGAAGGTGAGAAAGTTAAAATTCCCGTCGCTATCAAGAGAAGCAACATCTCCGAAAGCCAACAAGCCAACAAGGAAATCCTCGN",
+                                    "CTCTGGATCCCAGAAGGTGAGAAAGTTAAAATTCGCGTCGCTATCAAGAGAAGCAACATCTCCGAAAGCCAACAAGCCAACAAGGAAATCCTCGATGAAGC",
+                                    "AAAGTTAAAATTCCCGTCGCTATCAAGAGAAGCAACATCTCCGAAAGCCACCAAGCCAACAAGGAAATCCTCGATGAAGCCTACGTGATGGCCAGCGTGG",
+                                    "AAAGTTAAAATTCCCGTCGCTATCAAGAGAAGCAACATCTCCGAAAGCCACCAAGCCAACAAGGAAATCCTCGATGAAGCCTACGTGATGGCCAGCGTGG"};
+*/
+    
+    
+    std::vector<std::string> ttt = {"TACCATAGCCGCCTAGCTTATCAAGAGTTTATCTTTCTCTTTTCTTGCTACAAACCCAGTGCATTTCCTCCTTCCTCTGAAAATATGTCTTGTCACTTGTGACTTGAATGTAGACAGAAAACCTCCTAAAAACTATCTTTGCTTCTCTTCA",
+                                    "GAGTGTGAGGCGTATTATACCATAGCCGCCTAGCTTATCAAGAGTTTATCTTTCTCTTTTCTTGCTACAAACCCAGTGCATTTCCTCCTTCCTCTGAACATATGTCTTGTCACTTGTGACTTGAATGTAGACAGAAAACCTCCTAAAAACT",
+                                    "AGAATGAGTGTGAGGCGTATTATACCATAGCCGCCTAGCTTATCAAGAGTTTATCTTTCTCTTTTCTTGCTACAAACCCAGTGCATTTCCTCCTTCCTCTGAAAATATGTCTTGTCACTTGTGACTTGAATGTAGACAGAAAACCTCCTAA",
+                                    "GATTGATCGAGGGTAAATGTGTCTTCAAGATTCTACAACAGATTCTCTCGTCAGGGGGTTGAGAATGAGTGTGAGGCGTATTATACCATAGCCGCCTAGCTTATCAAGAGTTTATCTTTCTCTTTTCTTGCTACAAACCCAGTGCATTTCC",
+                                    "GATTGATCGAGGGTAAATGTGTCTTCAAGATTCTACAACAGATTCTCTCGTCAGGGGGTTGAGAATGAGTGTGAGGCGTATTATACCATAGCCGCCTAGCTTATCAAGAGTTTATCTTTCTCTTTTCTTGCTACAAACCCAGTGCATTTCC"};
+
+    
+
+    /* 
+    std::vector<std::string> ttt = { "NAANANNANANANANNCCNANAGAATGAGTGTGAGGCGTATTATACCATAGCCGCCTAGCTTATCAAGAGTTTATCTTTCTCTTTTCTTGCTACAAACCCAGTGCATTTCCTCCTTCCTCTGAAAATATGTCTTGTCACTTGTGACTTGAATGTAGACAGAAAACCTCCTAA",
+                                    "NTTNTACCATAGCCGCCTAGCTTATCAAGAGTTTATCTTTCTCTTTTCTTGCTACAAACCCAGTGCATTTCCTCCTTCCTCTGAAAATATGTCTTGTCACTTGTGACTTGAATGTAGACAGAAAACCTCCTAAAAACTATCTTTGCTTCTCTTCA",
+                                     "NGGNGNNTGATTGATCGAGGGTAAATGTGTCTTCAAGATTCTACAACAGATTCTCTCGTCAGGGGGTTGAGAATGAGTGTGAGGCGTATTATACCATAGCCGCCTAGCTTATCAAGAGTTTATCTTTCTCTTTTCTTGCTACAAACCCAGTGCATTTCC",
+                                     "NCCGAGTGTGAGGCGTATTATACCATAGCCGCCTAGCTTATCAAGAGTTTATCTTTCTCTTTTCTTGCTACAAACCCAGTGCATTTCCTCCTTCCTCTGAAAATATGTCTTGTCACTTGTGACTTGAATGTAGACAGAAAACCTCCTAAAAACT", 
+                                     "NCCGAGTGTGAGGCGTATTATACCATAGCCGCCTAGCTTATCAAGAGTTTATCTTTCTCTTTTCTTGCTACAAACCCAGTGCATTTCCTCCTTCCTCTGAAAATATGTCTTGTCACTTGTGACTTGAATGTAGACAGAAAACCTCCTAAAAACT"};
+*/
+    
+    seqs = ttt;
+    
+    
+    std::vector<Overlap> overlaps;   
+    
+    const int match_score = 3;
+    const int mismatch_penalty = 10;
+    const int gap_open_penalty = 255;
+    const int gap_extention_penalty = 255;
+
+    StripedSmithWaterman::Alignment alignment;   
+    StripedSmithWaterman::Aligner aligner(match_score, mismatch_penalty, gap_open_penalty, gap_extention_penalty);
+    StripedSmithWaterman::Filter filter;
+    
+    int n = seqs.size();
+    for (size_t i = 0; i < n - 1;)
+    {
+        int32_t mask_len = strlen(seqs[i+1].c_str() ) / 2;
+        mask_len = mask_len < 15 ? 15 : mask_len;
+        int j = i;
+        int k = i;
+        bool is_gapped = true;
+        //flag for supporting alignment prev_start <= curr_start  prev_start <= curr_end
+        do
+        {
+            ++j;
+            aligner.Align(seqs[j].c_str(), seqs[i].c_str(), seqs[i].size(), filter, &alignment, mask_len);
+            std::string cigar_string = alignment.cigar_string;
+            if (cigar_string.find("I") == std::string::npos || cigar_string.find("D") == std::string::npos) is_gapped = false;
+            std::cout << i << " " << j << " " << cigar_string << std::endl; 
+        }   
+        while ((j < n -1) && is_gapped);
+        i = j;
+
+        overlaps.emplace_back(k, alignment.ref_begin, alignment.ref_end, alignment.query_begin, alignment.query_end);
+            
+    }
+
+    return overlaps;
+}
+
+void sw::merge_reads(std::vector<std::string> & seqs, std::vector<std::string> & seq_quals)
+{
+    std::deque<BaseCnt> base_cnts;
+    std::vector<Overlap> overlaps = find_overlaps(seqs);
+
+    int merge_start = 0, merge_end = 0;
+    int curr_start = 0, curr_end = 0;
+    int prev_start = 0, prev_end = 0;
+    
+    bool is_last = false;
+    int n_overlap_reads = overlaps.size();
+    for (int i = 0; i < n_overlap_reads; ++i)
+    {
+        is_last = (i == (n_overlap_reads - 1));
+        
+        curr_start = overlaps[i].ref_start;
+        curr_end = overlaps[i].ref_end;
+        
+        std::string seq = seqs[overlaps[i].index];
+        std::string seq_qual = seq_quals[overlaps[i].index];
+             
+        if (!i)
+        {
+            for (int j = 0; j <= (curr_end - curr_start); ++j)
+            {
+                BaseCnt bc;
+                bc.add(seq[curr_start + j], seq_qual[curr_start + j]);
+                base_cnts.push_back(bc);
+            }
+        }
+        else  
+        {
+            if (prev_start <= curr_start)
+            {
+                merge_start += (curr_start - prev_start);
+                merge_end = base_cnts.size(); 
+
+                if (curr_start <= prev_end) 
+                {
+                    for (int j = 0; j <= (prev_end - curr_start); ++j)
+                    {
+                        if (merge_start + j < merge_end) 
+                        {    
+                            base_cnts[merge_start + j].add(seq[curr_start + j], seq_qual[curr_start + j]);
+                        }
+                    }
+                    
+                    // right extension (meaningful if prev_end < curr_end)
+                    if (!is_last)
+                    {
+                        for (int j = 1; j <= (curr_end - prev_end); ++j)
+                        {
+                            BaseCnt bc;
+                            bc.add(seq[prev_end + j], seq_qual[prev_end + j]);
+                            base_cnts.push_back(bc);
+                        }
+                    }
+                  
+                }
+                else
+                {
+                    //construction fail 
+                    //should be checked earlier? 
+                }
+            }
+            else
+            {
+                //left extension prev_start > 0 guranteed
+                if(!is_last)
+                {
+                    //for (int i = prev_start - 1; curr_start <= i; --i)
+                    for (int j = -1; (curr_start - prev_start) <= j; --j)
+                    {
+                        BaseCnt bc;
+                        bc.add(seq[prev_start + j], seq_qual[prev_start + j]);
+                        base_cnts.push_front(bc);
+                    }
+                    merge_start = prev_start - curr_start;
+                }
+                else merge_start = 0;
+                
+                merge_end = base_cnts.size();
+                
+                //int merge_pos = merge_start;
+                if (prev_start <= curr_end)
+                {
+                    //merge_end = bd.size(); 
+                    //for (int i = prev_start; i <= curr_end; ++i)
+                    for (int j = 0; j <= (curr_end - prev_start); ++j)
+                    {
+                        if (merge_start + j < merge_end) 
+                        {    
+                            base_cnts[merge_start + j].add(seq[prev_start + j], seq_qual[prev_start + j]);
+                        }
+                        //++merge_pos;
+                    }
+                }    
+
+            }
+            
+            std::cout << prev_start << " " << curr_start << " " << merge_start << std::endl;    
+        }
+        
+        // query serves as ref in the next iteration
+        // memorize the aln start/end for the next
+        prev_start = overlaps[i].query_start;
+        prev_end = overlaps[i].query_end;       
+    }
+    for (auto & i : base_cnts)
+    {
+        std::cout << i.get_consensus().first;
+    }
+    std::cout << std::endl;     
+}
+
 void pairwise_stitch(std::deque<BaseCount> & consensus,
 //                     const std::vector<std::string> & v)
                      const std::pair<std::string, std::string> & v)   
@@ -637,23 +1028,26 @@ void pairwise_stitch(std::deque<BaseCount> & consensus,
     // gap-less alignment
     const int match_score = 3;
     const int mismatch_penalty = 2;
-    const int gap_open_penalty = std::max(read1.size(), read2.size());
-    const int gap_extention_penalty = 1;
+    const int gap_open_penalty = 255;
+    const int gap_extention_penalty = 255;
 
     sw::Alignment aln = sw::align(read1, read2, match_score, mismatch_penalty,
                                   gap_open_penalty, gap_extention_penalty);
 
+    
     std::vector<std::string> cigar_vec = _decompose_cigar_string(aln.cigar_string);
     
     const int read1_begin = aln.ref_begin;
     const int read1_end = aln.ref_end;
     const int read2_begin = aln.query_begin;
     const int read2_end = aln.query_end;
-
-    //std::cout << aln.cigar_string << ", " << read1_begin << ", " << read1_end << ", " << read2_begin << ", " << read2_end << std::endl;
     
+    const bool is_read1_end_covered = (read1_end == (read1.size() - 1));
+     
+    
+    bool is_stitchable = true;
     std::string lt_ext, lt_qual, rt_ext, rt_qual, mread1, mqual1, mread2, mqual2;
-    if (read2_begin == 0) {
+    if (read2_begin == 0 && is_read1_end_covered) {
         lt_ext = read1.substr( 0, read1_begin );
         lt_qual = qual1.substr( 0, read1_begin );
         rt_ext = read2.substr( read2_end + 1 );
@@ -661,6 +1055,7 @@ void pairwise_stitch(std::deque<BaseCount> & consensus,
 
         mread2 = read2.substr( 0, read2_end + 1 );
         mqual2 = qual2.substr( 0, read2_end + 1 );
+
     }
     else if ( read1_begin == 0 ) {
         lt_ext = read2.substr( 0, read2_begin );
@@ -673,18 +1068,22 @@ void pairwise_stitch(std::deque<BaseCount> & consensus,
         mqual2 = qual2.substr( read2_begin, m_len );
     }
     else {
+        is_stitchable = false;
         // not stitchable -> reconsider
     }
 
 
     // check for stichability needed
-    update( consensus, read2_begin, lt_ext, lt_qual, mread2, mqual2, rt_ext,
-            rt_qual );
+    if (is_stitchable)
+    {    
+        update( consensus, read2_begin, lt_ext, lt_qual, mread2, mqual2, rt_ext,
+                rt_qual );
+    }
    
 }
 
-std::string sw::flatten_reads( const std::pair<std::string, std::string> seed_read,
-                               const std::vector<std::pair<std::string, std::string>> & reads )
+std::pair<std::string, std::string> sw::flatten_reads(const std::pair<std::string, std::string> seed_read,
+                                                      const std::vector<std::pair<std::string, std::string>> & reads)
 {
     std::deque<BaseCount>  consensus;
     std::string seed_bases = seed_read.first;
@@ -701,14 +1100,14 @@ std::string sw::flatten_reads( const std::pair<std::string, std::string> seed_re
     }
 
 
-    std::string ans = "";
+    std::string seq = "";
     std::string qual = "";
     for ( size_t i = 0; i < consensus.size(); ++i ) {
         BaseCount c = consensus[i];
-        ans += c.get_consensus().first;
+        seq += c.get_consensus().first;
         qual += c.get_consensus().second;
     }
 
-    return ans;
+    return {seq, qual};
 }
 

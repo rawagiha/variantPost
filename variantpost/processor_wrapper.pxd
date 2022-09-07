@@ -9,6 +9,8 @@ cdef string  test_it(
                 string &,
                 string &,
                 int,
+                float,
+                int,
                 int, 
                 int,
                 #string &, 

@@ -32,6 +32,7 @@ struct ParsedRead {
     std::vector<std::pair<int, int>> un_spliced_segments;
     std::vector<std::pair<int, int>> spliced_segments;
     bool may_be_complex;
+    bool has_non_target_in_critical_region;
     int target_aligned_pos;
     std::string target_aligned_ref;
     std::string target_aligned_alt;

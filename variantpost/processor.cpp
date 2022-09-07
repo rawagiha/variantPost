@@ -39,6 +39,8 @@ pp::ProcessedPileup  pp::process_pileup(
     const std::string & ref,
     const std::string & alt,
     int base_quality_threshold,
+    double low_quality_base_rate_threshold,
+    int kmer_size,
     int unspliced_local_reference_start,
     int unspliced_local_reference_end,
     const std::vector<std::string> & read_names,
@@ -86,6 +88,9 @@ pp::ProcessedPileup  pp::process_pileup(
     if (targets.size() > 0) {
          process_aligned_target(chrom,
                                 fr,
+                                base_quality_threshold,
+                                low_quality_base_rate_threshold,
+                                kmer_size,
                                 contig,
                                 target_pos,
                                 target_ref,

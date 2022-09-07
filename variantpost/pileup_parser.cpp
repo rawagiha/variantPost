@@ -27,6 +27,7 @@ char classify_covering(const int lpos, const int pos, const int rpos,
 
 // check local non-ref base pattern
 char classify_local_pattern(bool & may_be_complex,
+                            bool & has_non_target_in_critical_region,
                             char & clip_ptrn,
                             int & target_aligned_pos,
                             std::string & target_aligned_ref,
@@ -142,10 +143,12 @@ ParsedRead::ParsedRead
     
     //classify local non-reference base pattern 
     may_be_complex = false;
+    has_non_target_in_critical_region = false;
     target_aligned_pos = -1;
     target_aligned_ref = "N";
     target_aligned_alt = "N";
     local_ptrn = classify_local_pattern(may_be_complex,
+                                        has_non_target_in_critical_region,
                                         clip_ptrn,
                                         target_aligned_pos,
                                         target_aligned_ref,
@@ -171,7 +174,7 @@ ParsedRead::ParsedRead
                                                aln_end, end_offset);    
     }
     
-    if (local_ptrn == 'B') {
+    if (local_ptrn != 'N') {
         dirty_base_rate = dirty_rate(base_qual_thresh, non_ref_quals, read_seq.size());
     }
     else dirty_base_rate = 0.0;
@@ -362,10 +365,13 @@ char classify_covering(const int lpos, const int pos, const int rpos,
 //----------------------------------------------------------------------------------------
 int dist_to_non_target_variant(bool & has_target,
                                bool & has_gteq_five_indel,
+                               bool & has_non_target_in_critical_region,
                                int & target_aligned_pos,
                                std::string & target_aligned_ref,
                                std::string & target_aligned_alt, 
+                               const int lpos,
                                const int pos, 
+                               const int rpos,
                                const Variant & target,
                                const std::vector<Variant> & variants,
                                const int unspliced_local_reference_start,
@@ -397,9 +403,11 @@ int dist_to_non_target_variant(bool & has_target,
             target_aligned_alt = variant.alt;
         }
         else {
+            if ((lpos <= variant.pos) & (variant.pos <= rpos)) has_non_target_in_critical_region = true;
+
             int lp = variant.get_leftmost_pos(unspliced_local_reference_start, 
-                                          indexed_local_reference);
-            int rp = variant.get_rightmost_pos(unspliced_local_reference_end, 
+                                           indexed_local_reference);
+            int rp = variant.get_rightmost_pos(unspliced_local_reference_end,
                                            indexed_local_reference);
             int _rp = rp + (variant.ref_len - 1); 
         
@@ -507,6 +515,7 @@ char classify_clip_pattern (int & dist_to_clip,
 //  'N': not worth further check
 //----------------------------------------------------------------------------
 char classify_local_pattern(bool & may_be_complex,
+                            bool & has_non_target_in_critical_region,
                             char & clip_ptrn,
                             int & target_aligned_pos,
                             std::string & target_aligned_ref,
@@ -551,10 +560,13 @@ char classify_local_pattern(bool & may_be_complex,
     bool has_gteq_five_indel = false;
     int d2var = dist_to_non_target_variant(has_target,
                                            has_gteq_five_indel,
+                                           has_non_target_in_critical_region,
                                            target_aligned_pos,
                                            target_aligned_ref,
                                            target_aligned_alt,
+                                           lpos,
                                            pos,
+                                           rpos,
                                            target, 
                                            variants,
                                            unspliced_local_reference_start, 

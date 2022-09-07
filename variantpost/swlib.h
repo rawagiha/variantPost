@@ -52,17 +52,29 @@ std::vector<ParsedVariant> find_variants(
     const uint32_t & genomic_ref_start = 0 );
 
 
-std::string flatten_reads( const std::pair<std::string, std::string> seed_read,
-                           const std::vector<std::pair<std::string, std::string>> & reads );
+std::pair<std::string, std::string>  flatten_reads(const std::pair<std::string, std::string> seed_read,
+                                                   const std::vector<std::pair<std::string, std::string>> & reads);
 
 
-bool is_compatible(const std::string & contig,
+char match_to_contig(const std::string & query, const bool is_dirty_query,
+                     const std::string & contig_seq, const std::string & ref_contig_seq, const std::vector<std::pair<int, int>> & decomposed_contig, const bool is_dirty_contig,
+                     const int n_tandem_repeats, const std::string & repeat_unit, const std::string & rv_repeat_unit, const bool is_complete_tandem_repeat,
+                     const std::pair<int, int> & repeat_boundary);
+/*
+char is_compatible(const std::string & contig,
                    const std::string & ref_contig,
                    const std::string & query,
                    const std::vector<std::pair<int, int>> & decomposed_contig,
                    const std::string & repeat_unit,
+                   const std::string & reversed_repeat_unit,
                    const int expected_num_repeats,
-                   const std::pair<int, int> & boundary_indexes);
+                   const bool is_complete_tandem_repeat,
+                   const std::pair<int, int> & boundary_indexes,
+                   const bool is_dirty);
+*/
+
+void merge_reads(std::vector<std::string> & seqs, std::vector<std::string> & seq_quals);
+
 } //end of namespace "sw"
 
 #endif
