@@ -88,7 +88,7 @@ std::vector<std::pair<int, int>> find_coordinates_union(const Reads & reads)
     auto contig_start = std::min_element(starts.begin(), starts.end());
     auto contig_end = std::max_element(ends.begin(), ends.end());
     
-    std::vector<std::pair<int, int>> un_spls = reads[0].un_spliced_segments;
+    std::vector<std::pair<int, int>> un_spls = reads[0].aligned_segments;
     
     std::vector<std::pair<int, int>> coords;
     if (un_spls.size() == 1) 

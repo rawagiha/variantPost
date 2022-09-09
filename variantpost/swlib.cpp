@@ -814,14 +814,12 @@ struct BaseCnt
 struct Overlap
 {   
     int index;
-    //int query_index;
     int ref_start;
     int ref_end;
     int query_start;
     int query_end;
 
     Overlap(const int index, 
-            //const int query_index, 
             const int ref_start, 
             const int ref_end, 
             const int query_start, 
@@ -831,22 +829,22 @@ struct Overlap
 
 std::vector<Overlap> find_overlaps(std::vector<std::string> & seqs)
 {
-    /* 
+     
     std::vector<std::string> ttt = {"GTGTATAAGGGACTCTGGATCCCAGAAGGTGAGAAAGTTAAAATTCCCGTCGCTATCAAGAGAAGCAACATCTCCGAAAGCAAACAAGCCAACAAGGNNNN",
                                     "TTTTTTTTTTTTTTTTTTTTAAGGGACTCTGGATCCCAGAAGGTGAGAAAGTTAAAATTCCCGTCGCTATCAAGAGAAGCAACATCTCCGAAAGCCAACAAGCCAACAAGGAAATCCTCGN",
                                     "CTCTGGATCCCAGAAGGTGAGAAAGTTAAAATTCGCGTCGCTATCAAGAGAAGCAACATCTCCGAAAGCCAACAAGCCAACAAGGAAATCCTCGATGAAGC",
                                     "AAAGTTAAAATTCCCGTCGCTATCAAGAGAAGCAACATCTCCGAAAGCCACCAAGCCAACAAGGAAATCCTCGATGAAGCCTACGTGATGGCCAGCGTGG",
                                     "AAAGTTAAAATTCCCGTCGCTATCAAGAGAAGCAACATCTCCGAAAGCCACCAAGCCAACAAGGAAATCCTCGATGAAGCCTACGTGATGGCCAGCGTGG"};
-*/
+
     
-    
+   /* 
     std::vector<std::string> ttt = {"TACCATAGCCGCCTAGCTTATCAAGAGTTTATCTTTCTCTTTTCTTGCTACAAACCCAGTGCATTTCCTCCTTCCTCTGAAAATATGTCTTGTCACTTGTGACTTGAATGTAGACAGAAAACCTCCTAAAAACTATCTTTGCTTCTCTTCA",
                                     "GAGTGTGAGGCGTATTATACCATAGCCGCCTAGCTTATCAAGAGTTTATCTTTCTCTTTTCTTGCTACAAACCCAGTGCATTTCCTCCTTCCTCTGAACATATGTCTTGTCACTTGTGACTTGAATGTAGACAGAAAACCTCCTAAAAACT",
                                     "AGAATGAGTGTGAGGCGTATTATACCATAGCCGCCTAGCTTATCAAGAGTTTATCTTTCTCTTTTCTTGCTACAAACCCAGTGCATTTCCTCCTTCCTCTGAAAATATGTCTTGTCACTTGTGACTTGAATGTAGACAGAAAACCTCCTAA",
                                     "GATTGATCGAGGGTAAATGTGTCTTCAAGATTCTACAACAGATTCTCTCGTCAGGGGGTTGAGAATGAGTGTGAGGCGTATTATACCATAGCCGCCTAGCTTATCAAGAGTTTATCTTTCTCTTTTCTTGCTACAAACCCAGTGCATTTCC",
                                     "GATTGATCGAGGGTAAATGTGTCTTCAAGATTCTACAACAGATTCTCTCGTCAGGGGGTTGAGAATGAGTGTGAGGCGTATTATACCATAGCCGCCTAGCTTATCAAGAGTTTATCTTTCTCTTTTCTTGCTACAAACCCAGTGCATTTCC"};
 
-    
+    */
 
     /* 
     std::vector<std::string> ttt = { "NAANANNANANANANNCCNANAGAATGAGTGTGAGGCGTATTATACCATAGCCGCCTAGCTTATCAAGAGTTTATCTTTCTCTTTTCTTGCTACAAACCCAGTGCATTTCCTCCTTCCTCTGAAAATATGTCTTGTCACTTGTGACTTGAATGTAGACAGAAAACCTCCTAA",
@@ -964,10 +962,8 @@ void sw::merge_reads(std::vector<std::string> & seqs, std::vector<std::string> &
             }
             else
             {
-                //left extension prev_start > 0 guranteed
                 if(!is_last)
                 {
-                    //for (int i = prev_start - 1; curr_start <= i; --i)
                     for (int j = -1; (curr_start - prev_start) <= j; --j)
                     {
                         BaseCnt bc;
@@ -980,18 +976,14 @@ void sw::merge_reads(std::vector<std::string> & seqs, std::vector<std::string> &
                 
                 merge_end = base_cnts.size();
                 
-                //int merge_pos = merge_start;
                 if (prev_start <= curr_end)
                 {
-                    //merge_end = bd.size(); 
-                    //for (int i = prev_start; i <= curr_end; ++i)
                     for (int j = 0; j <= (curr_end - prev_start); ++j)
                     {
                         if (merge_start + j < merge_end) 
                         {    
                             base_cnts[merge_start + j].add(seq[prev_start + j], seq_qual[prev_start + j]);
                         }
-                        //++merge_pos;
                     }
                 }    
 

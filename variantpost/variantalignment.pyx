@@ -5,7 +5,7 @@ import time
 
 class VariantAlignment(object):
     def __init__(
-        self, variant, bam, second_bam=None, window=200, exclude_duplicates=True, downsample_thresh=-1, base_quality_threshold=20, low_quality_base_rate_threshold=0.1, kmer_size=15, 
+        self, variant, bam, second_bam=None, window=200, exclude_duplicates=True, downsample_threshold=-1, mapping_quality_threshold=1, base_quality_threshold=20, low_quality_base_rate_threshold=0.1, kmer_size=15, 
     ):
 
         (
@@ -48,7 +48,7 @@ class VariantAlignment(object):
             reference,
             exclude_duplicates,
             window,
-            downsample_thresh,
+            downsample_threshold,
         )
        
         tt = time.time()
@@ -57,6 +57,7 @@ class VariantAlignment(object):
         res = test_it(fastafile,
                       chrom.encode(), 
                       pos, ref.encode(), alt.encode(),
+                      mapping_quality_threshold,
                       base_quality_threshold, 
                       low_quality_base_rate_threshold,
                       kmer_size,

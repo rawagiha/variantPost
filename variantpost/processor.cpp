@@ -35,14 +35,15 @@ pp::ProcessedPileup::ProcessedPileup
 pp::ProcessedPileup  pp::process_pileup(
     const std::string & fastafile,
     const std::string & chrom,
-    int pos, 
+    const int pos, 
     const std::string & ref,
     const std::string & alt,
-    int base_quality_threshold,
-    double low_quality_base_rate_threshold,
-    int kmer_size,
-    int unspliced_local_reference_start,
-    int unspliced_local_reference_end,
+    const int mapping_quality_threshold,
+    const int base_quality_threshold,
+    const double low_quality_base_rate_threshold,
+    const int kmer_size,
+    const int unspliced_local_reference_start,
+    const int unspliced_local_reference_end,
     const std::vector<std::string> & read_names,
     const std::vector<bool> & are_reverse,
     const std::vector<std::string> & cigar_strings,
@@ -63,9 +64,11 @@ pp::ProcessedPileup  pp::process_pileup(
     parse_pileup(targets, candidates, non_targets,
                  fr,
                  chrom, pos, ref, alt,
+                 mapping_quality_threshold,
                  base_quality_threshold,
                  unspliced_local_reference_start,
                  unspliced_local_reference_end,
+                 is_from_first_bam,
                  read_names,
                  are_reverse,
                  cigar_strings,
@@ -73,8 +76,7 @@ pp::ProcessedPileup  pp::process_pileup(
                  aln_ends,
                  read_seqs,
                  quals,
-                 mapqs,
-                 is_from_first_bam);
+                 mapqs);
     
     std::string contig = "";
     

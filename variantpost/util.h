@@ -13,7 +13,7 @@
 #include "fasta/Fasta.h"
 
 template<typename A, typename B, typename C>
-bool ordered(const A & a, const B & b, const C & c)
+bool is_ascending(const A & a, const B & b, const C & c)
 {
     return (a <= b) && (b <= c);
 }

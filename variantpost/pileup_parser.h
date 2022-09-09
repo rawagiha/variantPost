@@ -20,26 +20,27 @@ struct ParsedRead {
     int aln_end;
     int read_start;
     int read_end;
-    int covering_start;
-    int covering_end;
+    int covering_start = 0;
+    int covering_end = 0;
     int start_offset;
     int end_offset;
     std::string read_seq;
     std::string ref_seq;
-    std::string base_qualities;
+    std::string base_qualities = "";
+    std::string non_ref_quals = "";
     int mapq;
     std::vector<Variant> variants;
-    std::vector<std::pair<int, int>> un_spliced_segments;
-    std::vector<std::pair<int, int>> spliced_segments;
-    bool may_be_complex;
-    bool has_non_target_in_critical_region;
-    int target_aligned_pos;
-    std::string target_aligned_ref;
-    std::string target_aligned_alt;
+    std::vector<std::pair<int, int>> aligned_segments;
+    std::vector<std::pair<int, int>> skipped_segments;
+    bool may_be_complex = false;
+    bool has_non_target_in_critical_region = false;
+    int target_aligned_pos = -1;
+    std::string target_aligned_ref = "N";
+    std::string target_aligned_alt = "N";
     char covering_ptrn;
     char local_ptrn;
     char clip_ptrn;
-    double dirty_base_rate;
+    double dirty_base_rate = 0.0;
     std::string non_ref_ptrn_str;
 
     ParsedRead();
@@ -75,23 +76,22 @@ void parse_pileup( std::vector<ParsedRead> &,
                    std::vector<ParsedRead> &,
                    FastaReference &,
                    const std::string &,
-                   int,
+                   const int,
                    const std::string &,
                    const std::string &,
-                   int, 
-                   int,
-                   int,
-                   //const std::string &, 
+                   const int,
+                   const int, 
+                   const int,
+                   const int,
+                   const std::vector<bool> &,
                    const std::vector<std::string> &,
                    const std::vector<bool> &, 
                    const std::vector<std::string> &,
                    const std::vector<int> &, 
                    const std::vector<int> &,
                    const std::vector<std::string> &, 
-                   //const std::vector<std::string> &,
                    const std::vector<std::vector<int>> &, 
-                   const std::vector<int> &,
-                   const std::vector<bool> &
+                   const std::vector<int> &
 );
 
 #endif
