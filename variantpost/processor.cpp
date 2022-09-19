@@ -87,6 +87,7 @@ pp::ProcessedPileup  pp::process_pileup(
     
     std::string minimal_repeat = target.minimal_repeat_unit();
      
+    
     if (targets.size() > 0) {
          process_aligned_target(chrom,
                                 fr,

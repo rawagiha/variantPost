@@ -28,6 +28,7 @@ extensions = [
             "variantpost/pileup_parser.cpp",
             "variantpost/util.cpp",
             "variantpost/swlib.cpp",
+            "variantpost/localn.cpp",
             "variantpost/ssw/ssw.c",
             "variantpost/ssw/ssw_cpp.cpp",
             "variantpost/fasta/Fasta.cpp",

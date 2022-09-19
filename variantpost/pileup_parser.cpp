@@ -10,7 +10,6 @@
 #include <unordered_map>
 
 #include "util.h"
-#include "swlib.h"
 #include "pileup_parser.h"
 #include "fasta/Fasta.h"
 
@@ -127,7 +126,7 @@ int dist_to_non_target_variant(
     bool & has_non_target_in_critical_region,
     int & target_aligned_pos,
     std::string & target_aligned_ref,
-    std::string & target_aligned_alt, 
+    std::string & target_aligned_alt,
     const int lpos, const int pos, const int rpos,
     const Variant & target,
     const std::vector<Variant> & variants,
@@ -164,7 +163,10 @@ int dist_to_non_target_variant(
         }
         else 
         {
-            if ((lpos <= variant.pos) & (variant.pos <= rpos)) has_non_target_in_critical_region = true;
+            if (lpos <= variant.pos && variant.pos <= rpos) 
+            {
+                has_non_target_in_critical_region = true;
+            }
 
             int event_region_start = variant.get_leftmost_pos(
                                         unspliced_local_reference_start, 
@@ -338,7 +340,7 @@ char classify_local_pattern(
                     has_gteq_five_indel,
                     has_non_target_in_critical_region,
                     target_aligned_pos, target_aligned_ref, target_aligned_alt,
-                    lpos, pos, rpos, 
+                    lpos, pos, rpos,  
                     target, variants,
                     unspliced_local_reference_start, 
                     unspliced_local_reference_end,
