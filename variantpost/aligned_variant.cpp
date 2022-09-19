@@ -39,8 +39,6 @@ Reads find_seed_reads(const Reads & targets, const double dirty_thresh, const si
     
     std::string commonest_ptrn = find_commonest_str(non_ref_ptrns);
     
-    std::cout << commonest_ptrn << std::endl;
-    
     Reads seeds; 
     for (const auto & read : clean_targets) 
     {
@@ -50,23 +48,15 @@ Reads find_seed_reads(const Reads & targets, const double dirty_thresh, const si
         }
     } 
     
-    std::cout << seeds.size() << std::endl;
-    
     if (seeds.size() > seed_size) 
     {
-        std::cout << "shuff " << std::endl;
         std::shuffle(seeds.begin(), seeds.end(), std::default_random_engine(123));
         
         Reads tmp = {seeds.begin(), seeds.begin() + seed_size};
-
         
-        std::cout << "sort " << std::endl;
         std::sort(tmp.begin(), tmp.end(), 
                   [](const ParsedRead & a, const ParsedRead & b){return a.aln_start < b.aln_start ? true : false;});   
-        
-        
          
-        std::cout << "is this worng" << std::endl;
         return tmp;
     }
     else return seeds;
@@ -238,9 +228,7 @@ MergedRead preprep(const Reads & targets, const double dirty_thresh, Reads & see
             }
         }
 
-        std::cout << "here" << std::endl;
         MergedRead _from_multiple = merge_reads(inputs);
-        std::cout << "here here" << std::endl;
         return _from_multiple;
     }
 }
@@ -448,17 +436,13 @@ void process_aligned_target(const std::string & chrom, FastaReference & fr, cons
     std::string repeat_unit = obsved_trgt.minimal_repeat_unit();   
     std::string rv_repeat_unit = repeat_unit;
     std::reverse(rv_repeat_unit.begin(), rv_repeat_unit.end());   
-     
-    std::cout << " before I get here" << std::endl;
-    std::cout << contig.contig_seq << " " << contig.decomposition[0].second << std::endl;
-    std::cout << contig.ref_contig_seq << std::endl;
     
     int  n_tandem_repeats = 0;
     bool is_complete_tandem_repeat = false;
     std::pair<int, int> repeat_boundary; 
     repeat_check(obsved_trgt, contig, repeat_unit, n_tandem_repeats, is_complete_tandem_repeat, repeat_boundary);
     
-    const uint8_t match_score = 3, mismatch_penalty = 0;
+    const uint8_t match_score = 3, mismatch_penalty = 2;
     const uint8_t gap_open_penalty = 255, gap_extention_penalty = 255;
     Filter filter;
     Alignment aln;
@@ -466,9 +450,6 @@ void process_aligned_target(const std::string & chrom, FastaReference & fr, cons
                 match_score, mismatch_penalty,
                 gap_open_penalty, gap_extention_penalty
             );
-     
-    std::cout << " I get here" << std::endl;
-    std::cout << contig.contig_seq << " " << contig.decomposition[0].second << std::endl;
      
     Reads undetermined;
     for (const auto & read : candidates)
@@ -498,13 +479,7 @@ void process_aligned_target(const std::string & chrom, FastaReference & fr, cons
             {
                 case 'T':
                     targets.push_back(read);
-                    std::cout << read.read_seq << std::endl;
-                    std::cout << read.cigar_string << std::endl;
-                    for (auto & v : read.variants)
-                    {
-                    std::cout << v.pos << " " << v.ref << " " << v.alt;
-                    }
-                    std::cout<<std::endl;
+                    //std::cout << read.read_name << " " << read.is_reverse << " " << read.cigar_string << std::endl;            
                     break;
                 case 'F':
                     non_targets.push_back(read);
@@ -531,10 +506,12 @@ void process_aligned_target(const std::string & chrom, FastaReference & fr, cons
     std::cout << "non_target: " << non_targets.size() << " " << std::endl;
     std::cout << "undetermined: " << undetermined.size() << std::endl;
      
-    for (auto & t : targets)
+    /*
+    for (auto & t : non_targets)
     {
-        //std::cout << t.read_name << " " << t.is_reverse << std::endl;
+        std::cout << t.read_name << " " << t.is_reverse << std::endl;
     }
+    */
 }
 
 

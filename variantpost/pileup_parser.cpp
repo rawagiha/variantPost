@@ -50,8 +50,6 @@ char classify_covering(
         }
     }
     
-    bool is_first = false, is_last = false;
-    
     for (const auto & segment : aligned_segments) 
     {
         covering_start = segment.first;

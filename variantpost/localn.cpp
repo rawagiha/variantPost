@@ -145,7 +145,7 @@ std::vector<Overlap> find_overlaps(const std::vector<InputRead> & inputs)
     for (size_t i = 0; i < n - 1;)
     {
         
-        int j = i;
+        size_t j = i;
         bool is_gapped = true;
         do
         {
@@ -182,7 +182,6 @@ std::vector<Overlap> find_overlaps(const std::vector<InputRead> & inputs)
 MergedRead merge_reads(const std::vector<InputRead> & inputs)
 {
     std::deque<BaseCount> base_cnts;
-    std::cout << "before over" << std::endl;
     std::vector<Overlap> overlaps = find_overlaps(inputs);
     
     int merge_start = 0, merge_end = 0;
@@ -287,9 +286,6 @@ MergedRead merge_reads(const std::vector<InputRead> & inputs)
             }
             
         }
-        
-        // query serves as ref in the next iteration
-        // memorize the aln start/end for the next
         prev_start = overlaps[i].query_start;
         prev_end = overlaps[i].query_end;   
     }
@@ -304,6 +300,7 @@ MergedRead merge_reads(const std::vector<InputRead> & inputs)
         n_start_checks.push_back(std::accumulate(b.start_checks.begin(), b.start_checks.end(), 0));
     }
     
+    /*
     int p = 0;
     for (const auto & b : base_cnts)
     {   
@@ -314,6 +311,7 @@ MergedRead merge_reads(const std::vector<InputRead> & inputs)
         std::cout << "  " << p << " " <<std::endl;
         ++p;
     }
+    */
      
     int target_start_idx = get_max_indices(n_start_checks)[0];   
     
@@ -323,128 +321,69 @@ MergedRead merge_reads(const std::vector<InputRead> & inputs)
 }
 
 
-/*
-char sw::match_to_contig(const std::string & query, const bool is_dirty_query,
-                         const std::string & contig_seq, const std::string & ref_contig_seq, const std::vector<std::pair<int, int>> & decomposed_contig, const bool is_dirty_contig,
-                         const int n_tandem_repeats, const std::string & repeat_unit, const std::string & rv_repeat_unit, const bool is_complete_tandem_repeat,
-                         const std::pair<int, int> & repeat_boundary)
-
-char sw::is_compatible(const std::string & contig,
-                       const std::string & ref_contig,
-                       const std::string & query,
-                       const std::vector<std::pair<int, int>> & decomposed_contig,
-                       const std::string & repeat_unit,
-                       const std::string & reversed_repeat_unit,
-                       const int expected_num_repeats,
-                       const bool is_complete_tandem_repeat,
-                       const std::pair<int, int> & boundary_indexes,
-                       const bool is_dirty) 
-
-
-*/
 char match_to_contig
 (
-            const std::string & query, const bool is_dirty_query,
-            const std::string & contig_seq, const std::string & ref_contig_seq, const std::vector<std::pair<int, int>> & decomposed_contig, const bool is_dirty_contig,
-            const int n_tandem_repeats, const std::string & repeat_unit, const std::string & rv_repeat_unit, const bool is_complete_tandem_repeat,
-            const std::pair<int, int> & repeat_boundary,
-            const Filter & filter,
-            const Aligner & aligner, 
-            Alignment & alignment
+    const std::string & query, const bool is_dirty_query,
+    const std::string & contig_seq, const std::string & ref_contig_seq, 
+    const std::vector<std::pair<int, int>> & decomposed_contig, const bool is_dirty_contig,
+    const int n_tandem_repeats, const std::string & repeat_unit, 
+    const std::string & rv_repeat_unit, const bool is_complete_tandem_repeat,
+    const std::pair<int, int> & repeat_boundary,
+    const Filter & filter,
+    const Aligner & aligner, 
+    Alignment & alignment
 )          
-
-
 {
     //contig layout
     const int lt_end_idx = decomposed_contig[0].second - 1;
     const int rt_start_idx = decomposed_contig[2].first;
       
-    //gap-less aln
-    //const int match_score = 3;
-    //const int mismatch_penalty = 10;
-    //const int gap_open_penalty = 255;
-    //const int gap_extention_penalty = 255;
-    
     int32_t mask_len = strlen(query.c_str()) / 2;
     mask_len = mask_len < 15 ? 15 : mask_len;
             
     aligner.Align(query.c_str(), contig_seq.c_str(), contig_seq.size(), filter, &alignment, mask_len);
    
-    /*
-    //TODO -> do not creat alingment object each time. pass by referece.
-    sw::Alignment alignment = sw::align(contig_seq, query, match_score, mismatch_penalty,
-                                        gap_open_penalty, gap_extention_penalty);
-    */
     const int ref_start = alignment.ref_begin;
     const int ref_end = alignment.ref_end;
-    
     
     // still has gap
     std::string cigar_string = alignment.cigar_string;
     size_t found_ins = cigar_string.find("I");
     size_t found_del = cigar_string.find("D");
-    if ((found_ins != std::string::npos) || (found_del != std::string::npos)) return 'F';
+    if (found_ins != std::string::npos || found_del != std::string::npos) return 'F';
        
     // doesn't overlap the target region
-    if ((ref_end <= lt_end_idx) || (rt_start_idx <= ref_start)) return 'F';
-   
-    //TODO -> require covering both sides for deletions.
-    //     for ins, check lt-covering, rt-coveirng or both
-    
+    if (ref_end <= lt_end_idx || rt_start_idx <= ref_start) return 'F';
     
     // checks for complete tandem repeat  
+    int lt_rep = 0, rt_rep = 0;
     if (is_complete_tandem_repeat) 
     { 
         const int boundary_start = repeat_boundary.first;
         const int read_start = alignment.query_begin;
 
         // must be bounded
-        if ((boundary_start < ref_start) || (ref_end < repeat_boundary.second)) return 'F';
+        if (boundary_start < ref_start || ref_end < repeat_boundary.second) return 'F';
         
         std::string lt_fragment = query.substr(0, (boundary_start + 1 - ref_start) + read_start);
         std::reverse(lt_fragment.begin(), lt_fragment.end());
-        int lt_rep = count_repeats(rv_repeat_unit, lt_fragment);
+        lt_rep = count_repeats(rv_repeat_unit, lt_fragment);
 
         std::string rt_fragment = query.substr((boundary_start + 1 - ref_start) + read_start);
-        int rt_rep = count_repeats(repeat_unit, rt_fragment);
+        rt_rep = count_repeats(repeat_unit, rt_fragment);
 
-        // must repeat exactly n times 
-        if (n_tandem_repeats != (lt_rep + rt_rep)) return 'F';         
-                
-    }  
+        // repeat as expected
+        if (n_tandem_repeats != (lt_rep + rt_rep)) return 'F';  
+    } 
     
-    //return 'T';
-    
-    // check with alignment against referece 
-    //sw::Alignment ref_alignment = sw::align(ref_contig_seq, query, match_score, mismatch_penalty, gap_open_penalty, gap_extention_penalty);
-    /*
-    Alignment ref_alignment;
-    aligner.Align(query.c_str(), ref_contig_seq.c_str(), ref_contig_seq.size(), filter, &ref_alignment, mask_len);
-    
-    
-    
-    if (alignment.sw_score > ref_alignment.sw_score) 
-    {
-        return 'T';
-    }
-    else
-    {
-        if (is_dirty_query || is_dirty_contig) 
-        {   
-            std::cout << query << std::endl;
-            std::cout << alignment.sw_score << " " << ref_alignment.sw_score << " " << alignment.sw_score_next_best << " " << ref_alignment.sw_score_next_best << std::endl;
-            return 'T';
-        } 
-        else
-        {
-            return 'F';
-        }
-    }
-    */
+    //critical region
+    // Extra one base (N) + boundary (B) + repeat (R): NBRRRRRRRBN  
+    int lt_bound = lt_end_idx - (lt_rep + 1)* repeat_unit.size();
+    int rt_bound = rt_start_idx + (rt_rep + 1)* repeat_unit.size();
+
     char op;
     int op_len;
     int i = ref_start;
-    int j = 0;
     int n_mismatched_bases = 0;  
     std::vector<std::pair<char, int>> cigar_vec = to_cigar_vector(cigar_string);
     for (const auto & c : cigar_vec) 
@@ -456,50 +395,32 @@ char match_to_contig
          {
             case '=':
                 i += op_len;
-                j = i;
                 break;
             case 'X':
-                while ((lt_end_idx <= j) && (j <= rt_start_idx + 5) && (j <= (i + op_len))) 
+                for (int j = 0; j < op_len; ++j)
+                {
+                    if (lt_bound <= i && i <= rt_bound)
+                    {
+                        ++n_mismatched_bases;
+                    }
+                    ++i;
+                }
+                break;
+            case 'S':
+                if (lt_bound <= i && i <= rt_bound)
                 {
                     ++n_mismatched_bases;
-                    ++j;
-                }
-                 
-                i += op_len;     
-                j = i;
+                }       
                 break;
             default:
                 break;
          }        
             
     }
-    std::cout << cigar_string << " " << n_mismatched_bases << std::endl;
+    
+    if (is_complete_tandem_repeat && (n_mismatched_bases)) return 'F';
+        
     return 'T';
-    
-    /*
-    int critical_aln_start = std::max(ref_start, lt_end_idx);
-    int critical_aln_end = std::min(rt_start_idx, ref_end);
-    int n_total_bases = critical_aln_end - critical_aln_start + 1;
-    
-    //mismatche rate in critical region
-    double mitmatch_rate = n_mismatched_bases / static_cast<double>(n_total_bases); 
-    if (mitmatch_rate > 0.333) {
-        return 'F';
-    }
-    else {
-        sw::Alignment ref_alignment = sw::align(ref_contig, query, match_score, mismatch_penalty,
-                                                gap_open_penalty, gap_extention_penalty);
-        
-        if (alignment.alignment_score > ref_alignment.alignment_score) {
-            return 'T';
-        }
-        else {
-            if (is_dirty) return 'T';
-            else return 'U';
-        }
-        
-    }
-    */
 }
 
 
