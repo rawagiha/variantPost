@@ -249,6 +249,7 @@ public:
     size_t seeds_size = 0;
     size_t contig_size = 0;
     double central = 0.0;
+    bool closer_to_rt_end = false;
     bool lt_clip_seed = false;
     bool rt_clip_seed = false; 
     
@@ -293,8 +294,18 @@ public:
         int rt_len = decomposition[2].second;
         contig_size = lt_len + mid_len + rt_len;
 
-        int closer_to_end = (lt_len < rt_len ? lt_len : rt_len);
-        central = static_cast<double>(closer_to_end) / contig_size;
+        int dist_to_end = 0;
+        if (lt_len < rt_len)
+        {
+            dist_to_end = lt_len;
+        }
+        else
+        {
+            dist_to_end = rt_len;
+            closer_to_rt_end = true;
+        }
+        
+        central = static_cast<double>(dist_to_end) / contig_size;
         
         non_ref_ptrn = sample_seed.non_ref_ptrn_str;
         if (non_ref_ptrn.find("lt_clip_end=") != std::string::npos) lt_clip_seed = true;
@@ -471,6 +482,7 @@ void process_aligned_target(const std::string & chrom, FastaReference & fr, cons
 
         if (kmer_score)
         {
+            // or extend here? using perfec match
             char match_ptrn = match_to_contig(read.read_seq, is_dirty_query,
                                                   contig.contig_seq, contig.ref_contig_seq, contig.decomposition, contig.is_dirty,
                                                   n_tandem_repeats, repeat_unit, rv_repeat_unit, is_complete_tandem_repeat,
@@ -497,7 +509,7 @@ void process_aligned_target(const std::string & chrom, FastaReference & fr, cons
      }   
     
     _contig = contig.contig_seq;
-    
+    std::cout << contig.central << " " << contig.closer_to_rt_end << std::endl;    
     
     Alignment alna;
     
@@ -506,12 +518,10 @@ void process_aligned_target(const std::string & chrom, FastaReference & fr, cons
     std::cout << "non_target: " << non_targets.size() << " " << std::endl;
     std::cout << "undetermined: " << undetermined.size() << std::endl;
      
-    /*
-    for (auto & t : non_targets)
-    {
-        std::cout << t.read_name << " " << t.is_reverse << std::endl;
-    }
-    */
+    //for (auto & t : non_targets)
+    //{
+    //    std::cout << t.read_name << " " << t.is_reverse << std::endl;
+    //}
 }
 
 
