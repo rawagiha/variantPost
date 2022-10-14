@@ -312,6 +312,10 @@ public:
         if (non_ref_ptrn.find("rt_clip_start=") != std::string::npos) rt_clip_seed = true;
     }
 
+    bool is_high_quality()
+    {
+     return (!lt_clip_seed && !rt_clip_seed && central > .25);   
+    }    
 };
 
 
@@ -434,6 +438,62 @@ void repeat_check(const Variant & trgt, const Contig & contig, const std::string
 }
 
 
+void classify_candidates(const Reads & candidates, const Contig & contig, 
+                         const Filter & filter, const Aligner & aligner, Alignment & alignment, 
+                         const std::set<std::string> & informative_kmers,
+                         const bool is_complete_tandem_repeat, const int n_tandem_repeats,
+                         const std::pair<int, int> & repeat_boundary,
+                         const std::string & repeat_unit, const std::string & rv_repeat_unit,
+                         const double low_quality_base_rate_threshold,
+                         Reads & _targets, Reads & undetermined, Reads & non_targets)
+{
+    for (const auto & read : candidates)
+    {
+        if (is_complete_tandem_repeat & read.has_non_target_in_critical_region) 
+        {
+            non_targets.push_back(read);
+            continue;
+        }
+       
+        int kmer_score = 0;
+        const char* read_seq = read.read_seq.c_str();
+        for (const auto & kmer : informative_kmers)
+        {
+            if(strstr(read_seq, kmer.c_str())) ++kmer_score;
+        }
+        
+        const bool is_dirty_query = (read.dirty_base_rate < low_quality_base_rate_threshold);
+
+        if (kmer_score)
+        {
+            // or extend here? using perfec match
+            char match_ptrn = match_to_contig(read.read_seq, is_dirty_query,
+                                                  contig.contig_seq, contig.ref_contig_seq, contig.decomposition, contig.is_dirty,
+                                                  n_tandem_repeats, repeat_unit, rv_repeat_unit, is_complete_tandem_repeat,
+                                                  repeat_boundary, filter, aligner, alignment);
+            switch (match_ptrn)
+            {
+                case 'T':
+                    _targets.push_back(read);
+                    //std::cout << read.read_name << " " << read.is_reverse << " " << read.cigar_string << std::endl;            
+                    break;
+                case 'F':
+                    non_targets.push_back(read);
+                    break;
+                case 'U':
+                    undetermined.push_back(read);
+                    break;
+            }                    
+        }
+        else
+        {
+             non_targets.push_back(read);
+        }
+     
+     }   
+}    
+
+
 void process_aligned_target(const std::string & chrom, FastaReference & fr, const int base_quality_threshold, const double low_quality_base_rate_threshold, const int kmer_size, 
                             std::string & _contig, int & target_pos, std::string & target_ref, std::string & target_alt, std::string & _repeat_unit,
                             Reads & targets, Reads & candidates, Reads & non_targets)
@@ -462,7 +522,20 @@ void process_aligned_target(const std::string & chrom, FastaReference & fr, cons
                 gap_open_penalty, gap_extention_penalty
             );
      
-    Reads undetermined;
+    
+    Reads _targets, undetermined;
+    classify_candidates(candidates, contig, filter, aligner, aln, informative_kmers,
+                        is_complete_tandem_repeat, n_tandem_repeats, repeat_boundary,
+                        repeat_unit, rv_repeat_unit, low_quality_base_rate_threshold,
+                        _targets, undetermined, non_targets);
+    
+    
+    std::cout << "high quality conting: " << contig.is_high_quality() << std::endl;
+    
+    
+    //Reads _targets, undetermined;
+    
+    /*
     for (const auto & read : candidates)
     {
         if (is_complete_tandem_repeat & read.has_non_target_in_critical_region) 
@@ -490,7 +563,7 @@ void process_aligned_target(const std::string & chrom, FastaReference & fr, cons
             switch (match_ptrn)
             {
                 case 'T':
-                    targets.push_back(read);
+                    _targets.push_back(read);
                     //std::cout << read.read_name << " " << read.is_reverse << " " << read.cigar_string << std::endl;            
                     break;
                 case 'F':
@@ -507,14 +580,15 @@ void process_aligned_target(const std::string & chrom, FastaReference & fr, cons
         }
      
      }   
-    
+     */
+
     _contig = contig.contig_seq;
     std::cout << contig.central << " " << contig.closer_to_rt_end << std::endl;    
     
     Alignment alna;
     
     
-    std::cout << "target: " << targets.size() << std::endl;
+    std::cout << "target: " << targets.size() + _targets.size() << std::endl;
     std::cout << "non_target: " << non_targets.size() << " " << std::endl;
     std::cout << "undetermined: " << undetermined.size() << std::endl;
      
