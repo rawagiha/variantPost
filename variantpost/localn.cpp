@@ -179,6 +179,32 @@ std::vector<Overlap> find_overlaps(const std::vector<InputRead> & inputs)
 }
 
 
+// 
+InputRead pairwise_stitch(const std::vector<InputRead> & inputs, bool lt_extention)
+{
+    std::vector<Overlap> overlaps = find_overlaps(inputs);   
+
+    if (lt_extention)
+    {
+        std::string lt_ext = inputs[1].read_seq.substr(0, overlaps[0].query_start);
+        std::string lt_ext_q = inputs[1].base_qualities.substr(0, overlaps[0].query_start);
+
+        InputRead lt_extended{lt_ext + inputs[0].read_seq, lt_ext_q + inputs[0].base_qualities, -1};
+
+        return lt_extended;
+    }
+    else
+    {
+        std::string rt_ext = inputs[1].read_seq.substr(overlaps[0].query_end + 1);
+        std::string rt_ext_q = inputs[1].base_qualities.substr(overlaps[0].query_end + 1);
+
+        InputRead rt_extended{inputs[0].read_seq + rt_ext, inputs[0].base_qualities + rt_ext_q, -1};
+
+        return rt_extended;
+    }
+}
+
+
 MergedRead merge_reads(const std::vector<InputRead> & inputs)
 {
     std::deque<BaseCount> base_cnts;
@@ -337,11 +363,12 @@ char match_to_contig
     //contig layout
     const int lt_end_idx = decomposed_contig[0].second - 1;
     const int rt_start_idx = decomposed_contig[2].first;
+    const int contig_len = contig_seq.size();
       
     int32_t mask_len = strlen(query.c_str()) / 2;
     mask_len = mask_len < 15 ? 15 : mask_len;
             
-    aligner.Align(query.c_str(), contig_seq.c_str(), contig_seq.size(), filter, &alignment, mask_len);
+    aligner.Align(query.c_str(), contig_seq.c_str(), contig_len, filter, &alignment, mask_len);
    
     const int ref_start = alignment.ref_begin;
     const int ref_end = alignment.ref_end;
@@ -420,7 +447,27 @@ char match_to_contig
     
     if (is_complete_tandem_repeat && (n_mismatched_bases)) return 'F';
         
-    return 'T';
+    
+    // check for extenders
+    if ((ref_start < lt_end_idx && rt_start_idx < ref_end) 
+        &&
+        (cigar_string.find('X') == std::string::npos)) 
+    {
+        if (ref_start == 0) 
+        {
+            //left extender
+            return 'L';
+        }
+       
+        if (ref_end == (contig_len - 1))
+        {
+            //right extender
+            return 'R';
+            //std::cout << query << " " << ref_contig_seq << std::endl;
+        }
+    }          
+    
+    return 'M';
 }
 
 

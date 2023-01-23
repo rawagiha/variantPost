@@ -25,6 +25,8 @@ struct InputRead
     ) : read_seq(read_seq), 
         base_qualities(base_qualities), 
         target_start(target_start) {}
+
+   InputRead() {}
 };
 
 
@@ -41,11 +43,14 @@ struct MergedRead
     ) : merged_seq(merged_seq), 
         merged_qualities(merged_qualities), 
         target_start(target_start) {}
+
+    MergedRead() {}
 };
 
 
 MergedRead merge_reads(const std::vector<InputRead> & inputs);
 
+InputRead pairwise_stitch(const std::vector<InputRead> & inputs, bool lt_extention);
 
 
 char match_to_contig
