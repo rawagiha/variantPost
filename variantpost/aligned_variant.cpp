@@ -415,7 +415,7 @@ void repeat_check(const Variant & trgt, const Contig & contig, const std::string
     }
     
     size_t i = 0;
-    while((i < lt_len) & is_rotatable(allele_for_lt)) 
+    while((i < lt_len) && is_rotatable(allele_for_lt)) 
     {
         to_left(allele_for_lt, lt_seq);
         ++i;
@@ -426,8 +426,10 @@ void repeat_check(const Variant & trgt, const Contig & contig, const std::string
     {
         to_right(allele_for_rt, rt_seq);
         ++j;
-    } while((j < rt_len) & is_rotatable(allele_for_rt));
-
+    } while((j < rt_len) && is_rotatable(allele_for_rt));
+    //undo once
+    --j;
+    
     const size_t lt_bound_end = lt_len - (i + 1);
     const size_t rt_bound_start = contig.decomposition[2].first + j - 1;
     const size_t shiftable_len =  rt_bound_start - lt_bound_end - 1;
@@ -471,12 +473,13 @@ void classify_candidates(const Reads & candidates, const Contig & contig,
 {
     for (const auto & read : candidates)
     {
-        if (is_complete_tandem_repeat & read.has_non_target_in_critical_region) 
+        if (is_complete_tandem_repeat && read.has_non_target_in_critical_region) 
         {
             non_targets.push_back(read);
             continue;
         }
        
+        
         int kmer_score = 0;
         const char* read_seq = read.read_seq.c_str();
         for (const auto & kmer : informative_kmers)
@@ -489,10 +492,12 @@ void classify_candidates(const Reads & candidates, const Contig & contig,
         if (kmer_score)
         {
             // or extend here? using perfec match
+            std::cout << read.read_name << "; ";
             char match_ptrn = match_to_contig(read.read_seq, is_dirty_query,
                                               contig.contig_seq, contig.ref_contig_seq, contig.decomposition, contig.is_dirty,
                                               n_tandem_repeats, repeat_unit, rv_repeat_unit, is_complete_tandem_repeat,
                                               repeat_boundary, filter, aligner, alignment);
+            std::cout << match_ptrn << std::endl;
             switch (match_ptrn)
             {
                 case 'L':
@@ -611,7 +616,11 @@ bool is_compatible_spl_ptrn(const ParsedRead & read, const std::vector<std::pair
 //splice compatibility check
 //bool is_splice_compatible (in util?)
 //do we need commonest prtn check (as in seed)??
-void extend_contig_seq(Contig & contig, Reads & lt_extenders, Reads & rt_extenders, InputRead & extended_contig )
+void extend_contig_seq(const Contig & contig, 
+                       const Reads & lt_extenders, 
+                       const Reads & rt_extenders, 
+                       InputRead & extended_contig,
+                       std::vector<std::pair<int, int>> & extended_coordinates)
 {
 
     //const size_t lt_len = contig.decomposition[0].second;
@@ -633,12 +642,14 @@ void extend_contig_seq(Contig & contig, Reads & lt_extenders, Reads & rt_extende
                   [](const ParsedRead & a, const ParsedRead & b)
                   {return a.aln_start < b.aln_start ? true : false;});
 
+            std::vector<int> aln_starts;
             std::vector<InputRead> lt_inputs;
             for (auto & _ext : lt_tmp)
             {
                 if (is_compatible_spl_ptrn(_ext, contig.coordinates))
                 {
                     lt_inputs.emplace_back(_ext.read_seq, _ext.base_qualities, -1);
+                    aln_starts.push_back(_ext.aln_start);
                 }
             }
 
@@ -651,6 +662,9 @@ void extend_contig_seq(Contig & contig, Reads & lt_extenders, Reads & rt_extende
                 lt_scaffolds.emplace_back(merged_ext.merged_seq, merged_ext.merged_qualities, -1);
             
                 extended_contig = pairwise_stitch(lt_scaffolds, true);
+
+                //update coord
+                extended_coordinates[0].first = *(std::min_element(aln_starts.begin(), aln_starts.end()));
             }
         }
     }
@@ -668,14 +682,17 @@ void extend_contig_seq(Contig & contig, Reads & lt_extenders, Reads & rt_extende
                   [](const ParsedRead & a, const ParsedRead & b)
                   {return a.aln_start < b.aln_start ? false : true;});
 
+            std::vector<int> aln_ends;
             std::vector<InputRead> rt_inputs;
             for (auto & _ext : rt_tmp)
             {
                 if (is_compatible_spl_ptrn(_ext, contig.coordinates))
                 {
                     rt_inputs.emplace_back(_ext.read_seq, _ext.base_qualities, -1);
+                    aln_ends.push_back(_ext.aln_end);
                 }
             }
+            
             
             if (!rt_inputs.empty())
             {
@@ -686,18 +703,204 @@ void extend_contig_seq(Contig & contig, Reads & lt_extenders, Reads & rt_extende
                 rt_scaffolds.emplace_back(merged_ext.merged_seq, merged_ext.merged_qualities, -1);
 
                 extended_contig = pairwise_stitch(rt_scaffolds, false);
+                
+
+                //update coord
+                extended_coordinates[(extended_coordinates.size() - 1)].second = *(std::max_element(aln_ends.begin(), aln_ends.end()));
             }
         } 
     }
     
-    std::cout << extended_contig.read_seq << " " << extended_contig.base_qualities << std::endl; 
+    //std::cout << extended_contig.read_seq << " " << extended_contig.base_qualities << std::endl; 
 }
+
+/*
+void include_skips_to_cigar(std::string & cigar_string, int start_offset, int end_offset, std::vector<std::pair<int, int>> & extended_coordinates)
+{
+    
+    cigar_string = "5=2I3=";
+    extended_coordinates = {{109, 115}, {120, 122}};
+    std::vector<std::pair<char, int>> cigar_vec = to_cigar_vector(cigar_string);
+    std::vector<std::pair<char, int>> tmp; 
+    
+    int curr_idx = 0;
+    int last_idx = extended_coordinates.size() - 1;
+    int curr_pos = extended_coordinates[curr_idx].first + start_offset;
+    int prev_pos = 0;
+
+    for (const auto & cigar : cigar_vec)
+    {
+        char op = cigar.first;
+        
+        int op_len = 0;
+        switch (op)
+        {
+            case 'M':
+            case 'D':
+            case '=':
+            case 'X':
+                op_len = cigar.second;
+                break;
+            default:
+                break;
+        }
+                
+        prev_pos = curr_pos;
+        curr_pos += op_len;
+        
+        int curr_segment_start = extended_coordinates[curr_idx].first;
+        int curr_segment_end = extended_coordinates[curr_idx].second;
+        if ((curr_segment_start <= curr_pos) && (curr_pos <= curr_segment_end))
+        {
+            tmp.emplace_back(op, op_len);           
+        }
+        else 
+        {
+            while ((curr_segment_end < curr_pos) && (curr_idx  < last_idx))
+            {
+                tmp.emplace_back(op, (curr_segment_end - prev_pos + 1));
+                tmp.emplace_back('N', (extended_coordinates[curr_idx + 1].first 
+                                       - (extended_coordinates[curr_idx] + 1));
+                
+                prev_pos = extended_coordinates[curr_idx + 1].first;
+                
+                ++curr_idx;              
+            }
+        }  
+    } 
+     
+    
+   
+    int i = 0;
+    const int n_segments = extended_coordinates.size();  
+    if (n_segments > 1)
+    {
+        for (int j = 0; j < n_segments - 1; ++j)
+        {
+            int consumable = 0;
+            if (!j)
+            {
+                consumable = extended_coordinates[j].second - (extended_coordinates[j].first + start_offset) + 1;
+            }
+            else if (j == (n_segments - 1))
+            {
+                consumable = (extended_coordinates[j].second - end_offset) - extended_coordinates[j].first + 1;
+            }
+            else
+            {
+                consumable = extended_coordinates[j].second - extended_coordinates[j].first + 1;
+            }
+            
+            char op;
+            int op_len;
+            bool is_consumed = false;
+            while (consumable >= 0) 
+            {
+                op = cigar_vec[i].first;
+                op_len = cigar_vec[i].second;
+                
+                switch (op)
+                {
+                    case 'M':
+                    case 'D':
+                    case '=':
+                    case 'X':
+                        consumable -= op_len;
+                        is_consumed = true;
+                        break;
+                    default:
+                        break;
+                }
+                
+                std::cout << consumable << std::endl;
+                if (consumable > 0)
+                {
+                    tmp.emplace_back(op, op_len);
+                }
+                
+                else
+                {
+                    if (is_consumed)
+                    {
+                        tmp.emplace_back(op, (op_len + consumable));
+                    }
+                    else{
+                        if (j <   n_segments - 1)
+                        {
+                            tmp.emplace_back(op, (op_len + consumable));
+                            tmp.emplace_back('N', extended_coordinates[j + 1].first  -  (extended_coordinates[j].second + 1));
+                        }
+                    }
+                    
+                    if (consumable < 0)
+                    {
+                        tmp.emplace_back(op, -1 * consumable);
+                    }
+                }
+                is_consumed = false;
+                ++i;                
+            }
+              
+        }    
+    }
+    std::string k = "";
+    for (auto p : tmp)
+    {
+        k += std::to_string(p.second);
+        k += p.first;
+    } 
+
+    std::cout << " new one: " << k << std::endl;
+
+}
+*/
+void align_to_contig(const std::string & chrom, FastaReference & fr, 
+                     InputRead & extended_contig, 
+                     std::vector<std::pair<int, int>> & extended_coordinates)
+{
+    std::string extended_ref = ""; 
+    for (const auto & coord : extended_coordinates)
+    {
+        extended_ref += fr.getSubSequence(chrom, coord.first - 1, (coord.second -  coord.first + 1));
+    }
+
+    std::cout << extended_ref << std::endl;
+    std::cout << extended_contig.read_seq << std::endl;
+   
+    const uint8_t match_score = 3, mismatch_penalty = 2;
+    const uint8_t gap_open_penalty = 3, gap_extention_penalty = 0;
+    Filter filter;
+    Alignment aln;
+    Aligner aligner(
+                match_score, mismatch_penalty,
+                gap_open_penalty, gap_extention_penalty
+            );
+
+    int32_t mask_len = strlen(extended_contig.read_seq.c_str()) / 2;
+    mask_len = mask_len < 15 ? 15 : mask_len;
+    aligner.Align(extended_contig.read_seq.c_str(), extended_ref.c_str(), extended_ref.size(), filter, &aln, mask_len);
+
+    std::cout << aln.cigar_string << std::endl;
+    std::cout << aln.ref_begin << " " << aln.query_begin << std::endl;
+
+    //include_skips_to_cigar(aln.cigar_string, 2, 0, extended_coordinates);
+}
+
+
 
 
 void process_aligned_target(const std::string & chrom, FastaReference & fr, const int base_quality_threshold, const double low_quality_base_rate_threshold, const int kmer_size, 
                             std::string & _contig, int & target_pos, std::string & target_ref, std::string & target_alt, std::string & _repeat_unit,
                             Reads & targets, Reads & candidates, Reads & non_targets)
 {   
+    
+    /*
+    for (auto & read : candidates)
+    {
+        std::cout << read.read_name << " " << read.is_reverse << " " << read.may_be_complex << " " << read.non_ref_ptrn_str << " " << read.has_non_target_in_critical_region << " " << std::endl;
+    }
+    */
+
     Contig contig = set_up_contig(chrom, targets, low_quality_base_rate_threshold, base_quality_threshold, fr);
     
     std::set<std::string> informative_kmers = diff_kmers(contig, kmer_size);
@@ -733,7 +936,25 @@ void process_aligned_target(const std::string & chrom, FastaReference & fr, cons
     
     
     InputRead extended(contig.contig_seq, contig.contig_qual);
-    extend_contig_seq(contig, lt_extenders, rt_extenders, extended);
+    std::vector<std::pair<int, int>> ext_coord = contig.coordinates;
+    
+    for (auto i : ext_coord)
+    {
+        std::cout << i.first << " - " << i.second << ", ";
+    }
+    std::cout << std::endl;
+    
+    extend_contig_seq(contig, lt_extenders, rt_extenders, extended, ext_coord);
+    
+    
+    for (auto i : ext_coord)
+    {
+        std::cout << i.first << " - " << i.second << ", ";
+    }
+    std::cout << std::endl;
+    
+    
+    align_to_contig(chrom, fr, extended, ext_coord);
     
     /*const size_t lt_len = contig.decomposition[0].second;
     const size_t rt_len = contig.decomposition[2].second;
@@ -748,10 +969,15 @@ void process_aligned_target(const std::string & chrom, FastaReference & fr, cons
     
     Alignment alna;
     
-    
+    */ 
     std::cout << "target: " << targets.size() + lt_extenders.size() + extra_targets.size() + rt_extenders.size()<< std::endl;
     std::cout << "non_target: " << non_targets.size() << " " << std::endl;
     std::cout << "undetermined: " << undetermined.size() << std::endl;
+    /*
+    for (auto & r : non_targets)
+    {
+        std::cout << r.read_name << " " << r.cigar_string << std::endl;
+    }
     */    
 }
 

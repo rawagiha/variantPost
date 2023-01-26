@@ -207,6 +207,12 @@ InputRead pairwise_stitch(const std::vector<InputRead> & inputs, bool lt_extenti
 
 MergedRead merge_reads(const std::vector<InputRead> & inputs)
 {
+    if (inputs.size() == 1)
+    {
+        MergedRead _merged(inputs[0].read_seq, inputs[0].base_qualities, -1);
+        return _merged;
+    }
+    
     std::deque<BaseCount> base_cnts;
     std::vector<Overlap> overlaps = find_overlaps(inputs);
     
@@ -347,6 +353,7 @@ MergedRead merge_reads(const std::vector<InputRead> & inputs)
 }
 
 
+//complete contig
 char match_to_contig
 (
     const std::string & query, const bool is_dirty_query,
@@ -364,7 +371,8 @@ char match_to_contig
     const int lt_end_idx = decomposed_contig[0].second - 1;
     const int rt_start_idx = decomposed_contig[2].first;
     const int contig_len = contig_seq.size();
-      
+    const bool is_del = (rt_start_idx == (lt_end_idx + 1));
+    
     int32_t mask_len = strlen(query.c_str()) / 2;
     mask_len = mask_len < 15 ? 15 : mask_len;
             
@@ -372,6 +380,7 @@ char match_to_contig
    
     const int ref_start = alignment.ref_begin;
     const int ref_end = alignment.ref_end;
+    
     
     // still has gap
     std::string cigar_string = alignment.cigar_string;
@@ -381,6 +390,13 @@ char match_to_contig
        
     // doesn't overlap the target region
     if (ref_end <= lt_end_idx || rt_start_idx <= ref_start) return 'F';
+    
+    // del needs to be cov
+    if (is_del)
+    {
+        if ((ref_start <= lt_end_idx) && (rt_start_idx <= ref_end)) { /*pass*/ }
+        else return 'F'; 
+    }
     
     // checks for complete tandem repeat  
     int lt_rep = 0, rt_rep = 0;
@@ -405,13 +421,23 @@ char match_to_contig
     
     //critical region
     // Extra one base (N) + boundary (B) + repeat (R): NBRRRRRRRBN  
-    int lt_bound = lt_end_idx - (lt_rep + 1)* repeat_unit.size();
-    int rt_bound = rt_start_idx + (rt_rep + 1)* repeat_unit.size();
+    int lt_crit_bound = lt_end_idx - (lt_rep + 1)* repeat_unit.size();
+    int rt_crit_bound = rt_start_idx + (rt_rep + 1)* repeat_unit.size();
 
+    //inserted region
+    int lt_ins_bound = -1;
+    int rt_ins_bound = -1;
+    if (!is_del)
+    {
+        lt_ins_bound = lt_end_idx; 
+        rt_ins_bound = rt_start_idx;
+    }
+    
     char op;
     int op_len;
     int i = ref_start;
-    int n_mismatched_bases = 0;  
+    int n_crit_mismatched_bases = 0;  
+    int n_ins_matched_bases = 0;
     std::vector<std::pair<char, int>> cigar_vec = to_cigar_vector(cigar_string);
     for (const auto & c : cigar_vec) 
     {
@@ -421,23 +447,40 @@ char match_to_contig
          switch (op) 
          {
             case '=':
-                i += op_len;
+                //i += op_len;
+                for (int j = 0; j <  op_len; ++j)
+                {
+                    if (lt_ins_bound < i && i <rt_ins_bound)
+                    {
+                        ++n_ins_matched_bases;
+                    }
+                    ++i;
+                }
+
                 break;
             case 'X':
                 for (int j = 0; j < op_len; ++j)
                 {
-                    if (lt_bound <= i && i <= rt_bound)
+                    if (lt_crit_bound <= i && i <= rt_crit_bound)
                     {
-                        ++n_mismatched_bases;
+                        ++n_crit_mismatched_bases;
                     }
+                    //if (lt_ins_bound < i && i <rt_ins_bound)
+                    //{
+                    //    ++n_ins_mismatched_bases;
+                    //}
                     ++i;
                 }
                 break;
             case 'S':
-                if (lt_bound <= i && i <= rt_bound)
+                if (lt_crit_bound <= i && i <= rt_crit_bound)
                 {
-                    ++n_mismatched_bases;
-                }       
+                    ++n_crit_mismatched_bases;
+                }
+                //if (lt_ins_bound < i && i <rt_ins_bound)
+                //{
+                //    ++n_ins_mismatched_bases;           
+                //}
                 break;
             default:
                 break;
@@ -445,9 +488,24 @@ char match_to_contig
             
     }
     
-    if (is_complete_tandem_repeat && (n_mismatched_bases)) return 'F';
+    if (is_complete_tandem_repeat && (n_crit_mismatched_bases)) return 'F';
         
-    
+    if (!is_del)
+    {
+        int ins_len = (rt_start_idx - lt_end_idx);
+        double frac_covered_ins = n_ins_matched_bases / static_cast<double>(ins_len);
+        
+        //smale -> adjustable
+        if (ins_len < 4)
+        {
+            if (frac_covered_ins < 1.0) return 'F';
+        }
+        else 
+        {    //simscore
+            if (frac_covered_ins < 0.66) return 'F'; 
+        }  
+    }
+   
     // check for extenders
     if ((ref_start < lt_end_idx && rt_start_idx < ref_end) 
         &&
