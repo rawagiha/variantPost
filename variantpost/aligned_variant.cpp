@@ -714,135 +714,103 @@ void extend_contig_seq(const Contig & contig,
     //std::cout << extended_contig.read_seq << " " << extended_contig.base_qualities << std::endl; 
 }
 
-/*
+std::vector<int> expand_coordinates(const std::vector<std::pair<int, int>> & coordinates)
+{
+    std::vector<int> expanded;
+    for (const auto & coord_pair : coordinates)
+    {
+        for (int i = coord_pair.first; i <= coord_pair.second; ++i)
+        {
+            expanded.push_back(i);
+        }
+    }
+    
+    return expanded;    
+}
+
+
 void include_skips_to_cigar(std::string & cigar_string, int start_offset, int end_offset, std::vector<std::pair<int, int>> & extended_coordinates)
 {
     
-    cigar_string = "5=2I3=";
-    extended_coordinates = {{109, 115}, {120, 122}};
+    //cigar_string = "5=1X4=2X5=";
+    //extended_coordinates = {{109, 115}, {120, 122}, {127, 130}, {140, 144}};
+    
+    std::vector<int> exp = expand_coordinates(extended_coordinates);
     std::vector<std::pair<char, int>> cigar_vec = to_cigar_vector(cigar_string);
     std::vector<std::pair<char, int>> tmp; 
     
     int curr_idx = 0;
     int last_idx = extended_coordinates.size() - 1;
-    int curr_pos = extended_coordinates[curr_idx].first + start_offset;
-    int prev_pos = 0;
+    int curr_pos = extended_coordinates[curr_idx].first + start_offset - 1;
+    int curr_op_end = curr_pos;
+    int pos_vec_idx = start_offset - 1;
 
     for (const auto & cigar : cigar_vec)
     {
         char op = cigar.first;
-        
-        int op_len = 0;
+        int op_len = cigar.second;
+
+        int consumable_op_len = 0;
         switch (op)
         {
             case 'M':
             case 'D':
             case '=':
             case 'X':
-                op_len = cigar.second;
+                consumable_op_len = cigar.second;
                 break;
             default:
                 break;
         }
-                
-        prev_pos = curr_pos;
-        curr_pos += op_len;
-        
-        int curr_segment_start = extended_coordinates[curr_idx].first;
-        int curr_segment_end = extended_coordinates[curr_idx].second;
-        if ((curr_segment_start <= curr_pos) && (curr_pos <= curr_segment_end))
+
+        if (consumable_op_len)
         {
-            tmp.emplace_back(op, op_len);           
+            pos_vec_idx += consumable_op_len;
+            curr_op_end = exp[pos_vec_idx];
         }
-        else 
+
+        int curr_segment_start = extended_coordinates[curr_idx].first;   
+        int curr_segment_end = extended_coordinates[curr_idx].second;               
+        if (consumable_op_len)
         {
-            while ((curr_segment_end < curr_pos) && (curr_idx  < last_idx))
+            std::cout << curr_segment_end << " " << curr_op_end << std::endl;
+            while(curr_segment_end < curr_op_end)
             {
-                tmp.emplace_back(op, (curr_segment_end - prev_pos + 1));
-                tmp.emplace_back('N', (extended_coordinates[curr_idx + 1].first 
-                                       - (extended_coordinates[curr_idx] + 1));
+                tmp.emplace_back(op, (curr_segment_end - curr_pos));
+                tmp.emplace_back('N', (extended_coordinates[curr_idx + 1].first - (curr_segment_end + 1)));
+                curr_pos = extended_coordinates[curr_idx + 1].first - 1;
                 
-                prev_pos = extended_coordinates[curr_idx + 1].first;
-                
-                ++curr_idx;              
+                ++curr_idx; 
+
+                curr_segment_start = extended_coordinates[curr_idx].first;
+                curr_segment_end = extended_coordinates[curr_idx].second; 
+
             }
-        }  
-    } 
-     
+
+            if (curr_op_end - curr_pos > 0) 
+            {
+                tmp.emplace_back(op, curr_op_end - curr_pos);
+            }
+            curr_pos = curr_op_end;
+        }
+        else //if (!consumable_op_len)
+        {
+            tmp.emplace_back(op, op_len);   
+        }
+
+        if (curr_op_end == curr_segment_end && curr_idx < last_idx)
+        {
+            ++curr_idx;
+            curr_segment_start = extended_coordinates[curr_idx].first;
+            curr_segment_end = extended_coordinates[curr_idx].second;
+            tmp.emplace_back('N', (curr_segment_start - (curr_op_end + 1)));
+            curr_pos = curr_segment_start - 1;
+            curr_op_end = curr_pos;
+
+        }
+       
+   } 
     
-   
-    int i = 0;
-    const int n_segments = extended_coordinates.size();  
-    if (n_segments > 1)
-    {
-        for (int j = 0; j < n_segments - 1; ++j)
-        {
-            int consumable = 0;
-            if (!j)
-            {
-                consumable = extended_coordinates[j].second - (extended_coordinates[j].first + start_offset) + 1;
-            }
-            else if (j == (n_segments - 1))
-            {
-                consumable = (extended_coordinates[j].second - end_offset) - extended_coordinates[j].first + 1;
-            }
-            else
-            {
-                consumable = extended_coordinates[j].second - extended_coordinates[j].first + 1;
-            }
-            
-            char op;
-            int op_len;
-            bool is_consumed = false;
-            while (consumable >= 0) 
-            {
-                op = cigar_vec[i].first;
-                op_len = cigar_vec[i].second;
-                
-                switch (op)
-                {
-                    case 'M':
-                    case 'D':
-                    case '=':
-                    case 'X':
-                        consumable -= op_len;
-                        is_consumed = true;
-                        break;
-                    default:
-                        break;
-                }
-                
-                std::cout << consumable << std::endl;
-                if (consumable > 0)
-                {
-                    tmp.emplace_back(op, op_len);
-                }
-                
-                else
-                {
-                    if (is_consumed)
-                    {
-                        tmp.emplace_back(op, (op_len + consumable));
-                    }
-                    else{
-                        if (j <   n_segments - 1)
-                        {
-                            tmp.emplace_back(op, (op_len + consumable));
-                            tmp.emplace_back('N', extended_coordinates[j + 1].first  -  (extended_coordinates[j].second + 1));
-                        }
-                    }
-                    
-                    if (consumable < 0)
-                    {
-                        tmp.emplace_back(op, -1 * consumable);
-                    }
-                }
-                is_consumed = false;
-                ++i;                
-            }
-              
-        }    
-    }
     std::string k = "";
     for (auto p : tmp)
     {
@@ -851,9 +819,10 @@ void include_skips_to_cigar(std::string & cigar_string, int start_offset, int en
     } 
 
     std::cout << " new one: " << k << std::endl;
-
+    
 }
-*/
+
+
 void align_to_contig(const std::string & chrom, FastaReference & fr, 
                      InputRead & extended_contig, 
                      std::vector<std::pair<int, int>> & extended_coordinates)
@@ -883,7 +852,7 @@ void align_to_contig(const std::string & chrom, FastaReference & fr,
     std::cout << aln.cigar_string << std::endl;
     std::cout << aln.ref_begin << " " << aln.query_begin << std::endl;
 
-    //include_skips_to_cigar(aln.cigar_string, 2, 0, extended_coordinates);
+    include_skips_to_cigar(aln.cigar_string, 2, 0, extended_coordinates);
 }
 
 
