@@ -12,6 +12,7 @@ typedef StripedSmithWaterman::Alignment Alignment;
 typedef StripedSmithWaterman::Aligner Aligner;
 typedef StripedSmithWaterman::Filter Filter;
 
+/*
 struct InputRead
 {
     std::string read_seq;
@@ -28,8 +29,26 @@ struct InputRead
 
    InputRead() {}
 };
+*/
 
+struct SimplifiedRead
+{
+    std::string seq;
+    std::string base_qualities;
+    int target_start;
 
+    SimplifiedRead() {}
+
+    SimplifiedRead(
+        const std::string & seq,
+        const std::string & base_qualities,
+        int target_start = -1
+    ) : seq(seq),
+        base_qualities(base_qualities),
+        target_start(target_start) {}
+};
+
+/*
 struct MergedRead
 {
     std::string merged_seq;
@@ -46,11 +65,12 @@ struct MergedRead
 
     MergedRead() {}
 };
+*/
 
 
-MergedRead merge_reads(const std::vector<InputRead> & inputs);
+SimplifiedRead merge_reads(const std::vector<SimplifiedRead> & inputs);
 
-InputRead pairwise_stitch(const std::vector<InputRead> & inputs, bool lt_extention);
+SimplifiedRead pairwise_stitch(const std::vector<SimplifiedRead> & inputs, bool lt_extention);
 
 
 char match_to_contig

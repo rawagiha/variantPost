@@ -49,22 +49,37 @@ inline std::pair<char, int> to_op_and_op_len ( const std::string &cigar ) {
                           std::stoi ( cigar.substr ( 0, last_idx ) ) );
 }
 
-std::vector<std::pair<char, int>> to_cigar_vector ( const std::string &
-cigar_string ) {
+std::vector<std::pair<char, int>> to_cigar_vector(const std::string & cigar_string) 
+{
   std::vector<std::pair<char, int>> cigarette;
 
   size_t pos = 0;
   size_t newpos;
   const size_t len = cigar_string.size();
 
-  while ( pos < len ) {
-    newpos = cigar_string.find_first_of ( "MIDNSHPX=", pos ) + 1;
-    cigarette.emplace_back ( to_op_and_op_len ( cigar_string.substr ( pos,
-                             newpos - pos ) ) );
+  while (pos < len) 
+  {
+    newpos = cigar_string.find_first_of("MIDNSHPX=", pos) + 1;
+    cigarette.emplace_back(to_op_and_op_len(cigar_string.substr(pos, newpos - pos)));
     pos = newpos;
   }
 
   return cigarette;
+}
+
+
+// cigar vec to string: {<'M', 10>, <'D', 4>, <'M', 3>, <'S', 2>} -> 10M4D3M2S 
+//----------------------------------------------------------------------------
+std::string to_cigar_string(const std::vector<std::pair<char, int>> & cigar_vector)
+{
+    std::string cigar_string = "";
+    for (const auto & elem : cigar_vector)
+    {
+        cigar_string += std::to_string(elem.second);
+        cigar_string += elem.first;
+    } 
+
+    return cigar_string;
 }
 
 int count_repeats(const std::string & ptrn,
@@ -86,6 +101,25 @@ int count_repeats(const std::string & ptrn,
 
     return n;
 }
+
+// expand segment start/end: {{123, 125}, {502, 504}} -> {0(offset), 123, 124, 125, 502, 503, 504}
+//------------------------------------------------------------------------------------------------
+std::vector<int> expand_coordinates(const std::vector<std::pair<int, int>> & coordinates, 
+                                    bool with_offset)
+{
+    std::vector<int> expanded = {};
+    if (with_offset) expanded.push_back(0);
+    
+    for (const auto & coord_pair : coordinates)
+    {
+        for (int i = coord_pair.first; i <= coord_pair.second; ++i)
+        {
+            expanded.push_back(i);
+        }
+    }
+    return expanded;    
+}
+
 
 
 void parse_splice_pattern(std::vector<std::pair<int, int>> & exons,

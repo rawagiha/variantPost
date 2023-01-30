@@ -22,8 +22,13 @@ std::string find_commonest_str(const std::vector<std::string> & arr_str);
 
 std::string to_fastq_qual( const std::vector<int> & arr_qual );
 
-std::vector<std::pair<char, int>> to_cigar_vector( const std::string &
-                               cigar_string );
+//cigar string to vec: 10M4D3M2S -> {<'M', 10>, <'D', 4>, <'M', 3>, <'S', 2>}
+//----------------------------------------------------------------------------
+std::vector<std::pair<char, int>> to_cigar_vector(const std::string & cigar_string);
+
+//cigar vec to string: {<'M', 10>, <'D', 4>, <'M', 3>, <'S', 2>} -> 10M4D3M2S
+//----------------------------------------------------------------------------- 
+std::string to_cigar_string(const std::vector<std::pair<char, int>> & cigar_vector);
 
 std::string get_unspliced_ref_seq(const int aln_start, const int aln_end,
                                   const int unspliced_local_reference_start,
@@ -38,6 +43,11 @@ void parse_splice_pattern(std::vector<std::pair<int, int>> & exons,
                           const std::vector<std::pair<char, int>> & cigar_vector,
                           const int start,
                           const int end);
+
+//expand segment start/end: {{123, 125}, {502, 504}} -> {0(offset), 123, 124, 125, 502, 503, 504}
+//-----------------------------------------------------------------------------------------------
+std::vector<int> expand_coordinates(const std::vector<std::pair<int, int>> & coordinates, 
+                                    bool with_offset = true);
 
 std::unordered_map<int, char> reference_by_position( const std::string &
         unspliced_local_reference, int unspliced_local_reference_start,

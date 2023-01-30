@@ -186,20 +186,20 @@ std::vector<std::pair<int, int>> split_target_read(const ParsedRead & read)
 }
 
 
-std::vector<std::pair<int, int>> split_merged_target_read(const MergedRead & mr, const std::string & ref_allele, const std::string & alt_allele)
+std::vector<std::pair<int, int>> split_merged_target_read(const SimplifiedRead & mr, const std::string & ref_allele, const std::string & alt_allele)
 {
     size_t lt_start = 0;
     size_t lt_len = mr.target_start + 1;
     size_t mid_start = lt_len;
     size_t mid_len = (alt_allele.size() > ref_allele.size() ? alt_allele.size() - 1 : 0);  
     size_t rt_start = mid_start + mid_len;
-    size_t rt_len = mr.merged_seq.size() - rt_start;
+    size_t rt_len = mr.seq.size() - rt_start;
     
     return {{lt_start, lt_len}, {mid_start, mid_len}, {rt_start, rt_len}};
 }
 
 
-MergedRead merge_target_reads(const Reads & targets, const double dirty_thresh, Reads & seeds)
+SimplifiedRead merge_target_reads(const Reads & targets, const double dirty_thresh, Reads & seeds)
 {
     int target_start = 0;
     if (targets.size() == 1)
@@ -207,7 +207,7 @@ MergedRead merge_target_reads(const Reads & targets, const double dirty_thresh, 
         seeds = targets;
         target_start = split_target_read(seeds[0])[0].second - 1;   
         
-        MergedRead _from_single(seeds[0].read_seq,
+        SimplifiedRead _from_single(seeds[0].read_seq,
                                 seeds[0].base_qualities,
                                 target_start);
         return _from_single;
@@ -217,7 +217,7 @@ MergedRead merge_target_reads(const Reads & targets, const double dirty_thresh, 
         size_t seed_size = 5;
         seeds = find_seed_reads(targets, dirty_thresh, seed_size);
 
-        std::vector<InputRead> inputs;
+        std::vector<SimplifiedRead> inputs;
         for (const auto & seed : seeds)
         {
             int target_start = split_target_read(seed)[0].second - 1;
@@ -230,7 +230,7 @@ MergedRead merge_target_reads(const Reads & targets, const double dirty_thresh, 
             }
         }
 
-        MergedRead _from_multiple = merge_reads(inputs);
+        SimplifiedRead _from_multiple = merge_reads(inputs);
         return _from_multiple;
     }
 }
@@ -241,9 +241,9 @@ struct Contig
 private:
     const double dirty_thresh = .1;
 public:
-    std::string contig_seq;
-    std::string contig_qual;
-    std::string ref_contig_seq;
+    std::string seq;
+    std::string base_qualities;
+    std::string ref_seq;
     std::string non_ref_ptrn;
      
     double dirty_rate = 0.0;
@@ -265,23 +265,23 @@ public:
           
     void set_ref_seq(const Reads & seeds, const std::string & chrom, FastaReference & fr)
     {
-        ref_contig_seq = construct_ref_contig(seeds, chrom, fr, coordinates);
+        ref_seq = construct_ref_contig(seeds, chrom, fr, coordinates);
         is_spliced = (coordinates.size() > 1);
     }   
     
     void set_dirty_rate(const int qual_thresh)
     {   
         int dirty_bases = 0;
-        for (const char & q : contig_qual)
+        for (const char & q : base_qualities)
         {
             if ((static_cast<int>(q) - 33) < qual_thresh) ++dirty_bases;   
         }
         
-        dirty_rate = static_cast<double>(dirty_bases) / contig_qual.size();
+        dirty_rate = static_cast<double>(dirty_bases) / base_qualities.size();
         if (dirty_rate > dirty_thresh) is_dirty = true;
     }
     
-    void set_details(const Reads & seeds, const MergedRead & mr)
+    void set_details(const Reads & seeds, const SimplifiedRead & mr)
     {   
         seeds_size = seeds.size();
         ParsedRead sample_seed = seeds[0];
@@ -326,12 +326,12 @@ Contig set_up_contig(const std::string & chrom, const Reads & targets, const dou
 {
     Reads seeds;
     
-    MergedRead mr = merge_target_reads(targets, dirty_rate_thresh, seeds);
+    SimplifiedRead mr = merge_target_reads(targets, dirty_rate_thresh, seeds);
     
     Contig contig;
 
-    contig.contig_seq = mr.merged_seq;
-    contig.contig_qual = mr.merged_qualities;
+    contig.seq = mr.seq;
+    contig.base_qualities = mr.base_qualities;
     contig.set_ref_seq(seeds, chrom, fr);
     contig.set_dirty_rate(qual_thresh);
     contig.set_details(seeds, mr); 
@@ -363,8 +363,8 @@ std::set<std::string> diff_kmers(const Contig & contig, const size_t k, const bo
 //specialized for target
 std::set<std::string> diff_kmers(const Contig & contig, const size_t k)
 {
-    std::set<std::string> mut_kmers = make_kmers(contig.contig_seq, k);
-    std::set<std::string> ref_kmers = make_kmers(contig.ref_contig_seq, k);
+    std::set<std::string> mut_kmers = make_kmers(contig.seq, k);
+    std::set<std::string> ref_kmers = make_kmers(contig.ref_seq, k);
     
     std::set<std::string> diff;
     std::set_difference(mut_kmers.begin(), mut_kmers.end(), 
@@ -398,8 +398,8 @@ void repeat_check(const Variant & trgt, const Contig & contig, const std::string
 {
     const size_t lt_len = contig.decomposition[0].second;
     const size_t rt_len = contig.decomposition[2].second;
-    std::string lt_seq = contig.contig_seq.substr(0, lt_len);
-    std::string rt_seq = contig.contig_seq.substr(contig.decomposition[2].first, rt_len);
+    std::string lt_seq = contig.seq.substr(0, lt_len);
+    std::string rt_seq = contig.seq.substr(contig.decomposition[2].first, rt_len);
    
     std::string allele_for_lt = "";
     std::string allele_for_rt = "";
@@ -433,7 +433,7 @@ void repeat_check(const Variant & trgt, const Contig & contig, const std::string
     const size_t lt_bound_end = lt_len - (i + 1);
     const size_t rt_bound_start = contig.decomposition[2].first + j - 1;
     const size_t shiftable_len =  rt_bound_start - lt_bound_end - 1;
-    std::string shiftable = contig.contig_seq.substr(lt_bound_end + 1, shiftable_len);
+    std::string shiftable = contig.seq.substr(lt_bound_end + 1, shiftable_len);
  
     const size_t unit_len = repeat_unit.size();
     if (shiftable_len >= unit_len)
@@ -494,7 +494,7 @@ void classify_candidates(const Reads & candidates, const Contig & contig,
             // or extend here? using perfec match
             std::cout << read.read_name << "; ";
             char match_ptrn = match_to_contig(read.read_seq, is_dirty_query,
-                                              contig.contig_seq, contig.ref_contig_seq, contig.decomposition, contig.is_dirty,
+                                              contig.seq, contig.ref_seq, contig.decomposition, contig.is_dirty,
                                               n_tandem_repeats, repeat_unit, rv_repeat_unit, is_complete_tandem_repeat,
                                               repeat_boundary, filter, aligner, alignment);
             std::cout << match_ptrn << std::endl;
@@ -619,15 +619,14 @@ bool is_compatible_spl_ptrn(const ParsedRead & read, const std::vector<std::pair
 void extend_contig_seq(const Contig & contig, 
                        const Reads & lt_extenders, 
                        const Reads & rt_extenders, 
-                       InputRead & extended_contig,
+                       SimplifiedRead & extended_contig,
                        std::vector<std::pair<int, int>> & extended_coordinates)
 {
 
     //const size_t lt_len = contig.decomposition[0].second;
     //const size_t rt_len = contig.decomposition[2].second;
     
-    MergedRead merged_ext;
-    //InputRead extended_contig;
+    SimplifiedRead merged_ext;
 
     if (contig.closer_to_lt_end)
     {
@@ -643,7 +642,7 @@ void extend_contig_seq(const Contig & contig,
                   {return a.aln_start < b.aln_start ? true : false;});
 
             std::vector<int> aln_starts;
-            std::vector<InputRead> lt_inputs;
+            std::vector<SimplifiedRead> lt_inputs;
             for (auto & _ext : lt_tmp)
             {
                 if (is_compatible_spl_ptrn(_ext, contig.coordinates))
@@ -657,9 +656,9 @@ void extend_contig_seq(const Contig & contig,
             {
                 merged_ext = merge_reads(lt_inputs);
 
-                std::vector<InputRead> lt_scaffolds;
-                lt_scaffolds.emplace_back(contig.contig_seq, contig.contig_qual, -1);
-                lt_scaffolds.emplace_back(merged_ext.merged_seq, merged_ext.merged_qualities, -1);
+                std::vector<SimplifiedRead> lt_scaffolds;
+                lt_scaffolds.emplace_back(contig.seq, contig.base_qualities, -1);
+                lt_scaffolds.emplace_back(merged_ext.seq, merged_ext.base_qualities, -1);
             
                 extended_contig = pairwise_stitch(lt_scaffolds, true);
 
@@ -683,7 +682,7 @@ void extend_contig_seq(const Contig & contig,
                   {return a.aln_start < b.aln_start ? false : true;});
 
             std::vector<int> aln_ends;
-            std::vector<InputRead> rt_inputs;
+            std::vector<SimplifiedRead> rt_inputs;
             for (auto & _ext : rt_tmp)
             {
                 if (is_compatible_spl_ptrn(_ext, contig.coordinates))
@@ -698,9 +697,9 @@ void extend_contig_seq(const Contig & contig,
             {
                 merged_ext = merge_reads(rt_inputs);
             
-                std::vector<InputRead> rt_scaffolds;
-                rt_scaffolds.emplace_back(contig.contig_seq, contig.contig_qual, -1);
-                rt_scaffolds.emplace_back(merged_ext.merged_seq, merged_ext.merged_qualities, -1);
+                std::vector<SimplifiedRead> rt_scaffolds;
+                rt_scaffolds.emplace_back(contig.seq, contig.base_qualities, -1);
+                rt_scaffolds.emplace_back(merged_ext.seq, merged_ext.base_qualities, -1);
 
                 extended_contig = pairwise_stitch(rt_scaffolds, false);
                 
@@ -714,9 +713,10 @@ void extend_contig_seq(const Contig & contig,
     //std::cout << extended_contig.read_seq << " " << extended_contig.base_qualities << std::endl; 
 }
 
+/*
 std::vector<int> expand_coordinates(const std::vector<std::pair<int, int>> & coordinates)
 {
-    std::vector<int> expanded;
+    std::vector<int> expanded = {0}; //starts with zero 
     for (const auto & coord_pair : coordinates)
     {
         for (int i = coord_pair.first; i <= coord_pair.second; ++i)
@@ -727,30 +727,39 @@ std::vector<int> expand_coordinates(const std::vector<std::pair<int, int>> & coo
     
     return expanded;    
 }
+*/
 
-
-void include_skips_to_cigar(std::string & cigar_string, int start_offset, int end_offset, std::vector<std::pair<int, int>> & extended_coordinates)
+void include_skips_to_cigar(std::string & cigar_string, 
+                            const int start_offset, 
+                            //const int end_offset,
+                            const std::vector<int> & genomic_positions, 
+                            const std::vector<std::pair<int, int>> & extended_coordinates)
 {
+    // unspliced 
+    if (extended_coordinates.size() < 2)
+    {
+        return; 
+    }
     
-    //cigar_string = "5=1X4=2X5=";
-    //extended_coordinates = {{109, 115}, {120, 122}, {127, 130}, {140, 144}};
-    
-    std::vector<int> exp = expand_coordinates(extended_coordinates);
     std::vector<std::pair<char, int>> cigar_vec = to_cigar_vector(cigar_string);
     std::vector<std::pair<char, int>> tmp; 
     
+    char op;
+    int op_len = 0;
+    int consumable_op_len = 0;
     int curr_idx = 0;
     int last_idx = extended_coordinates.size() - 1;
     int curr_pos = extended_coordinates[curr_idx].first + start_offset - 1;
+    int curr_segment_start = extended_coordinates[curr_idx].first;
+    int curr_segment_end = extended_coordinates[curr_idx].second;
     int curr_op_end = curr_pos;
-    int pos_vec_idx = start_offset - 1;
-
+    int genome_pos_idx = start_offset;
+    
     for (const auto & cigar : cigar_vec)
     {
-        char op = cigar.first;
-        int op_len = cigar.second;
-
-        int consumable_op_len = 0;
+        op = cigar.first;
+        op_len = cigar.second;
+        consumable_op_len = 0;
         switch (op)
         {
             case 'M':
@@ -765,15 +774,12 @@ void include_skips_to_cigar(std::string & cigar_string, int start_offset, int en
 
         if (consumable_op_len)
         {
-            pos_vec_idx += consumable_op_len;
-            curr_op_end = exp[pos_vec_idx];
+            genome_pos_idx += consumable_op_len;
+            curr_op_end = genomic_positions[genome_pos_idx];
         }
 
-        int curr_segment_start = extended_coordinates[curr_idx].first;   
-        int curr_segment_end = extended_coordinates[curr_idx].second;               
         if (consumable_op_len)
         {
-            std::cout << curr_segment_end << " " << curr_op_end << std::endl;
             while(curr_segment_end < curr_op_end)
             {
                 tmp.emplace_back(op, (curr_segment_end - curr_pos));
@@ -793,7 +799,7 @@ void include_skips_to_cigar(std::string & cigar_string, int start_offset, int en
             }
             curr_pos = curr_op_end;
         }
-        else //if (!consumable_op_len)
+        else 
         {
             tmp.emplace_back(op, op_len);   
         }
@@ -806,25 +812,19 @@ void include_skips_to_cigar(std::string & cigar_string, int start_offset, int en
             tmp.emplace_back('N', (curr_segment_start - (curr_op_end + 1)));
             curr_pos = curr_segment_start - 1;
             curr_op_end = curr_pos;
-
         }
        
    } 
-    
-    std::string k = "";
-    for (auto p : tmp)
-    {
-        k += std::to_string(p.second);
-        k += p.first;
-    } 
+   
+   cigar_string = to_cigar_string(tmp); 
 
-    std::cout << " new one: " << k << std::endl;
+   std::cout << " new one: " << cigar_string << std::endl;
     
 }
 
 
 void align_to_contig(const std::string & chrom, FastaReference & fr, 
-                     InputRead & extended_contig, 
+                     SimplifiedRead & extended_contig, 
                      std::vector<std::pair<int, int>> & extended_coordinates)
 {
     std::string extended_ref = ""; 
@@ -834,7 +834,7 @@ void align_to_contig(const std::string & chrom, FastaReference & fr,
     }
 
     std::cout << extended_ref << std::endl;
-    std::cout << extended_contig.read_seq << std::endl;
+    std::cout << extended_contig.seq << std::endl;
    
     const uint8_t match_score = 3, mismatch_penalty = 2;
     const uint8_t gap_open_penalty = 3, gap_extention_penalty = 0;
@@ -845,14 +845,16 @@ void align_to_contig(const std::string & chrom, FastaReference & fr,
                 gap_open_penalty, gap_extention_penalty
             );
 
-    int32_t mask_len = strlen(extended_contig.read_seq.c_str()) / 2;
+    int32_t mask_len = strlen(extended_contig.seq.c_str()) / 2;
     mask_len = mask_len < 15 ? 15 : mask_len;
-    aligner.Align(extended_contig.read_seq.c_str(), extended_ref.c_str(), extended_ref.size(), filter, &aln, mask_len);
+    aligner.Align(extended_contig.seq.c_str(), extended_ref.c_str(), extended_ref.size(), filter, &aln, mask_len);
 
     std::cout << aln.cigar_string << std::endl;
     std::cout << aln.ref_begin << " " << aln.query_begin << std::endl;
 
-    include_skips_to_cigar(aln.cigar_string, 2, 0, extended_coordinates);
+    std::vector<int> genomic_pos = expand_coordinates(extended_coordinates);
+    
+    include_skips_to_cigar(aln.cigar_string, aln.ref_begin, genomic_pos, extended_coordinates);
 }
 
 
@@ -904,7 +906,7 @@ void process_aligned_target(const std::string & chrom, FastaReference & fr, cons
                         lt_extenders, extra_targets, rt_extenders, undetermined, non_targets);
     
     
-    InputRead extended(contig.contig_seq, contig.contig_qual);
+    SimplifiedRead extended(contig.seq, contig.base_qualities);
     std::vector<std::pair<int, int>> ext_coord = contig.coordinates;
     
     for (auto i : ext_coord)
@@ -931,14 +933,14 @@ void process_aligned_target(const std::string & chrom, FastaReference & fr, cons
     std::cout << lt_len << " " << rt_len << std::endl;
     std::cout << lt_extenders.size() << " " << extra_targets.size() << " " << rt_extenders.size() << std::endl;
     std::cout << "high quality conting: " << contig.is_high_quality() << std::endl;
-    
+   */ 
 
-    _contig = contig.contig_seq;
+    _contig = contig.seq;
     std::cout << contig.central << " " << contig.closer_to_lt_end << std::endl;    
     
     Alignment alna;
     
-    */ 
+     
     std::cout << "target: " << targets.size() + lt_extenders.size() + extra_targets.size() + rt_extenders.size()<< std::endl;
     std::cout << "non_target: " << non_targets.size() << " " << std::endl;
     std::cout << "undetermined: " << undetermined.size() << std::endl;

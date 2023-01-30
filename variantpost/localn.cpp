@@ -127,7 +127,7 @@ struct BaseCount
 };
 
 
-std::vector<Overlap> find_overlaps(const std::vector<InputRead> & inputs)
+std::vector<Overlap> find_overlaps(const std::vector<SimplifiedRead> & inputs)
 {
     std::vector<Overlap> overlaps;   
     
@@ -150,13 +150,13 @@ std::vector<Overlap> find_overlaps(const std::vector<InputRead> & inputs)
         do
         {
             ++j;
-            int32_t mask_len = strlen(inputs[j].read_seq.c_str()) / 2;
+            int32_t mask_len = strlen(inputs[j].seq.c_str()) / 2;
             mask_len = mask_len < 15 ? 15 : mask_len;
             
             // align next seq (as query) vs current seq (as ref)
             aligner.Align(
-                        inputs[j].read_seq.c_str(),                 
-                        inputs[i].read_seq.c_str(), inputs[i].read_seq.size(), 
+                        inputs[j].seq.c_str(),                 
+                        inputs[i].seq.c_str(), inputs[i].seq.size(), 
                         filter, &aln, mask_len
                     );
             
@@ -180,37 +180,37 @@ std::vector<Overlap> find_overlaps(const std::vector<InputRead> & inputs)
 
 
 // 
-InputRead pairwise_stitch(const std::vector<InputRead> & inputs, bool lt_extention)
+SimplifiedRead pairwise_stitch(const std::vector<SimplifiedRead> & inputs, bool lt_extention)
 {
     std::vector<Overlap> overlaps = find_overlaps(inputs);   
 
     if (lt_extention)
     {
-        std::string lt_ext = inputs[1].read_seq.substr(0, overlaps[0].query_start);
+        std::string lt_ext = inputs[1].seq.substr(0, overlaps[0].query_start);
         std::string lt_ext_q = inputs[1].base_qualities.substr(0, overlaps[0].query_start);
 
-        InputRead lt_extended{lt_ext + inputs[0].read_seq, lt_ext_q + inputs[0].base_qualities, -1};
+        SimplifiedRead lt_extended{lt_ext + inputs[0].seq, lt_ext_q + inputs[0].base_qualities, -1};
 
         return lt_extended;
     }
     else
     {
-        std::string rt_ext = inputs[1].read_seq.substr(overlaps[0].query_end + 1);
+        std::string rt_ext = inputs[1].seq.substr(overlaps[0].query_end + 1);
         std::string rt_ext_q = inputs[1].base_qualities.substr(overlaps[0].query_end + 1);
 
-        InputRead rt_extended{inputs[0].read_seq + rt_ext, inputs[0].base_qualities + rt_ext_q, -1};
+        SimplifiedRead rt_extended{inputs[0].seq + rt_ext, inputs[0].base_qualities + rt_ext_q, -1};
 
         return rt_extended;
     }
 }
 
 
-MergedRead merge_reads(const std::vector<InputRead> & inputs)
+SimplifiedRead merge_reads(const std::vector<SimplifiedRead> & inputs)
 {
     if (inputs.size() == 1)
     {
-        MergedRead _merged(inputs[0].read_seq, inputs[0].base_qualities, -1);
-        return _merged;
+        SimplifiedRead _unmerged(inputs[0].seq, inputs[0].base_qualities, -1);
+        return _unmerged;
     }
     
     std::deque<BaseCount> base_cnts;
@@ -231,7 +231,7 @@ MergedRead merge_reads(const std::vector<InputRead> & inputs)
         curr_end = overlaps[i].ref_end;
         target_start = overlaps[i].target_start;
         
-        std::string seq = inputs[overlaps[i].index].read_seq;
+        std::string seq = inputs[overlaps[i].index].seq;
         std::string seq_qual = inputs[overlaps[i].index].base_qualities;
              
         if (!i)
@@ -332,24 +332,11 @@ MergedRead merge_reads(const std::vector<InputRead> & inputs)
         n_start_checks.push_back(std::accumulate(b.start_checks.begin(), b.start_checks.end(), 0));
     }
     
-    /*
-    int p = 0;
-    for (const auto & b : base_cnts)
-    {   
-        for (const auto q : b.start_checks)
-        {
-            std::cout << q << ",";
-        }
-        std::cout << "  " << p << " " <<std::endl;
-        ++p;
-    }
-    */
-     
     int target_start_idx = get_max_indices(n_start_checks)[0];   
     
-    MergedRead mr(merged_read, merged_qualities, target_start_idx);   
+    SimplifiedRead _merged(merged_read, merged_qualities, target_start_idx);   
     
-    return mr; 
+    return _merged; 
 }
 
 
@@ -495,13 +482,13 @@ char match_to_contig
         int ins_len = (rt_start_idx - lt_end_idx);
         double frac_covered_ins = n_ins_matched_bases / static_cast<double>(ins_len);
         
-        //smale -> adjustable
+        //smale -> make this thresh adjustable
         if (ins_len < 4)
         {
             if (frac_covered_ins < 1.0) return 'F';
         }
         else 
-        {    //simscore
+        {    //simscore -> make this thresh adjustable
             if (frac_covered_ins < 0.66) return 'F'; 
         }  
     }
