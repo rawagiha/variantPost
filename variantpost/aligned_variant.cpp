@@ -17,8 +17,6 @@
 #include "aligned_variant.h"
 
 
-//std::vector<std::pair<int, int>> decompose_read(const ParsedRead & read);
-
 Reads find_seed_reads(const Reads & targets, const double dirty_thresh, const size_t seed_size)
 {   
     Reads clean_targets;
@@ -30,7 +28,6 @@ Reads find_seed_reads(const Reads & targets, const double dirty_thresh, const si
         }
     }
     
-    //if (clean_targets.empty()) clean_targets = targets;
     if (clean_targets.empty()) clean_targets = std::move(targets);
 
     std::vector<std::string> non_ref_ptrns;
@@ -339,27 +336,6 @@ Contig set_up_contig(const std::string & chrom, const Reads & targets, const dou
     return contig;     
 }       
 
-/*
-std::set<std::string> diff_kmers(const Contig & contig, const size_t k, const bool is_for_target)
-{
-    std::set<std::string> mut_kmers = make_kmers(contig.contig_seq, k);
-    std::set<std::string> ref_kmers = make_kmers(contig.ref_contig_seq, k);
-    
-    std::set<std::string> diff;
-    if (is_for_target)
-    {
-        std::set_difference(mut_kmers.begin(), mut_kmers.end(), ref_kmers.begin(), ref_kmers.end(), std::inserter(diff, diff.end()));
-    }
-    else
-    {
-        std::set_difference(ref_kmers.begin(), ref_kmers.end(), mut_kmers.begin(), mut_kmers.end(), std::inserter(diff, diff.end()));
-    }
-    
-    return diff;
-}
-*/
-
-
 //specialized for target
 std::set<std::string> diff_kmers(const Contig & contig, const size_t k)
 {
@@ -427,8 +403,7 @@ void repeat_check(const Variant & trgt, const Contig & contig, const std::string
         to_right(allele_for_rt, rt_seq);
         ++j;
     } while((j < rt_len) && is_rotatable(allele_for_rt));
-    //undo once
-    --j;
+    --j; //undo once for rt aln
     
     const size_t lt_bound_end = lt_len - (i + 1);
     const size_t rt_bound_start = contig.decomposition[2].first + j - 1;
@@ -713,115 +688,6 @@ void extend_contig_seq(const Contig & contig,
     //std::cout << extended_contig.read_seq << " " << extended_contig.base_qualities << std::endl; 
 }
 
-/*
-std::vector<int> expand_coordinates(const std::vector<std::pair<int, int>> & coordinates)
-{
-    std::vector<int> expanded = {0}; //starts with zero 
-    for (const auto & coord_pair : coordinates)
-    {
-        for (int i = coord_pair.first; i <= coord_pair.second; ++i)
-        {
-            expanded.push_back(i);
-        }
-    }
-    
-    return expanded;    
-}
-*/
-
-void include_skips_to_cigar(std::string & cigar_string, 
-                            const int start_offset, 
-                            //const int end_offset,
-                            const std::vector<int> & genomic_positions, 
-                            const std::vector<std::pair<int, int>> & extended_coordinates)
-{
-    // unspliced 
-    if (extended_coordinates.size() < 2)
-    {
-        return; 
-    }
-    
-    std::vector<std::pair<char, int>> cigar_vec = to_cigar_vector(cigar_string);
-    std::vector<std::pair<char, int>> tmp; 
-    
-    char op;
-    int op_len = 0;
-    int consumable_op_len = 0;
-    int curr_idx = 0;
-    int last_idx = extended_coordinates.size() - 1;
-    int curr_pos = extended_coordinates[curr_idx].first + start_offset - 1;
-    int curr_segment_start = extended_coordinates[curr_idx].first;
-    int curr_segment_end = extended_coordinates[curr_idx].second;
-    int curr_op_end = curr_pos;
-    int genome_pos_idx = start_offset;
-    
-    for (const auto & cigar : cigar_vec)
-    {
-        op = cigar.first;
-        op_len = cigar.second;
-        consumable_op_len = 0;
-        switch (op)
-        {
-            case 'M':
-            case 'D':
-            case '=':
-            case 'X':
-                consumable_op_len = cigar.second;
-                break;
-            default:
-                break;
-        }
-
-        if (consumable_op_len)
-        {
-            genome_pos_idx += consumable_op_len;
-            curr_op_end = genomic_positions[genome_pos_idx];
-        }
-
-        if (consumable_op_len)
-        {
-            while(curr_segment_end < curr_op_end)
-            {
-                tmp.emplace_back(op, (curr_segment_end - curr_pos));
-                tmp.emplace_back('N', (extended_coordinates[curr_idx + 1].first - (curr_segment_end + 1)));
-                curr_pos = extended_coordinates[curr_idx + 1].first - 1;
-                
-                ++curr_idx; 
-
-                curr_segment_start = extended_coordinates[curr_idx].first;
-                curr_segment_end = extended_coordinates[curr_idx].second; 
-
-            }
-
-            if (curr_op_end - curr_pos > 0) 
-            {
-                tmp.emplace_back(op, curr_op_end - curr_pos);
-            }
-            curr_pos = curr_op_end;
-        }
-        else 
-        {
-            tmp.emplace_back(op, op_len);   
-        }
-
-        if (curr_op_end == curr_segment_end && curr_idx < last_idx)
-        {
-            ++curr_idx;
-            curr_segment_start = extended_coordinates[curr_idx].first;
-            curr_segment_end = extended_coordinates[curr_idx].second;
-            tmp.emplace_back('N', (curr_segment_start - (curr_op_end + 1)));
-            curr_pos = curr_segment_start - 1;
-            curr_op_end = curr_pos;
-        }
-       
-   } 
-   
-   cigar_string = to_cigar_string(tmp); 
-
-   std::cout << " new one: " << cigar_string << std::endl;
-    
-}
-
 
 void align_to_contig(const std::string & chrom, FastaReference & fr, 
                      SimplifiedRead & extended_contig, 
@@ -833,9 +699,11 @@ void align_to_contig(const std::string & chrom, FastaReference & fr,
         extended_ref += fr.getSubSequence(chrom, coord.first - 1, (coord.second -  coord.first + 1));
     }
 
-    std::cout << extended_ref << std::endl;
-    std::cout << extended_contig.seq << std::endl;
-   
+    std::cout << extended_ref.size() << std::endl;
+    std::cout << extended_contig.seq.size() << std::endl;
+    std::cout << extended_contig.base_qualities.size() << std::endl;
+    
+     
     const uint8_t match_score = 3, mismatch_penalty = 2;
     const uint8_t gap_open_penalty = 3, gap_extention_penalty = 0;
     Filter filter;
@@ -847,14 +715,31 @@ void align_to_contig(const std::string & chrom, FastaReference & fr,
 
     int32_t mask_len = strlen(extended_contig.seq.c_str()) / 2;
     mask_len = mask_len < 15 ? 15 : mask_len;
-    aligner.Align(extended_contig.seq.c_str(), extended_ref.c_str(), extended_ref.size(), filter, &aln, mask_len);
+    aligner.Align(extended_contig.seq.c_str(), 
+                  extended_ref.c_str(), 
+                  extended_ref.size(), 
+                  filter, &aln, mask_len);
 
     std::cout << aln.cigar_string << std::endl;
     std::cout << aln.ref_begin << " " << aln.query_begin << std::endl;
 
+    // edit cigar 
     std::vector<int> genomic_pos = expand_coordinates(extended_coordinates);
-    
-    include_skips_to_cigar(aln.cigar_string, aln.ref_begin, genomic_pos, extended_coordinates);
+    std::vector<std::pair<char, int>> cigar_vec = to_cigar_vector(aln.cigar_string);    
+    splice_cigar(cigar_vec, aln.ref_begin, genomic_pos, extended_coordinates);
+    move_up_insertion(cigar_vec); 
+   
+    int aln_start = genomic_pos[aln.ref_begin];
+    int aln_end = genomic_pos[aln.ref_end];  
+    std::cout << aln_start << " " << aln_end << std::endl;
+    std::string non;
+    /*
+    std::vector<Variant> aa = find_mapped_variants(aln_start, aln_end, extended_ref, extended_contig.seq, extended_contig.base_qualities,  cigar_vec, non);
+    for (auto & v : aa)
+    {
+        std::cout << v.pos << " " << v.ref << " " << v.alt << std::endl;
+    }
+    */
 }
 
 

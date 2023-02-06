@@ -26,9 +26,27 @@ std::string to_fastq_qual( const std::vector<int> & arr_qual );
 //----------------------------------------------------------------------------
 std::vector<std::pair<char, int>> to_cigar_vector(const std::string & cigar_string);
 
+
 //cigar vec to string: {<'M', 10>, <'D', 4>, <'M', 3>, <'S', 2>} -> 10M4D3M2S
 //----------------------------------------------------------------------------- 
 std::string to_cigar_string(const std::vector<std::pair<char, int>> & cigar_vector);
+
+
+// include skips (N) to cigar vec
+// {<'=', 5>, <'I', 1>, <'=', 5> + {{100, 104}, {108, 109}, {112, 114}}
+// -> {<'=', 5>, <'I', 1>, <'N', 3>, <'=', 2>, <'N', 2>, <'=', 3>}
+//--------------------------------------------------------------------------
+void splice_cigar(std::vector<std::pair<char, int>> & cigar_vector,
+                  const int start_offset, 
+                  const std::vector<int> & genomic_positions, 
+                  const std::vector<std::pair<int, int>> & extended_coordinates);
+
+
+//make insertion first for complex case with gap-merging
+//{'=', 2}, {'D', 2}, {'I', 2}, {'D', 4}, {'=', 3}} 
+// -> {{'=', 2}, {'I', 2}, {'D', 6},{'=', 3}}
+//-----------------------------------------------------------------------
+void move_up_insertion(std::vector<std::pair<char, int>> & cigar_vector);
 
 std::string get_unspliced_ref_seq(const int aln_start, const int aln_end,
                                   const int unspliced_local_reference_start,
@@ -44,10 +62,11 @@ void parse_splice_pattern(std::vector<std::pair<int, int>> & exons,
                           const int start,
                           const int end);
 
-//expand segment start/end: {{123, 125}, {502, 504}} -> {0(offset), 123, 124, 125, 502, 503, 504}
+//expand segment start/end: {{123, 125}, {502, 504}} -> {123, 124, 125, 502, 503, 504}
 //-----------------------------------------------------------------------------------------------
-std::vector<int> expand_coordinates(const std::vector<std::pair<int, int>> & coordinates, 
-                                    bool with_offset = true);
+std::vector<int> expand_coordinates(const std::vector<std::pair<int, int>> & coordinates);
+
+//void make_skip_after_ins(std::vector<std::pair<char, int>> & cigar_vec);
 
 std::unordered_map<int, char> reference_by_position( const std::string &
         unspliced_local_reference, int unspliced_local_reference_start,
@@ -115,6 +134,13 @@ std::vector<Variant> find_mapped_variants(const int aln_start, const int aln_end
                                           const std::vector<std::pair<char, int>> & cigar_vector,
                                           std::string & non_ref_quals);
 
+
+std::vector<Variant> find_variants(const int aln_start, 
+                                   const std::string & ref_seq, 
+                                   const std::string & read_seq,
+                                   const std::string & base_qualities,
+                                   const std::vector<std::pair<char, int>> & cigar_vector,
+                                   std::string & non_ref_quals);
 
 int count_repeats(const std::string & ptrn, const std::string & seq);
 

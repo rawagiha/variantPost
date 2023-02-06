@@ -506,11 +506,17 @@ ParsedRead::ParsedRead
         base_qualities = to_fastq_qual(q);
         
         //variants already aligned
+        
+        /*
         variants = find_mapped_variants(
                         aln_start, aln_end, 
                         ref_seq, read_seq, base_qualities,
                         cigar_vector, non_ref_quals
                     );
+        */
+
+        variants = find_variants(aln_start, ref_seq, read_seq, base_qualities, cigar_vector, non_ref_quals);
+        
         
         //check covering pattern (indel position shift considered)
         covering_ptrn = classify_covering(

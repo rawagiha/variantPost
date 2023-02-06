@@ -41,45 +41,252 @@ std::string to_fastq_qual ( const std::vector<int> &qvec ) {
 }
 
 
-// parse cigar string: 10M4D3M2S -> {<'M', 10>, <'D', 4>, <'M', 3>, <'S', 2>}
-//-----------------------------------------------------------------------------
-inline std::pair<char, int> to_op_and_op_len ( const std::string &cigar ) {
+inline std::pair<char, int> split_cigar(const std::string & cigar) 
+{
   size_t last_idx = cigar.size() - 1;
-  return std::make_pair ( cigar.substr ( last_idx, 1 ) [0],
-                          std::stoi ( cigar.substr ( 0, last_idx ) ) );
+  return std::make_pair(cigar.substr(last_idx, 1)[0], std::stoi(cigar.substr(0, last_idx)));
 }
 
+//parse cigar string: 10M4D3M2S -> {<'M', 10>, <'D', 4>, <'M', 3>, <'S', 2>}
+//-----------------------------------------------------------------------------
 std::vector<std::pair<char, int>> to_cigar_vector(const std::string & cigar_string) 
 {
-  std::vector<std::pair<char, int>> cigarette;
+  std::vector<std::pair<char, int>> cigar_vec;
 
   size_t pos = 0;
-  size_t newpos;
+  size_t new_pos;
   const size_t len = cigar_string.size();
 
   while (pos < len) 
   {
-    newpos = cigar_string.find_first_of("MIDNSHPX=", pos) + 1;
-    cigarette.emplace_back(to_op_and_op_len(cigar_string.substr(pos, newpos - pos)));
-    pos = newpos;
+    new_pos = cigar_string.find_first_of("MIDNSHPX=", pos) + 1;
+    cigar_vec.emplace_back(split_cigar(cigar_string.substr(pos, new_pos - pos)));
+    pos = new_pos;
   }
 
-  return cigarette;
+  return cigar_vec;
 }
 
-
-// cigar vec to string: {<'M', 10>, <'D', 4>, <'M', 3>, <'S', 2>} -> 10M4D3M2S 
+//cigar vec to string: {<'M', 10>, <'D', 4>, <'M', 3>, <'S', 2>} -> 10M4D3M2S 
 //----------------------------------------------------------------------------
 std::string to_cigar_string(const std::vector<std::pair<char, int>> & cigar_vector)
 {
     std::string cigar_string = "";
-    for (const auto & elem : cigar_vector)
+    for (const auto & cigar : cigar_vector)
     {
-        cigar_string += std::to_string(elem.second);
-        cigar_string += elem.first;
+        cigar_string += std::to_string(cigar.second);
+        cigar_string += cigar.first;
     } 
 
     return cigar_string;
+}
+
+/*
+bool is_gap(const char & op)
+{
+    if (op == 'I' || op == 'D' || op == 'N') 
+    {
+        return true;
+    }
+    else return false;
+}
+
+bool has_gaps_before_ins(const std::vector<std::pair<char, int>> & cigar_vector)
+{
+    bool prev_is_gap = false;
+    for (const auto & cigar : cigar_vector)
+    {
+        if (prev_is_gap && is_gap(cigar.first))
+        {
+            return true;
+        } 
+    }
+    return false;
+}
+*/
+ 
+// swap N and simple ins
+// {<'=', 2>, <'N', 6>, <'I', '4'>, <'=', 2>} -> {<'=', 2>, <'I', '4'>,  <'N', 6>,  <'=', 2>}
+//------------------------------------------------------------------------------------------
+void make_skip_after_ins(std::vector<std::pair<char, int>> & cigar_vector)
+{
+    std::vector<int> idx_lst; 
+    int last_idx = cigar_vector.size() - 1;
+    for (int i = 0; i < last_idx - 1; ++i)
+    {
+        if (cigar_vector[i].first == 'N' && cigar_vector[i + 1].first == 'I')
+        {
+            if (cigar_vector[i + 2].first == '=') //simple case
+            {
+                idx_lst.push_back(i);
+            }
+        }
+    } 
+    
+    for (const auto j : idx_lst)
+    {
+        std::iter_swap(cigar_vector.begin() + j, cigar_vector.begin() + j + 1);
+    }
+
+}
+
+
+// include skips (N) to cigar
+// {<'=', 5>, <'I', 1>, <'=', 5> + {{100, 104}, {108, 109}, {112, 114}}
+// -> {<'=', 5>, <'I', 1>, <'N', 3>, <'=', 2>, <'N', 2>, <'=', 3>}
+//--------------------------------------------------------------------------
+void splice_cigar(std::vector<std::pair<char, int>> & cigar_vector,
+                  const int start_offset, 
+                  const std::vector<int> & genomic_positions, 
+                  const std::vector<std::pair<int, int>> & extended_coordinates)
+{
+    
+    // unspliced 
+    if (extended_coordinates.size() < 2)
+    {
+        return; 
+    }
+    
+    std::vector<std::pair<char, int>> tmp; 
+    
+    char op;
+    int op_len = 0;
+    int consumable_op_len = 0;
+    int curr_idx = 0;
+    int last_idx = extended_coordinates.size() - 1;
+    int curr_pos = extended_coordinates[curr_idx].first + start_offset - 1;
+    int curr_segment_start = extended_coordinates[curr_idx].first;
+    int curr_segment_end = extended_coordinates[curr_idx].second;
+    int curr_op_end = curr_pos;
+    int genome_pos_idx = start_offset - 1; 
+    
+    for (const auto & cigar : cigar_vector)
+    {
+        op = cigar.first;
+        op_len = cigar.second;
+        consumable_op_len = 0;
+        switch (op)
+        {
+            case 'M':
+            case 'D':
+            case '=':
+            case 'X':
+                consumable_op_len = cigar.second;
+                break;
+            default:
+                break;
+        }
+
+        if (consumable_op_len)
+        {
+            genome_pos_idx += consumable_op_len;
+            curr_op_end = genomic_positions[genome_pos_idx];
+        }
+
+        if (consumable_op_len)
+        {
+            while(curr_segment_end < curr_op_end)
+            {
+                tmp.emplace_back(op, (curr_segment_end - curr_pos));
+                tmp.emplace_back('N', (extended_coordinates[curr_idx + 1].first - (curr_segment_end + 1)));
+                curr_pos = extended_coordinates[curr_idx + 1].first - 1;
+                
+                ++curr_idx; 
+
+                curr_segment_start = extended_coordinates[curr_idx].first;
+                curr_segment_end = extended_coordinates[curr_idx].second; 
+
+            }
+
+            if (curr_op_end - curr_pos > 0) 
+            {
+                tmp.emplace_back(op, curr_op_end - curr_pos);
+            }
+            curr_pos = curr_op_end;
+        }
+        else 
+        {
+            tmp.emplace_back(op, op_len);   
+        }
+
+        if (curr_op_end == curr_segment_end && curr_idx < last_idx)
+        {
+            ++curr_idx;
+            curr_segment_start = extended_coordinates[curr_idx].first;
+            curr_segment_end = extended_coordinates[curr_idx].second;
+            tmp.emplace_back('N', (curr_segment_start - (curr_op_end + 1)));
+            curr_pos = curr_segment_start - 1;
+            curr_op_end = curr_pos;
+        }
+   }
+   
+   make_skip_after_ins(tmp);
+   std::swap(tmp, cigar_vector); 
+}
+
+
+//merge gaps of same type (needs this when gaps reordered)
+// {<'I', 4>, <'I', 2>} -> <'I', 6>
+//-------------------------------------------------------------
+std::pair<char, int> concat_gaps(const std::vector<std::pair<char, int>> & cigar_sub_vector)
+{
+    int tot_gap_len = 0;
+    if (!cigar_sub_vector.empty())
+    {
+        for(const auto & cigar : cigar_sub_vector)
+        {
+            tot_gap_len += cigar.second;
+        }
+
+        //merged_gaps = std::to_string(tot_gap_len) + cigar_sub_vector[0].first;
+    }
+
+    return {cigar_sub_vector[0].first, tot_gap_len};
+}
+
+
+//make insertion first for complex case with gap-merging
+//{'=', 2}, {'D', 2}, {'I', 2}, {'D', 4}, {'=', 3}} 
+// -> {{'=', 2}, {'I', 2}, {'D', 6},{'=', 3}}
+//----------------------------------------------------------------------
+void move_up_insertion(std::vector<std::pair<char, int>> & cigar_vector)
+{
+    bool gap_ended = true;
+    std::vector<std::pair<char, int>> tmp, ins, del;
+
+    for (const auto & cigar : cigar_vector)
+    {
+        if (cigar.first == 'I')
+        {
+            ins.push_back(cigar);
+            gap_ended = false;   
+        }
+        else if (cigar.first == 'D')
+        {
+            del.push_back(cigar);
+            gap_ended =false;   
+        }
+        else gap_ended = true;
+        
+        if (gap_ended)
+        {
+            if (!ins.empty())
+            {
+                tmp.push_back(concat_gaps(ins));
+                ins.clear();
+            }
+
+            if (!del.empty())
+            {
+                tmp.push_back(concat_gaps(del));
+                del.clear();
+            }
+            
+            tmp.push_back(cigar);
+        }   
+    }
+
+    std::swap(tmp, cigar_vector);
 }
 
 int count_repeats(const std::string & ptrn,
@@ -102,14 +309,12 @@ int count_repeats(const std::string & ptrn,
     return n;
 }
 
-// expand segment start/end: {{123, 125}, {502, 504}} -> {0(offset), 123, 124, 125, 502, 503, 504}
+
+// expand segment start/end: {{123, 125}, {502, 504}} -> {123, 124, 125, 502, 503, 504}
 //------------------------------------------------------------------------------------------------
-std::vector<int> expand_coordinates(const std::vector<std::pair<int, int>> & coordinates, 
-                                    bool with_offset)
+std::vector<int> expand_coordinates(const std::vector<std::pair<int, int>> & coordinates)
 {
     std::vector<int> expanded = {};
-    if (with_offset) expanded.push_back(0);
-    
     for (const auto & coord_pair : coordinates)
     {
         for (int i = coord_pair.first; i <= coord_pair.second; ++i)
@@ -464,6 +669,7 @@ std::string Variant::minimal_repeat_unit() const
     return seq;
 }
 
+//this will fail for reads starts with I/D
 std::vector<Variant> find_mapped_variants(const int aln_start, const int aln_end, 
                                           const std::string & ref_seq, 
                                           const std::string & read_seq,
@@ -532,6 +738,98 @@ std::vector<Variant> find_mapped_variants(const int aln_start, const int aln_end
                 //
                 break;
         }
+    }
+    return variants;
+}
+
+
+std::vector<Variant> find_variants(const int aln_start,
+                                   const std::string & ref_seq,
+                                   const std::string & read_seq,
+                                   const std::string & base_qualities,
+                                   const std::vector<std::pair<char, int>> & cigar_vector,
+                                   std::string & non_ref_quals)
+{
+    std::vector<Variant> variants = {};
+    
+    if (read_seq == ref_seq) return variants;
+
+    char op = '\0';
+    int op_len = 0;
+    int ref_idx = 0;
+    int read_idx = 0;
+    int pos = aln_start;
+
+    std::string ref = "";
+    std::string alt = "";
+
+    bool is_padding_base_supported = false;
+
+    for (const auto & cigar : cigar_vector)
+    {
+        op = cigar.first;
+        op_len = cigar.second;
+
+        switch (op)
+        {
+            case 'M':
+            case 'X':
+            case '=':
+                for (int i = 0; i < op_len; ++i)
+                {
+                    ref = ref_seq.substr(ref_idx, 1);
+                    alt = read_seq.substr(read_idx, 1);
+                    if (ref != alt)
+                    {
+                        variants.emplace_back(pos, ref, alt); 
+                        non_ref_quals += base_qualities.substr(read_idx, 1);
+                    }
+                    ++ref_idx;
+                    ++read_idx;
+                    ++pos;
+                }
+
+                is_padding_base_supported = true;
+                break;
+            case 'I':
+                if (is_padding_base_supported) ref = ref_seq.substr(ref_idx - 1, 1);
+                else ref = "N";
+
+                if (ref == "N")
+                {
+                    std::cout << "ins happened!" << std::endl;
+                }
+                
+                variants.emplace_back(pos - 1, ref, ref + read_seq.substr(read_idx, op_len));
+                non_ref_quals += base_qualities.substr(read_idx, op_len); 
+                read_idx += op_len;
+                break; 
+            case 'D':
+                if (is_padding_base_supported) alt = ref_seq.substr(ref_idx - 1, 1);
+                else alt = "N";
+               
+                if (alt == "N")
+                {
+                    std::cout << "del happend!" << std::endl;
+                } 
+                variants.emplace_back(pos - 1, alt + ref_seq.substr(ref_idx, op_len), alt);
+                ref_idx += op_len;
+                pos += op_len;
+                is_padding_base_supported = true;                 
+                break;
+            case 'N':
+                pos += op_len;
+                is_padding_base_supported = false;
+                break;
+            case 'S':
+                non_ref_quals += base_qualities.substr(read_idx, op_len);
+                read_idx += (op_len);
+                break;
+            case 'H':
+            case 'P':
+                /**/
+                break;
+        }       
     }
     return variants;
 }
