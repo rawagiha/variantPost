@@ -2,7 +2,7 @@ from libcpp.string cimport string
 from libcpp.vector cimport vector
 from libcpp cimport bool as bool_t
 
-cdef extern from "processor.h" namespace "pp":
+cdef extern from "pileup_processor.h" namespace "pp":
     
     cdef cppclass ProcessedPileup:
         

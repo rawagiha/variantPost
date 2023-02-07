@@ -358,7 +358,8 @@ char match_to_contig
     const int lt_end_idx = decomposed_contig[0].second - 1;
     const int rt_start_idx = decomposed_contig[2].first;
     const int contig_len = contig_seq.size();
-    const bool is_del = (rt_start_idx == (lt_end_idx + 1));
+    const bool is_del = (decomposed_contig[1].second == 0);
+    const int mid_len = decomposed_contig[1].second;
     
     int32_t mask_len = strlen(query.c_str()) / 2;
     mask_len = mask_len < 15 ? 15 : mask_len;
@@ -367,6 +368,7 @@ char match_to_contig
    
     const int ref_start = alignment.ref_begin;
     const int ref_end = alignment.ref_end;
+    
     
     
     // still has gap
@@ -378,7 +380,7 @@ char match_to_contig
     // doesn't overlap the target region
     if (ref_end <= lt_end_idx || rt_start_idx <= ref_start) return 'F';
     
-    // del needs to be cov
+    // del needs to be covered
     if (is_del)
     {
         if ((ref_start <= lt_end_idx) && (rt_start_idx <= ref_end)) { /*pass*/ }
@@ -386,24 +388,30 @@ char match_to_contig
     }
     
     // checks for complete tandem repeat  
-    int lt_rep = 0, rt_rep = 0;
+    int lt_rep = 0, mid_rep = 0, rt_rep = 0;
     if (is_complete_tandem_repeat) 
     { 
         const int boundary_start = repeat_boundary.first;
         const int read_start = alignment.query_begin;
 
         // must be bounded
-        if (boundary_start < ref_start || ref_end < repeat_boundary.second) return 'F';
+        if (boundary_start < ref_start || ref_end <= repeat_boundary.second) return 'U';
         
         std::string lt_fragment = query.substr(0, (boundary_start + 1 - ref_start) + read_start);
         std::reverse(lt_fragment.begin(), lt_fragment.end());
         lt_rep = count_repeats(rv_repeat_unit, lt_fragment);
 
-        std::string rt_fragment = query.substr((boundary_start + 1 - ref_start) + read_start);
+        if (!is_del)
+        {
+            std::string mid_fragment = query.substr((boundary_start + 1 - ref_start) + read_start, mid_len);
+            mid_rep = count_repeats(repeat_unit, mid_fragment) - 1; // -1 offset for own sequence   
+        }
+
+        std::string rt_fragment = query.substr((boundary_start + 1 - ref_start) + mid_len + read_start);
         rt_rep = count_repeats(repeat_unit, rt_fragment);
 
         // repeat as expected
-        if (n_tandem_repeats != (lt_rep + rt_rep)) return 'F';  
+        if (n_tandem_repeats != (lt_rep + mid_rep + rt_rep)) return 'F';  
     } 
     
     //critical region
@@ -479,11 +487,10 @@ char match_to_contig
         
     if (!is_del)
     {
-        int ins_len = (rt_start_idx - lt_end_idx);
-        double frac_covered_ins = n_ins_matched_bases / static_cast<double>(ins_len);
+        double frac_covered_ins = n_ins_matched_bases / static_cast<double>(mid_len);
         
         //smale -> make this thresh adjustable
-        if (ins_len < 4)
+        if (mid_len < 4)
         {
             if (frac_covered_ins < 1.0) return 'F';
         }

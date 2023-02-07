@@ -52,6 +52,7 @@ std::string get_unspliced_ref_seq(const int aln_start, const int aln_end,
                                   const int unspliced_local_reference_start,
                                   const std::string & unspliced_local_reference);
 
+//fasta file kept open???
 std::string get_spliced_ref_seq(const std::string & chrom, const int aln_start,
                                 const std::vector<std::pair<char, int>> & cigar_vector,
                                 FastaReference & fr);
@@ -79,10 +80,10 @@ struct RefSeq {
 };
 
 struct Variant {
-    //std::string chrom;
     int pos;
     std::string ref;
     std::string alt;
+    std::string chrom;
     
     int ref_len;
     int alt_len;
@@ -92,7 +93,7 @@ struct Variant {
     bool is_ins;
     bool is_del;
     
-    Variant(const int pos, const std::string & ref, const std::string & alt);
+    Variant(const int pos, const std::string & ref, const std::string & alt, const std::string & chrom = "N");
     
     //int ref_len_;
     //int alt_len_;
@@ -144,11 +145,19 @@ std::vector<Variant> find_variants(const int aln_start,
 
 int count_repeats(const std::string & ptrn, const std::string & seq);
 
+
+
+std::set<std::string> diff_kmers(const std::string & query,
+                                 const std::string & subject,
+                                 const size_t k);
+
+/*
 std::set<std::string> make_kmers(const std::string & seq, const size_t k);
 
 std::unordered_map<std::string, int> generate_kmer(const std::string & seq, 
                                                       const size_t k,
                                                       std::unordered_set<std::string> & kmers);
+*/
 
 double euclidean_dist(const std::string & query,
                       const size_t k,

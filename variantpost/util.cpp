@@ -449,8 +449,9 @@ std::unordered_map<int, char> reference_by_position(const std::string & unsplice
 Variant::Variant 
 (    int pos, 
      const std::string &ref, 
-     const std::string &alt
-) : pos (pos), ref (ref), alt (alt), 
+     const std::string &alt,
+     const std::string &chrom
+) : pos (pos), ref (ref), alt (alt), chrom(chrom), 
     ref_len (ref.size()), alt_len (alt.size()),
     is_substitute ((alt_len == ref_len)),
     is_ins ((alt_len > ref_len)),
@@ -844,6 +845,21 @@ std::set<std::string> make_kmers(const std::string & seq, const size_t k)
     }
 
     return kmers;
+}
+
+
+std::set<std::string> diff_kmers(const std::string & query,
+                                 const std::string & subject,
+                                 const size_t k)
+{
+    std::set<std::string> qry_kmers = make_kmers(query, k);
+    std::set<std::string> sbj_kmers = make_kmers(subject, k);
+
+    std::set<std::string> diff = {};
+    std::set_difference(qry_kmers.begin(), qry_kmers.end(), 
+                        sbj_kmers.begin(), sbj_kmers.end(),
+                        std::inserter(diff, diff.end()));
+    return diff;
 }
 
 

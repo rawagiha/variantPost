@@ -12,9 +12,9 @@
 #include "swlib.h"
 #include "localn.h"
 #include "fasta/Fasta.h"
-#include "pileup_parser.h"
+#include "read_classifier.h"
 
-#include "aligned_variant.h"
+#include "aligned_target.h"
 
 
 Reads find_seed_reads(const Reads & targets, const double dirty_thresh, const size_t seed_size)
@@ -22,7 +22,7 @@ Reads find_seed_reads(const Reads & targets, const double dirty_thresh, const si
     Reads clean_targets;
     for (const auto & read : targets) 
     {
-        if ((read.dirty_base_rate < dirty_thresh) && (read.read_seq.find("N") == std::string::npos)) 
+        if ((read.dirty_base_rate < dirty_thresh) && (read.seq.find("N") == std::string::npos)) 
         {
             clean_targets.push_back(read);
         }
@@ -54,7 +54,7 @@ Reads find_seed_reads(const Reads & targets, const double dirty_thresh, const si
         Reads tmp = {seeds.begin(), seeds.begin() + seed_size};
         
         std::sort(tmp.begin(), tmp.end(), 
-                  [](const ParsedRead & a, const ParsedRead & b){return a.aln_start < b.aln_start ? true : false;});   
+                  [](const Read & a, const Read & b){return a.aln_start < b.aln_start ? true : false;});   
          
         return tmp;
     }
@@ -116,7 +116,7 @@ std::string construct_ref_contig(const Reads & reads, const std::string & chrom,
 }    
 
 
-std::vector<std::pair<int, int>> split_target_read(const ParsedRead & read)
+std::vector<std::pair<int, int>> split_target_read(const Read & read)
 {   
     // with -1 offset
     int i = -1;
@@ -171,7 +171,7 @@ std::vector<std::pair<int, int>> split_target_read(const ParsedRead & read)
                 rt_fragment.first = i + 1; 
             }
 
-            rt_fragment.second = read.read_seq.size() - (i + alt_len - ref_len);
+            rt_fragment.second = read.seq.size() - (i + alt_len - ref_len);
            
             return {lt_fragment, middle_fragment, rt_fragment};
         }
@@ -204,9 +204,9 @@ SimplifiedRead merge_target_reads(const Reads & targets, const double dirty_thre
         seeds = targets;
         target_start = split_target_read(seeds[0])[0].second - 1;   
         
-        SimplifiedRead _from_single(seeds[0].read_seq,
-                                seeds[0].base_qualities,
-                                target_start);
+        SimplifiedRead _from_single(seeds[0].seq,
+                                    seeds[0].base_qualities,
+                                    target_start);
         return _from_single;
     }
     else 
@@ -218,12 +218,12 @@ SimplifiedRead merge_target_reads(const Reads & targets, const double dirty_thre
         for (const auto & seed : seeds)
         {
             int target_start = split_target_read(seed)[0].second - 1;
-            inputs.emplace_back(seed.read_seq, seed.base_qualities, target_start);
+            inputs.emplace_back(seed.seq, seed.base_qualities, target_start);
               
             // last elem twice
             if (&seed == &seeds.back()) 
             {    
-                inputs.emplace_back(seed.read_seq, seed.base_qualities, target_start);
+                inputs.emplace_back(seed.seq, seed.base_qualities, target_start);
             }
         }
 
@@ -281,7 +281,7 @@ public:
     void set_details(const Reads & seeds, const SimplifiedRead & mr)
     {   
         seeds_size = seeds.size();
-        ParsedRead sample_seed = seeds[0];
+        Read sample_seed = seeds[0];
          
         target_pos = sample_seed.target_aligned_pos;
         target_ref = sample_seed.target_aligned_ref;
@@ -377,7 +377,7 @@ void repeat_check(const Variant & trgt, const Contig & contig, const std::string
     const size_t rt_len = contig.decomposition[2].second;
     std::string lt_seq = contig.seq.substr(0, lt_len);
     std::string rt_seq = contig.seq.substr(contig.decomposition[2].first, rt_len);
-   
+    
     std::string allele_for_lt = "";
     std::string allele_for_rt = "";
     if (trgt.is_ins)
@@ -457,7 +457,7 @@ void classify_candidates(const Reads & candidates, const Contig & contig,
        
         
         int kmer_score = 0;
-        const char* read_seq = read.read_seq.c_str();
+        const char* read_seq = read.seq.c_str();
         for (const auto & kmer : informative_kmers)
         {
             if(strstr(read_seq, kmer.c_str())) ++kmer_score;
@@ -467,13 +467,11 @@ void classify_candidates(const Reads & candidates, const Contig & contig,
 
         if (kmer_score)
         {
-            // or extend here? using perfec match
-            std::cout << read.read_name << "; ";
-            char match_ptrn = match_to_contig(read.read_seq, is_dirty_query,
+            char match_ptrn = match_to_contig(read.seq, is_dirty_query,
                                               contig.seq, contig.ref_seq, contig.decomposition, contig.is_dirty,
                                               n_tandem_repeats, repeat_unit, rv_repeat_unit, is_complete_tandem_repeat,
                                               repeat_boundary, filter, aligner, alignment);
-            std::cout << match_ptrn << std::endl;
+            
             switch (match_ptrn)
             {
                 case 'L':
@@ -528,7 +526,7 @@ bool is_covered(const std::pair<int, int> & segment,
     return false;   
 }
 
-bool is_compatible_spl_ptrn(const ParsedRead & read, const std::vector<std::pair<int, int>> & coordinates)
+bool is_compatible_spl_ptrn(const Read & read, const std::vector<std::pair<int, int>> & coordinates)
 {
     const size_t coord_size = coordinates.size();
     
@@ -614,7 +612,7 @@ void extend_contig_seq(const Contig & contig,
             Reads lt_tmp = {lt_extenders.begin(), lt_extenders.begin() + lt_size};
 
             std::sort(lt_tmp.begin(), lt_tmp.end(),
-                  [](const ParsedRead & a, const ParsedRead & b)
+                  [](const Read & a, const Read & b)
                   {return a.aln_start < b.aln_start ? true : false;});
 
             std::vector<int> aln_starts;
@@ -623,7 +621,7 @@ void extend_contig_seq(const Contig & contig,
             {
                 if (is_compatible_spl_ptrn(_ext, contig.coordinates))
                 {
-                    lt_inputs.emplace_back(_ext.read_seq, _ext.base_qualities, -1);
+                    lt_inputs.emplace_back(_ext.seq, _ext.base_qualities, -1);
                     aln_starts.push_back(_ext.aln_start);
                 }
             }
@@ -654,7 +652,7 @@ void extend_contig_seq(const Contig & contig,
             Reads rt_tmp = {rt_extenders.end() - rt_size, rt_extenders.end()};
 
             std::sort(rt_tmp.begin(), rt_tmp.end(), 
-                  [](const ParsedRead & a, const ParsedRead & b)
+                  [](const Read & a, const Read & b)
                   {return a.aln_start < b.aln_start ? false : true;});
 
             std::vector<int> aln_ends;
@@ -663,7 +661,7 @@ void extend_contig_seq(const Contig & contig,
             {
                 if (is_compatible_spl_ptrn(_ext, contig.coordinates))
                 {
-                    rt_inputs.emplace_back(_ext.read_seq, _ext.base_qualities, -1);
+                    rt_inputs.emplace_back(_ext.seq, _ext.base_qualities, -1);
                     aln_ends.push_back(_ext.aln_end);
                 }
             }
@@ -830,12 +828,10 @@ void process_aligned_target(const std::string & chrom, FastaReference & fr, cons
     std::cout << "target: " << targets.size() + lt_extenders.size() + extra_targets.size() + rt_extenders.size()<< std::endl;
     std::cout << "non_target: " << non_targets.size() << " " << std::endl;
     std::cout << "undetermined: " << undetermined.size() << std::endl;
-    /*
-    for (auto & r : non_targets)
-    {
-        std::cout << r.read_name << " " << r.cigar_string << std::endl;
-    }
-    */    
+    //for (auto & r : non_targets)
+    //{
+    //    std::cout << r.read_name << " " << r.cigar_string << std::endl;
+    //}
 }
 
 
