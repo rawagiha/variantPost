@@ -437,9 +437,9 @@ void repeat_check(const Variant & trgt, const Contig & contig, const std::string
 }
 
 
-void classify_candidates(const Reads & candidates, const Contig & contig, 
+void classify_candidates(Reads & candidates, const Contig & contig, 
                          const Filter & filter, const Aligner & aligner, Alignment & alignment, 
-                         const std::set<std::string> & informative_kmers,
+                         const std::set<std::string> & target_kmers,
                          const bool is_complete_tandem_repeat, const int n_tandem_repeats,
                          const std::pair<int, int> & repeat_boundary,
                          const std::string & repeat_unit, const std::string & rv_repeat_unit,
@@ -447,57 +447,63 @@ void classify_candidates(const Reads & candidates, const Contig & contig,
                          Reads & lt_extenders, Reads & extra_targets, Reads & rt_extenders,
                          Reads & undetermined, Reads & non_targets)
 {
-    for (const auto & read : candidates)
+    for (size_t i = 0; i < candidates.size(); ++i)
     {
-        if (is_complete_tandem_repeat && read.has_non_target_in_critical_region) 
+        if (is_complete_tandem_repeat && candidates[i].has_non_target_in_critical_region) 
         {
-            non_targets.push_back(read);
+            //non_targets.push_back(read);
+            transfer_elem(non_targets, candidates, i);
             continue;
         }
-       
         
-        int kmer_score = 0;
+        int kmer_score = count_kmer_overlap(candidates[i].seq, target_kmers);
+        /*
         const char* read_seq = read.seq.c_str();
         for (const auto & kmer : informative_kmers)
         {
             if(strstr(read_seq, kmer.c_str())) ++kmer_score;
         }
-        
-        const bool is_dirty_query = (read.dirty_base_rate < low_quality_base_rate_threshold);
+        */
+        const bool is_dirty_query = (candidates[i].dirty_base_rate < low_quality_base_rate_threshold);
 
         if (kmer_score)
         {
-            char match_ptrn = match_to_contig(read.seq, is_dirty_query,
+            char match_ptrn = match_to_contig(candidates[i].seq, is_dirty_query,
                                               contig.seq, contig.ref_seq, contig.decomposition, contig.is_dirty,
                                               n_tandem_repeats, repeat_unit, rv_repeat_unit, is_complete_tandem_repeat,
-                                              repeat_boundary, filter, aligner, alignment);
-            
+                                              repeat_boundary, filter, aligner, alignment); 
             switch (match_ptrn)
             {
                 case 'L':
-                    lt_extenders.push_back(read);
+                    //lt_extenders.push_back(read);
+                    transfer_elem(lt_extenders, candidates, i);
                     //std::cout << read.read_name << " " << read.is_reverse << " " << read.cigar_string << std::endl;            
                     break;
                 case 'M':
-                    extra_targets.push_back(read);
+                    transfer_elem(extra_targets, candidates, i);
+                    //extra_targets.push_back(read);
                     break;
                 case 'R':
-                    rt_extenders.push_back(read);
+                    transfer_elem(rt_extenders, candidates, i);
+                    //rt_extenders.push_back(read);
                     break;
                 case 'F':
-                    non_targets.push_back(read);
+                    //non_targets.push_back(read);
+                    transfer_elem(non_targets, candidates, i);
                     break;
                 case 'U':
-                    undetermined.push_back(read);
+                    //undetermined.push_back(read);
+                    transfer_elem(undetermined, candidates, i);
                     break;
             }                    
         }
         else
         {
-             non_targets.push_back(read);
+             //non_targets.push_back(read);
+             transfer_elem(non_targets, candidates, i);
         }
-     
-     }   
+     }
+     candidates.clear();   
 }    
 
 
@@ -744,9 +750,17 @@ void align_to_contig(const std::string & chrom, FastaReference & fr,
 
 
 
-void process_aligned_target(const std::string & chrom, FastaReference & fr, const int base_quality_threshold, const double low_quality_base_rate_threshold, const int kmer_size, 
-                            std::string & _contig, int & target_pos, std::string & target_ref, std::string & target_alt, std::string & _repeat_unit,
+//void process_aligned_target(const std::string & chrom, FastaReference & fr, const int base_quality_threshold, const double low_quality_base_rate_threshold, const int kmer_size, 
+//                            std::string & _contig, int & target_pos, std::string & target_ref, std::string & target_alt, std::string & _repeat_unit,
+//                            Reads & targets, Reads & candidates, Reads & non_targets)
+void process_aligned_target(Variant & target,
+                            FastaReference & fr, 
+                            const int base_quality_threshold,
+                            const double low_quality_base_rate_threshold, 
+                            const int kmer_size,
+                            std::string & _contig,
                             Reads & targets, Reads & candidates, Reads & non_targets)
+
 {   
     
     /*
@@ -756,7 +770,7 @@ void process_aligned_target(const std::string & chrom, FastaReference & fr, cons
     }
     */
 
-    Contig contig = set_up_contig(chrom, targets, low_quality_base_rate_threshold, base_quality_threshold, fr);
+    Contig contig = set_up_contig(target.chrom, targets, low_quality_base_rate_threshold, base_quality_threshold, fr);
     
     std::set<std::string> informative_kmers = diff_kmers(contig.seq, contig.ref_seq, kmer_size);
     
@@ -769,7 +783,7 @@ void process_aligned_target(const std::string & chrom, FastaReference & fr, cons
     
     int  n_tandem_repeats = 0;
     bool is_complete_tandem_repeat = false;
-    std::pair<int, int> repeat_boundary; 
+    std::pair<int, int> repeat_boundary = {}; 
     repeat_check(observed_target, contig, repeat_unit, n_tandem_repeats, is_complete_tandem_repeat, repeat_boundary);
     
     //gap-less alignment
@@ -809,7 +823,7 @@ void process_aligned_target(const std::string & chrom, FastaReference & fr, cons
     std::cout << std::endl;
     
     
-    align_to_contig(chrom, fr, extended, ext_coord);
+    align_to_contig(target.chrom, fr, extended, ext_coord);
     
     /*const size_t lt_len = contig.decomposition[0].second;
     const size_t rt_len = contig.decomposition[2].second;
@@ -825,13 +839,19 @@ void process_aligned_target(const std::string & chrom, FastaReference & fr, cons
     Alignment alna;
     
      
+    transfer_vector(targets, lt_extenders);
+    transfer_vector(targets, extra_targets);
+    transfer_vector(targets, rt_extenders); 
+    
     std::cout << "target: " << targets.size() + lt_extenders.size() + extra_targets.size() + rt_extenders.size()<< std::endl;
     std::cout << "non_target: " << non_targets.size() << " " << std::endl;
     std::cout << "undetermined: " << undetermined.size() << std::endl;
-    //for (auto & r : non_targets)
-    //{
-    //    std::cout << r.read_name << " " << r.cigar_string << std::endl;
-    //}
+    /*
+    for (auto & r : non_targets)
+    {
+        std::cout << r.read_name << " " << r.cigar_string << std::endl;
+    }
+    */
 }
 
 

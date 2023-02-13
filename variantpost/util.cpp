@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include <utility>
+#include <cstring>
 #include <iostream>
 #include <algorithm>
 #include <unordered_map>
@@ -863,6 +864,19 @@ std::set<std::string> diff_kmers(const std::string & query,
 }
 
 
+int count_kmer_overlap(const string & seq, const std::set<std::string> & kmer_set)
+{
+    int kmer_cnt = 0;
+    const char* _seq = seq.c_str();
+    for (const auto & kmer : kmer_set)
+    {
+        if(strstr(_seq, kmer.c_str())) ++kmer_cnt;
+    }
+
+    return kmer_cnt; 
+}
+
+
 std::unordered_map<std::string, int> generate_kmer(const std::string & seq, 
                                                    const size_t k,
                                                    std::unordered_set<std::string> & kmers)
@@ -890,7 +904,6 @@ inline int kmer_cnt_lookup(const std::string & kmer, const std::unordered_map<st
        return (*it).second;
    }
 }
-
 
 double euclidean_dist(const std::string & query,
                       const size_t k,

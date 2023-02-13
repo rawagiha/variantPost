@@ -43,6 +43,7 @@ struct Read
     char clip_ptrn;
     double dirty_base_rate = 0.0;
     std::string non_ref_ptrn_str;
+    int kmer_score = -1;
 
     Read();
 

@@ -36,6 +36,7 @@ extensions = [
             "variantpost/fasta/Fasta.cpp",
             "variantpost/fasta/split.cpp",
             "variantpost/aligned_target.cpp",
+            "variantpost/unaligned_target.cpp",
         ],
         language="c++",
     ),

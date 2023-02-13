@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 #include <utility>
+#include <iterator>
 #include <algorithm>
 #include <unordered_map>
 #include <unordered_set>
@@ -17,6 +18,35 @@ bool is_ascending(const A & a, const B & b, const C & c)
 {
     return (a <= b) && (b <= c);
 }
+
+//transfer all elems to destination vector
+//source vector will be cleared
+//---------------------------------------------------------------
+template<typename A>
+void transfer_vector(std::vector<A> & dest, std::vector<A> & src)
+{
+    dest.insert(
+        dest.end(),
+        std::make_move_iterator(src.begin()),
+        std::make_move_iterator(src.end())
+       );
+
+    src.clear();
+}
+
+//transfer i-th elem to destination vector
+//source vector will NOT be resized
+//------------------------------------------------------------
+template<typename A>
+void transfer_elem(std::vector<A> & dest, std::vector<A> & src, const size_t i)
+{
+    dest.insert(
+        dest.end(),
+        std::make_move_iterator(src.begin() + i),
+        std::make_move_iterator(src.begin() + i + 1)
+       );
+}
+
 
 std::string find_commonest_str(const std::vector<std::string> & arr_str);
 
@@ -150,6 +180,8 @@ int count_repeats(const std::string & ptrn, const std::string & seq);
 std::set<std::string> diff_kmers(const std::string & query,
                                  const std::string & subject,
                                  const size_t k);
+
+int count_kmer_overlap(const string & seq, const std::set<std::string> & kmer_set);
 
 /*
 std::set<std::string> make_kmers(const std::string & seq, const size_t k);

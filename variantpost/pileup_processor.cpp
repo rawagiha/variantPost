@@ -6,6 +6,7 @@
 #include "pileup_processor.h"
 #include "read_classifier.h"
 #include "aligned_target.h"
+#include "unaligned_target.h"
 
 pp::ProcessedPileup prepare_processed_rslt(std::string & contig,
                                        int target_pos,
@@ -101,18 +102,17 @@ pp::ProcessedPileup  pp::process_pileup(
         // return result here
     }
     
-    std::cout << "target N: " << targets.size() << std::endl;
-    std::cout << "candidate N: " << candidates.size() << std::endl; 
-    std::cout << "non_target N: " << non_targets.size() << std::endl;  
     
     std::string contig = "";
     
     
-    std::string minimal_repeat = target.minimal_repeat_unit();
+    //std::string minimal_repeat = target.minimal_repeat_unit();
      
     
-    if (targets.size() > 0) {
-         process_aligned_target(chrom,
+    if (targets.size() > 0) 
+    {
+         /*
+         process_aligned_target(chromi,
                                 fr,
                                 base_quality_threshold,
                                 low_quality_base_rate_threshold,
@@ -125,9 +125,13 @@ pp::ProcessedPileup  pp::process_pileup(
                                 targets,
                                 candidates,
                                 non_targets);
+       */
+        process_aligned_target(target, fr, base_quality_threshold, low_quality_base_rate_threshold, kmer_size, contig, targets, candidates, non_targets);
     }
-    else if (candidates.size() > 0) {
-        //candidate processor
+    else if (candidates.size() > 0) 
+    {
+        std::cout << "enter here" << std::endl;
+        process_unaligned_target(target, fr, targets, candidates, non_targets, kmer_size);
     }
     
     
@@ -137,6 +141,13 @@ pp::ProcessedPileup  pp::process_pileup(
                                                  target.alt, 
                                                  targets, 
                                                  non_targets);
+    
+    
+    std::cout << "target N: " << targets.size() << std::endl;
+    std::cout << "candidate N: " << candidates.size() << std::endl; 
+    std::cout << "non_target N: " << non_targets.size() << std::endl;  
+    
+    
     //output preparer
     
     

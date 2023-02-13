@@ -341,6 +341,7 @@ SimplifiedRead merge_reads(const std::vector<SimplifiedRead> & inputs)
 
 
 //complete contig
+//TODO stratify by kmer score
 char match_to_contig
 (
     const std::string & query, const bool is_dirty_query,
@@ -369,8 +370,6 @@ char match_to_contig
     const int ref_start = alignment.ref_begin;
     const int ref_end = alignment.ref_end;
     
-    
-    
     // still has gap
     std::string cigar_string = alignment.cigar_string;
     size_t found_ins = cigar_string.find("I");
@@ -378,7 +377,7 @@ char match_to_contig
     if (found_ins != std::string::npos || found_del != std::string::npos) return 'F';
        
     // doesn't overlap the target region
-    if (ref_end <= lt_end_idx || rt_start_idx <= ref_start) return 'F';
+    if (ref_end <= lt_end_idx || rt_start_idx <= ref_start) return 'U';
     
     // del needs to be covered
     if (is_del)
@@ -496,7 +495,7 @@ char match_to_contig
         }
         else 
         {    //simscore -> make this thresh adjustable
-            if (frac_covered_ins < 0.66) return 'F'; 
+            if (n_ins_matched_bases < 3) return 'F'; 
         }  
     }
    
