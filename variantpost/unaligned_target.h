@@ -9,6 +9,8 @@
 
 
 void process_unaligned_target(Variant & target, FastaReference & fr, 
+                              const int base_quality_threshold,
+                              const double low_quality_base_rate_threshold, 
                               std::vector<Read> & targets, 
                               std::vector<Read> & candidates, 
                               std::vector<Read> & non_targets,

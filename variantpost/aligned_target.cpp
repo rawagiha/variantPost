@@ -332,7 +332,7 @@ Contig set_up_contig(const std::string & chrom, const Reads & targets, const dou
     contig.set_ref_seq(seeds, chrom, fr);
     contig.set_dirty_rate(qual_thresh);
     contig.set_details(seeds, mr); 
-    
+
     return contig;     
 }       
 
@@ -371,7 +371,12 @@ inline bool is_rotatable(const std::string & unpadded_allele)
     return (*unpadded_allele.begin() == *(unpadded_allele.end() - 1));
 }
 
-void repeat_check(const Variant & trgt, const Contig & contig, const std::string & repeat_unit, int & n_tandem_repeats, bool & is_complete_tandem_repeat, std::pair<int, int> & boundary)
+void repeat_check(const Variant & trgt, 
+                  const Contig & contig, 
+                  const std::string & repeat_unit, 
+                  int & n_tandem_repeats, 
+                  bool & is_complete_tandem_repeat, 
+                  std::pair<int, int> & boundary)
 {
     const size_t lt_len = contig.decomposition[0].second;
     const size_t rt_len = contig.decomposition[2].second;
@@ -452,11 +457,12 @@ void classify_candidates(Reads & candidates, const Contig & contig,
         if (is_complete_tandem_repeat && candidates[i].has_non_target_in_critical_region) 
         {
             //non_targets.push_back(read);
-            transfer_elem(non_targets, candidates, i);
-            continue;
+            //transfer_elem(non_targets, candidates, i);
+            //continue;
         }
         
         int kmer_score = count_kmer_overlap(candidates[i].seq, target_kmers);
+        
         /*
         const char* read_seq = read.seq.c_str();
         for (const auto & kmer : informative_kmers)
@@ -472,6 +478,7 @@ void classify_candidates(Reads & candidates, const Contig & contig,
                                               contig.seq, contig.ref_seq, contig.decomposition, contig.is_dirty,
                                               n_tandem_repeats, repeat_unit, rv_repeat_unit, is_complete_tandem_repeat,
                                               repeat_boundary, filter, aligner, alignment); 
+            
             switch (match_ptrn)
             {
                 case 'L':
@@ -762,14 +769,12 @@ void process_aligned_target(Variant & target,
                             Reads & targets, Reads & candidates, Reads & non_targets)
 
 {   
-    
     /*
-    for (auto & read : candidates)
+    for (auto & read : non_targets)
     {
         std::cout << read.read_name << " " << read.is_reverse << " " << read.may_be_complex << " " << read.non_ref_ptrn_str << " " << read.has_non_target_in_critical_region << " " << std::endl;
     }
     */
-
     Contig contig = set_up_contig(target.chrom, targets, low_quality_base_rate_threshold, base_quality_threshold, fr);
     
     std::set<std::string> informative_kmers = diff_kmers(contig.seq, contig.ref_seq, kmer_size);
@@ -798,6 +803,7 @@ void process_aligned_target(Variant & target,
      
     
     Reads lt_extenders, extra_targets, rt_extenders, undetermined;
+    
     classify_candidates(candidates, contig, filter, aligner, aln, informative_kmers,
                         is_complete_tandem_repeat, n_tandem_repeats, repeat_boundary,
                         repeat_unit, rv_repeat_unit, low_quality_base_rate_threshold,

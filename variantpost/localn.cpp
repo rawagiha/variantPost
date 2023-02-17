@@ -366,7 +366,7 @@ char match_to_contig
     mask_len = mask_len < 15 ? 15 : mask_len;
             
     aligner.Align(query.c_str(), contig_seq.c_str(), contig_len, filter, &alignment, mask_len);
-   
+
     const int ref_start = alignment.ref_begin;
     const int ref_end = alignment.ref_end;
     

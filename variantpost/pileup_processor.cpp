@@ -130,8 +130,7 @@ pp::ProcessedPileup  pp::process_pileup(
     }
     else if (candidates.size() > 0) 
     {
-        std::cout << "enter here" << std::endl;
-        process_unaligned_target(target, fr, targets, candidates, non_targets, kmer_size);
+        process_unaligned_target(target, fr, base_quality_threshold, low_quality_base_rate_threshold, targets, candidates, non_targets, kmer_size);
     }
     
     
@@ -146,7 +145,10 @@ pp::ProcessedPileup  pp::process_pileup(
     std::cout << "target N: " << targets.size() << std::endl;
     std::cout << "candidate N: " << candidates.size() << std::endl; 
     std::cout << "non_target N: " << non_targets.size() << std::endl;  
-    
+    for (auto & c : non_targets)
+    {
+        std::cout << c.read_name << " " << c.cigar_string << std::endl;
+    }    
     
     //output preparer
     

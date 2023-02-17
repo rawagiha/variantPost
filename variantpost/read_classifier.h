@@ -23,6 +23,7 @@ struct Read
     int read_end;
     int covering_start = 0;
     int covering_end = 0;
+    double centrality = -1.0;
     int start_offset;
     int end_offset;
     std::string seq;

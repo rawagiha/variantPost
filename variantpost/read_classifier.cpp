@@ -521,6 +521,18 @@ Read::Read
                         );
     }
     
+    if (covering_ptrn == 'A')
+    {
+        if (pos - covering_start > covering_end - pos)
+        {
+            centrality = (covering_end - pos)/static_cast<double>(covering_end - covering_start);
+        }
+        else
+        {
+            centrality = (pos - covering_start)/static_cast<double>(covering_end - covering_start);
+        }
+    } 
+    
     local_ptrn = classify_local_ptrn(
                         may_be_complex,
                         has_non_target_in_critical_region,
