@@ -457,7 +457,18 @@ Variant::Variant
     is_substitute ((alt_len == ref_len)),
     is_ins ((alt_len > ref_len)),
     is_del ((alt_len < ref_len))
-{}
+{
+    if (ref_len < alt_len)
+    {
+        if (alt.substr(0, ref_len) == ref) is_complex = false; 
+        else is_complex = true;
+    }
+    else
+    {
+        if (ref.substr(0, alt_len) == alt) is_complex = false;
+        else is_complex = true;
+    }    
+}
 
 inline bool is_rotatable(const std::string & allele)
 {
@@ -499,6 +510,7 @@ void left_align(int & pos,
 void Variant::left_aln(const int unspliced_local_reference_start,
                        const std::unordered_map<int, char> & indexed_local_reference)
 {
+    if (is_complex) return;
     left_align(pos, variant_end_pos, ref, alt, is_ins, unspliced_local_reference_start, indexed_local_reference);
 }         
 
@@ -506,7 +518,7 @@ void Variant::left_aln(const int unspliced_local_reference_start,
 int Variant::get_leftmost_pos(const int unspliced_local_reference_start, 
                               const std::unordered_map<int, char> & indexed_local_reference) const
 {
-    if (is_substitute) return pos;   
+    if (is_substitute || is_complex) return pos;   
     
     int pos_ = pos;
     int variant_end_pos_ = variant_end_pos;
@@ -558,7 +570,7 @@ int Variant::get_rightmost_pos(const int unspliced_local_reference_end,
                                const std::unordered_map<int, char> & indexed_local_reference) const
 {
     //NA: snv, mnv
-    if (is_substitute) return pos;
+    if (is_substitute || is_complex) return pos;
 
     int pos_ = pos;
     int variant_end_pos_ = variant_end_pos;
@@ -578,11 +590,13 @@ int Variant::get_rightmost_pos(const int unspliced_local_reference_end,
 bool Variant::is_shiftable(const std::unordered_map<int, char> & indexed_local_reference) const
 {
 
-    if (is_substitute) {
+    if (is_substitute || is_complex) 
+    {
         return false;
     }
 
-    if (is_ins) {
+    if (is_ins) 
+    {
         if (is_rotatable(alt)) {
             return true;
         }

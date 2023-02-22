@@ -9,6 +9,7 @@
 #include <algorithm>
 
 #include "util.h"
+#include "localn.h"
 #include "aligned_target.h"
 #include "unaligned_target.h"
 #include "read_classifier.h"
@@ -43,9 +44,12 @@ void mock_target_seq(std::string & mocked_seq,
     
     size_t k = 3;
     
-    std::string lt_frag = fr.getSubSequence(target.chrom, target.pos - kmer_size * k, kmer_size * k);
+    int offset = 0;
+    if (target.is_complex) offset = 1; 
+    std::string lt_frag = fr.getSubSequence(target.chrom, target.pos - offset - kmer_size * k, kmer_size * k);
+    
     layout.emplace_back(0, lt_frag.size());
-    std::string mid_frag = target.alt.substr(1, target.alt.size() - 1);
+    std::string mid_frag = target.alt;
     layout.emplace_back(lt_frag.size(), mid_frag.size());
     std::string rt_frag = fr.getSubSequence(target.chrom,  rt_frag_start, kmer_size * k);
     layout.emplace_back(lt_frag.size() + mid_frag.size() + 1, rt_frag.size()); 
@@ -192,6 +196,7 @@ void reclassify_candidates(const Variant & target,
 }
 
 
+//TODO decomposiiton of cplx indels
 void retarget(Variant & target,
               std::vector<Read> & targets,
               std::vector<Read> & candidates,
@@ -229,13 +234,6 @@ void retarget(Variant & target,
         
         if (dist2gap <= pos_ambi_thresh && dist2near_var <= seq_span_thresh)
         {
-           // Read top = top_candidates[0];
-            //top.target_aligned_pos = closest_indel.pos;
-            //top.target_aligned_ref = closest_indel.ref;
-            //top.target_aligned_alt = closest_indel.alt; 
-            //targets.push_back(top);
-            
-            //closest_indel.chrom = target.chrom;
             target = closest_indel;
             
             reclassify_candidates(target, targets, candidates);           
@@ -246,6 +244,107 @@ void retarget(Variant & target,
 }
 
 
+inline void add_to_input(
+                std::vector<SimplifiedRead> & input, 
+                const std::vector<int> & indexes, 
+                std::vector<Read> & candidates, 
+                int n)
+{
+    size_t idx_size = indexes.size();
+    
+    if (idx_size)
+    {
+    
+       
+    }  
+}
+void prep_reads_to_merge(std::vector<SimplifiedRead> & inputs, std::vector<Read> & candidates)
+{
+    
+    int kmer_score_thresh = static_cast<int>(candidates[0].kmer_score / 2.0);
+    
+    std::vector<int> lt_clipped = {};
+    std::vector<int> rt_clipped = {};
+    std::vector<int> unclipped = {};
+    for (int i = 0; i < candidates.size(); ++i)
+    {
+        char clp = candidates[i].clip_ptrn;
+
+        switch (clp)
+        {
+            case 'L':
+                lt_clipped.push_back(i);
+                break;
+            case 'R':
+                rt_clipped.push_back(i);
+                break;
+            default:
+                unclipped.push_back(i);
+                break;
+        }
+    }
+
+    
+
+}
+
+
+SimplifiedRead merge_to_fragment(std::vector<Read> & candidates, char clip_ptrn)
+{
+    std::vector<Read> tmp = {};
+    for (auto & read : candidates)
+    {
+        if (read.kmer_score > 0 && read.clip_ptrn == clip_ptrn)
+        {  
+            read.used4contig = true;
+            tmp.push_back(read);
+        }
+    }
+    
+    if (tmp.empty())
+    {
+        SimplifiedRead empty_read;
+        return empty_read;    
+    }
+    else
+    {
+        if (clip_ptrn == 'L')
+        {
+            std::sort(tmp.begin(), tmp.end(),
+                [](const Read & a, const Read & b){return a.read_start < b.read_start ? true : false;});    
+        }
+        else
+        {
+            std::sort(tmp.begin(), tmp.end(),
+                [](const Read & a, const Read & b){return a.aln_start < b.aln_start ? true : false;});
+        }
+
+        std::vector<SimplifiedRead> inputs;
+        for (auto & read : tmp)
+        {
+            inputs.emplace_back(read.seq, read.base_qualities, -1);
+        }
+
+        return merge_reads(inputs);
+     }
+}
+/*
+SimplifiedRead stitch_fragments(std::vector<SimplifiedRead> & fragments)
+{
+    for (int i = 0; i < 3; ++i)
+    {
+        if (i == 0)
+        {
+            if (fragments[0].empty()) continue;
+            else
+            {
+                
+            }
+        }
+    }
+}
+*/
+
 void process_unaligned_target(Variant & target, FastaReference & fr, 
                               const int base_quality_threshold,
                               const double low_quality_base_rate_threshold, 
@@ -254,6 +353,7 @@ void process_unaligned_target(Variant & target, FastaReference & fr,
                               std::vector<Read> & non_targets,
                               const size_t kmer_size)
 {
+    
     std::string mocked_seq = "";
     std::vector<std::pair<int, int>> mocked_seq_layout;
     std::string ref_seq = "";
@@ -261,20 +361,28 @@ void process_unaligned_target(Variant & target, FastaReference & fr,
     kmer_annot_candidates(target, fr, candidates, 
                           mocked_seq, mocked_seq_layout, ref_seq,
                           kmer_size);
-                           
+    
+    bool is_retargetable = false;                          
+    retarget(target, targets, candidates, 2, 10, is_retargetable);
+    
+    if (is_retargetable)   
+    {    
+        std::string _c;
+        process_aligned_target(target, fr, base_quality_threshold, low_quality_base_rate_threshold, kmer_size, _c, targets, candidates, non_targets);
+        return;
+    }
+
     sift_by_kmer(target, fr, candidates, non_targets);
 
     //exit if kmer_score = 0 for all candidates
-    if (!candidates.size()) return; 
-
-    bool is_retargetable = false;
-    retarget(target, targets, candidates, 2, 10, is_retargetable);
+    if (candidates.empty()) return;
     
-    if (is_retargetable)
-    {  
-        std::string _c;
-        std::cout << target.pos << " " << target.ref << " " << target.alt << " " << target.is_ins << std::endl;
-        process_aligned_target(target, fr, base_quality_threshold, low_quality_base_rate_threshold, kmer_size, _c, targets, candidates, non_targets);
-    }    
+    std::vector<char> ptrns = {'R', 'U', 'L'};
+    std::vector<SimplifiedRead> fragments = {};
+    for (const auto & ptrn : ptrns)
+    {
+        fragments.emplace_back(merge_to_fragment(candidates, ptrn));
+    }
+
 }
 

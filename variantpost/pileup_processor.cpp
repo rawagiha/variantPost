@@ -72,8 +72,7 @@ pp::ProcessedPileup  pp::process_pileup(
                                                 unspl_loc_ref,
                                                 unspl_loc_ref_start, unspl_loc_ref_end
                                              );
-
-     
+    
     Variant target = Variant(pos, ref, alt, chrom);
     
     classify_reads(targets, candidates, non_targets,
@@ -145,11 +144,12 @@ pp::ProcessedPileup  pp::process_pileup(
     std::cout << "target N: " << targets.size() << std::endl;
     std::cout << "candidate N: " << candidates.size() << std::endl; 
     std::cout << "non_target N: " << non_targets.size() << std::endl;  
+    /*
     for (auto & c : non_targets)
     {
         std::cout << c.read_name << " " << c.cigar_string << std::endl;
     }    
-    
+    */
     //output preparer
     
     

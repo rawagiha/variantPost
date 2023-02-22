@@ -5,7 +5,15 @@ import time
 
 class VariantAlignment(object):
     def __init__(
-        self, variant, bam, second_bam=None, window=200, exclude_duplicates=True, downsample_threshold=-1, mapping_quality_threshold=1, base_quality_threshold=20, low_quality_base_rate_threshold=0.1, kmer_size=15, 
+        self, variant, bam, 
+        second_bam=None, 
+        window=200, 
+        exclude_duplicates=True, 
+        downsample_threshold=-1, 
+        mapping_quality_threshold=1, 
+        base_quality_threshold=20, 
+        low_quality_base_rate_threshold=0.05, 
+        kmer_size=32, 
     ):
 
         (

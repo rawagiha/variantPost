@@ -33,9 +33,9 @@ struct InputRead
 
 struct SimplifiedRead
 {
-    std::string seq;
-    std::string base_qualities;
-    int target_start;
+    std::string seq = "";
+    std::string base_qualities = "";
+    int target_start = -1;
 
     SimplifiedRead() {}
 
@@ -46,7 +46,13 @@ struct SimplifiedRead
     ) : seq(seq),
         base_qualities(base_qualities),
         target_start(target_start) {}
+
+   bool empty()
+   {
+       return seq.empty();
+   }
 };
+
 
 /*
 struct MergedRead

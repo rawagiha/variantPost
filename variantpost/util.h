@@ -122,6 +122,8 @@ struct Variant {
     bool is_substitute;
     bool is_ins;
     bool is_del;
+    bool is_complex;
+    
     
     Variant(const int pos, const std::string & ref, const std::string & alt, const std::string & chrom = "N");
     
