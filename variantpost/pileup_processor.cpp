@@ -94,6 +94,16 @@ pp::ProcessedPileup  pp::process_pileup(
                    quals,
                    mapqs);
     
+    std::cout << "hello! classified" << std::endl;
+    
+    if (target.is_substitute)
+    {
+        cout << "This SNV is found: " << targets.size() << " alt: " << candidates.size() << " cand: " << non_targets.size() << " non-tar" << std::endl;
+        
+        ProcessedPileup _prp_snv;
+        return _prp_snv;
+    }
+
     // no targets/candidates
     if (targets.empty() && candidates.empty())
     {

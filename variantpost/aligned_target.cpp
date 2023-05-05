@@ -746,13 +746,11 @@ void align_to_contig(const std::string & chrom, FastaReference & fr,
     int aln_end = genomic_pos[aln.ref_end];  
     std::cout << aln_start << " " << aln_end << std::endl;
     std::string non;
-    /*
-    std::vector<Variant> aa = find_mapped_variants(aln_start, aln_end, extended_ref, extended_contig.seq, extended_contig.base_qualities,  cigar_vec, non);
+    std::vector<Variant> aa = find_mapped_variants(aln_start, aln_end, extended_ref.substr(aln.ref_begin), extended_contig.seq.substr(aln.query_begin), extended_contig.base_qualities,  cigar_vec, non);
     for (auto & v : aa)
     {
         std::cout << v.pos << " " << v.ref << " " << v.alt << std::endl;
     }
-    */
 }
 
 
