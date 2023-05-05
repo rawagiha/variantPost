@@ -104,5 +104,5 @@ cdef string test_it(
     
     #res is not a python obj..
     
-    print(res.contig) 
+    print(res.contig, res.target_pos, res.ref, res.alt) 
     return "aaa"

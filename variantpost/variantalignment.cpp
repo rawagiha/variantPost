@@ -1833,10 +1833,10 @@ static PyObject *__pyx_n_s_window;
 /* #### Code section: decls ### */
 static PyObject *__pyx_pf_11variantpost_16variantalignment_16VariantAlignment___init__(CYTHON_UNUSED PyObject *__pyx_self, CYTHON_UNUSED PyObject *__pyx_v_self, PyObject *__pyx_v_variant, PyObject *__pyx_v_bam, PyObject *__pyx_v_second_bam, PyObject *__pyx_v_window, PyObject *__pyx_v_exclude_duplicates, PyObject *__pyx_v_downsample_threshold, PyObject *__pyx_v_mapping_quality_threshold, PyObject *__pyx_v_base_quality_threshold, PyObject *__pyx_v_low_quality_base_rate_threshold, PyObject *__pyx_v_kmer_size); /* proto */
 #if !CYTHON_USE_MODULE_STATE
-static PyObject *__pyx_float_0_1;
+static PyObject *__pyx_float_0_05;
 static PyObject *__pyx_int_1;
-static PyObject *__pyx_int_15;
 static PyObject *__pyx_int_20;
+static PyObject *__pyx_int_32;
 static PyObject *__pyx_int_200;
 static PyObject *__pyx_int_neg_1;
 #endif
@@ -1926,10 +1926,10 @@ typedef struct {
   PyObject *__pyx_n_s_variantpost_variantalignment;
   PyObject *__pyx_kp_s_variantpost_variantalignment_pyx;
   PyObject *__pyx_n_s_window;
-  PyObject *__pyx_float_0_1;
+  PyObject *__pyx_float_0_05;
   PyObject *__pyx_int_1;
-  PyObject *__pyx_int_15;
   PyObject *__pyx_int_20;
+  PyObject *__pyx_int_32;
   PyObject *__pyx_int_200;
   PyObject *__pyx_int_neg_1;
   PyObject *__pyx_tuple__2;
@@ -2033,10 +2033,10 @@ static int __pyx_m_clear(PyObject *m) {
   Py_CLEAR(clear_module_state->__pyx_n_s_variantpost_variantalignment);
   Py_CLEAR(clear_module_state->__pyx_kp_s_variantpost_variantalignment_pyx);
   Py_CLEAR(clear_module_state->__pyx_n_s_window);
-  Py_CLEAR(clear_module_state->__pyx_float_0_1);
+  Py_CLEAR(clear_module_state->__pyx_float_0_05);
   Py_CLEAR(clear_module_state->__pyx_int_1);
-  Py_CLEAR(clear_module_state->__pyx_int_15);
   Py_CLEAR(clear_module_state->__pyx_int_20);
+  Py_CLEAR(clear_module_state->__pyx_int_32);
   Py_CLEAR(clear_module_state->__pyx_int_200);
   Py_CLEAR(clear_module_state->__pyx_int_neg_1);
   Py_CLEAR(clear_module_state->__pyx_tuple__2);
@@ -2127,10 +2127,10 @@ static int __pyx_m_traverse(PyObject *m, visitproc visit, void *arg) {
   Py_VISIT(traverse_module_state->__pyx_n_s_variantpost_variantalignment);
   Py_VISIT(traverse_module_state->__pyx_kp_s_variantpost_variantalignment_pyx);
   Py_VISIT(traverse_module_state->__pyx_n_s_window);
-  Py_VISIT(traverse_module_state->__pyx_float_0_1);
+  Py_VISIT(traverse_module_state->__pyx_float_0_05);
   Py_VISIT(traverse_module_state->__pyx_int_1);
-  Py_VISIT(traverse_module_state->__pyx_int_15);
   Py_VISIT(traverse_module_state->__pyx_int_20);
+  Py_VISIT(traverse_module_state->__pyx_int_32);
   Py_VISIT(traverse_module_state->__pyx_int_200);
   Py_VISIT(traverse_module_state->__pyx_int_neg_1);
   Py_VISIT(traverse_module_state->__pyx_tuple__2);
@@ -2218,10 +2218,10 @@ static int __pyx_m_traverse(PyObject *m, visitproc visit, void *arg) {
 #define __pyx_n_s_variantpost_variantalignment __pyx_mstate_global->__pyx_n_s_variantpost_variantalignment
 #define __pyx_kp_s_variantpost_variantalignment_pyx __pyx_mstate_global->__pyx_kp_s_variantpost_variantalignment_pyx
 #define __pyx_n_s_window __pyx_mstate_global->__pyx_n_s_window
-#define __pyx_float_0_1 __pyx_mstate_global->__pyx_float_0_1
+#define __pyx_float_0_05 __pyx_mstate_global->__pyx_float_0_05
 #define __pyx_int_1 __pyx_mstate_global->__pyx_int_1
-#define __pyx_int_15 __pyx_mstate_global->__pyx_int_15
 #define __pyx_int_20 __pyx_mstate_global->__pyx_int_20
+#define __pyx_int_32 __pyx_mstate_global->__pyx_int_32
 #define __pyx_int_200 __pyx_mstate_global->__pyx_int_200
 #define __pyx_int_neg_1 __pyx_mstate_global->__pyx_int_neg_1
 #define __pyx_tuple__2 __pyx_mstate_global->__pyx_tuple__2
@@ -2236,8 +2236,8 @@ static int __pyx_m_traverse(PyObject *m, visitproc visit, void *arg) {
  * 
  * class VariantAlignment(object):
  *     def __init__(             # <<<<<<<<<<<<<<
- *         self, variant, bam, second_bam=None, window=200, exclude_duplicates=True, downsample_threshold=-1, mapping_quality_threshold=1, base_quality_threshold=20, low_quality_base_rate_threshold=0.1, kmer_size=15,
- *     ):
+ *         self, variant, bam,
+ *         second_bam=None,
  */
 
 /* Python wrapper */
@@ -2285,21 +2285,29 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
     #endif
     PyObject* values[11] = {0,0,0,0,0,0,0,0,0,0,0};
 
-    /* "variantpost/variantalignment.pyx":8
- * class VariantAlignment(object):
+    /* "variantpost/variantalignment.pyx":9
  *     def __init__(
- *         self, variant, bam, second_bam=None, window=200, exclude_duplicates=True, downsample_threshold=-1, mapping_quality_threshold=1, base_quality_threshold=20, low_quality_base_rate_threshold=0.1, kmer_size=15,             # <<<<<<<<<<<<<<
- *     ):
- * 
+ *         self, variant, bam,
+ *         second_bam=None,             # <<<<<<<<<<<<<<
+ *         window=200,
+ *         exclude_duplicates=True,
  */
     values[3] = ((PyObject *)((PyObject *)Py_None));
     values[4] = ((PyObject *)((PyObject *)__pyx_int_200));
+
+    /* "variantpost/variantalignment.pyx":11
+ *         second_bam=None,
+ *         window=200,
+ *         exclude_duplicates=True,             # <<<<<<<<<<<<<<
+ *         downsample_threshold=-1,
+ *         mapping_quality_threshold=1,
+ */
     values[5] = ((PyObject *)((PyObject *)Py_True));
     values[6] = ((PyObject *)((PyObject *)__pyx_int_neg_1));
     values[7] = ((PyObject *)((PyObject *)__pyx_int_1));
     values[8] = ((PyObject *)((PyObject *)__pyx_int_20));
-    values[9] = ((PyObject *)((PyObject*)__pyx_float_0_1));
-    values[10] = ((PyObject *)((PyObject *)__pyx_int_15));
+    values[9] = ((PyObject *)((PyObject*)__pyx_float_0_05));
+    values[10] = ((PyObject *)((PyObject *)__pyx_int_32));
     if (__pyx_kwds) {
       Py_ssize_t kw_args;
       switch (__pyx_nargs) {
@@ -2460,8 +2468,8 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
  * 
  * class VariantAlignment(object):
  *     def __init__(             # <<<<<<<<<<<<<<
- *         self, variant, bam, second_bam=None, window=200, exclude_duplicates=True, downsample_threshold=-1, mapping_quality_threshold=1, base_quality_threshold=20, low_quality_base_rate_threshold=0.1, kmer_size=15,
- *     ):
+ *         self, variant, bam,
+ *         second_bam=None,
  */
 
   /* function exit code */
@@ -2520,94 +2528,94 @@ static PyObject *__pyx_pf_11variantpost_16variantalignment_16VariantAlignment___
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("__init__", 0);
 
-  /* "variantpost/variantalignment.pyx":22
+  /* "variantpost/variantalignment.pyx":30
  *             reference,
  *         ) = (
  *             variant.chrom,             # <<<<<<<<<<<<<<
  *             variant.pos,
  *             variant.ref,
  */
-  __pyx_t_1 = __Pyx_PyObject_GetAttrStr(__pyx_v_variant, __pyx_n_s_chrom); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 22, __pyx_L1_error)
+  __pyx_t_1 = __Pyx_PyObject_GetAttrStr(__pyx_v_variant, __pyx_n_s_chrom); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 30, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
 
-  /* "variantpost/variantalignment.pyx":23
+  /* "variantpost/variantalignment.pyx":31
  *         ) = (
  *             variant.chrom,
  *             variant.pos,             # <<<<<<<<<<<<<<
  *             variant.ref,
  *             variant.alt,
  */
-  __pyx_t_2 = __Pyx_PyObject_GetAttrStr(__pyx_v_variant, __pyx_n_s_pos); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 23, __pyx_L1_error)
+  __pyx_t_2 = __Pyx_PyObject_GetAttrStr(__pyx_v_variant, __pyx_n_s_pos); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 31, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
 
-  /* "variantpost/variantalignment.pyx":24
+  /* "variantpost/variantalignment.pyx":32
  *             variant.chrom,
  *             variant.pos,
  *             variant.ref,             # <<<<<<<<<<<<<<
  *             variant.alt,
  *             variant.reference_len,
  */
-  __pyx_t_3 = __Pyx_PyObject_GetAttrStr(__pyx_v_variant, __pyx_n_s_ref); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 24, __pyx_L1_error)
+  __pyx_t_3 = __Pyx_PyObject_GetAttrStr(__pyx_v_variant, __pyx_n_s_ref); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 32, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);
 
-  /* "variantpost/variantalignment.pyx":25
+  /* "variantpost/variantalignment.pyx":33
  *             variant.pos,
  *             variant.ref,
  *             variant.alt,             # <<<<<<<<<<<<<<
  *             variant.reference_len,
  *             variant.unspliced_local_reference,
  */
-  __pyx_t_4 = __Pyx_PyObject_GetAttrStr(__pyx_v_variant, __pyx_n_s_alt); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 25, __pyx_L1_error)
+  __pyx_t_4 = __Pyx_PyObject_GetAttrStr(__pyx_v_variant, __pyx_n_s_alt); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 33, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_4);
 
-  /* "variantpost/variantalignment.pyx":26
+  /* "variantpost/variantalignment.pyx":34
  *             variant.ref,
  *             variant.alt,
  *             variant.reference_len,             # <<<<<<<<<<<<<<
  *             variant.unspliced_local_reference,
  *             variant.unspliced_local_reference_start,
  */
-  __pyx_t_5 = __Pyx_PyObject_GetAttrStr(__pyx_v_variant, __pyx_n_s_reference_len); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 26, __pyx_L1_error)
+  __pyx_t_5 = __Pyx_PyObject_GetAttrStr(__pyx_v_variant, __pyx_n_s_reference_len); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 34, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_5);
 
-  /* "variantpost/variantalignment.pyx":27
+  /* "variantpost/variantalignment.pyx":35
  *             variant.alt,
  *             variant.reference_len,
  *             variant.unspliced_local_reference,             # <<<<<<<<<<<<<<
  *             variant.unspliced_local_reference_start,
  *             variant.unspliced_local_reference_end,
  */
-  __pyx_t_6 = __Pyx_PyObject_GetAttrStr(__pyx_v_variant, __pyx_n_s_unspliced_local_reference); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 27, __pyx_L1_error)
+  __pyx_t_6 = __Pyx_PyObject_GetAttrStr(__pyx_v_variant, __pyx_n_s_unspliced_local_reference); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 35, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_6);
 
-  /* "variantpost/variantalignment.pyx":28
+  /* "variantpost/variantalignment.pyx":36
  *             variant.reference_len,
  *             variant.unspliced_local_reference,
  *             variant.unspliced_local_reference_start,             # <<<<<<<<<<<<<<
  *             variant.unspliced_local_reference_end,
  *             variant.reference,
  */
-  __pyx_t_7 = __Pyx_PyObject_GetAttrStr(__pyx_v_variant, __pyx_n_s_unspliced_local_reference_start); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 28, __pyx_L1_error)
+  __pyx_t_7 = __Pyx_PyObject_GetAttrStr(__pyx_v_variant, __pyx_n_s_unspliced_local_reference_start); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 36, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_7);
 
-  /* "variantpost/variantalignment.pyx":29
+  /* "variantpost/variantalignment.pyx":37
  *             variant.unspliced_local_reference,
  *             variant.unspliced_local_reference_start,
  *             variant.unspliced_local_reference_end,             # <<<<<<<<<<<<<<
  *             variant.reference,
  *         )
  */
-  __pyx_t_8 = __Pyx_PyObject_GetAttrStr(__pyx_v_variant, __pyx_n_s_unspliced_local_reference_end); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 29, __pyx_L1_error)
+  __pyx_t_8 = __Pyx_PyObject_GetAttrStr(__pyx_v_variant, __pyx_n_s_unspliced_local_reference_end); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 37, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_8);
 
-  /* "variantpost/variantalignment.pyx":30
+  /* "variantpost/variantalignment.pyx":38
  *             variant.unspliced_local_reference_start,
  *             variant.unspliced_local_reference_end,
  *             variant.reference,             # <<<<<<<<<<<<<<
  *         )
  * 
  */
-  __pyx_t_9 = __Pyx_PyObject_GetAttrStr(__pyx_v_variant, __pyx_n_s_reference); if (unlikely(!__pyx_t_9)) __PYX_ERR(0, 30, __pyx_L1_error)
+  __pyx_t_9 = __Pyx_PyObject_GetAttrStr(__pyx_v_variant, __pyx_n_s_reference); if (unlikely(!__pyx_t_9)) __PYX_ERR(0, 38, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_9);
   __pyx_v_chrom = __pyx_t_1;
   __pyx_t_1 = 0;
@@ -2628,16 +2636,16 @@ static PyObject *__pyx_pf_11variantpost_16variantalignment_16VariantAlignment___
   __pyx_v_reference = __pyx_t_9;
   __pyx_t_9 = 0;
 
-  /* "variantpost/variantalignment.pyx":33
+  /* "variantpost/variantalignment.pyx":41
  *         )
  * 
  *         t = time.time()             # <<<<<<<<<<<<<<
  * 
  *         ##########
  */
-  __Pyx_GetModuleGlobalName(__pyx_t_8, __pyx_n_s_time); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 33, __pyx_L1_error)
+  __Pyx_GetModuleGlobalName(__pyx_t_8, __pyx_n_s_time); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 41, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_8);
-  __pyx_t_7 = __Pyx_PyObject_GetAttrStr(__pyx_t_8, __pyx_n_s_time); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 33, __pyx_L1_error)
+  __pyx_t_7 = __Pyx_PyObject_GetAttrStr(__pyx_t_8, __pyx_n_s_time); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 41, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_7);
   __Pyx_DECREF(__pyx_t_8); __pyx_t_8 = 0;
   __pyx_t_8 = NULL;
@@ -2656,39 +2664,39 @@ static PyObject *__pyx_pf_11variantpost_16variantalignment_16VariantAlignment___
     PyObject *__pyx_callargs[1] = {__pyx_t_8, };
     __pyx_t_9 = __Pyx_PyObject_FastCall(__pyx_t_7, __pyx_callargs+1-__pyx_t_10, 0+__pyx_t_10);
     __Pyx_XDECREF(__pyx_t_8); __pyx_t_8 = 0;
-    if (unlikely(!__pyx_t_9)) __PYX_ERR(0, 33, __pyx_L1_error)
+    if (unlikely(!__pyx_t_9)) __PYX_ERR(0, 41, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_9);
     __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
   }
   __pyx_v_t = __pyx_t_9;
   __pyx_t_9 = 0;
 
-  /* "variantpost/variantalignment.pyx":36
+  /* "variantpost/variantalignment.pyx":44
  * 
  *         ##########
  *         fastafile = variant.reference.filename             # <<<<<<<<<<<<<<
  *         #########
  * 
  */
-  __pyx_t_9 = __Pyx_PyObject_GetAttrStr(__pyx_v_variant, __pyx_n_s_reference); if (unlikely(!__pyx_t_9)) __PYX_ERR(0, 36, __pyx_L1_error)
+  __pyx_t_9 = __Pyx_PyObject_GetAttrStr(__pyx_v_variant, __pyx_n_s_reference); if (unlikely(!__pyx_t_9)) __PYX_ERR(0, 44, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_9);
-  __pyx_t_7 = __Pyx_PyObject_GetAttrStr(__pyx_t_9, __pyx_n_s_filename); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 36, __pyx_L1_error)
+  __pyx_t_7 = __Pyx_PyObject_GetAttrStr(__pyx_t_9, __pyx_n_s_filename); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 44, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_7);
   __Pyx_DECREF(__pyx_t_9); __pyx_t_9 = 0;
   __pyx_v_fastafile = __pyx_t_7;
   __pyx_t_7 = 0;
 
-  /* "variantpost/variantalignment.pyx":40
+  /* "variantpost/variantalignment.pyx":48
  * 
  *         #processed reads for c++ wrapper
  *         reads = preprocess(             # <<<<<<<<<<<<<<
  *             chrom,
  *             pos,
  */
-  __Pyx_GetModuleGlobalName(__pyx_t_9, __pyx_n_s_preprocess); if (unlikely(!__pyx_t_9)) __PYX_ERR(0, 40, __pyx_L1_error)
+  __Pyx_GetModuleGlobalName(__pyx_t_9, __pyx_n_s_preprocess); if (unlikely(!__pyx_t_9)) __PYX_ERR(0, 48, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_9);
 
-  /* "variantpost/variantalignment.pyx":51
+  /* "variantpost/variantalignment.pyx":59
  *             exclude_duplicates,
  *             window,
  *             downsample_threshold,             # <<<<<<<<<<<<<<
@@ -2711,23 +2719,23 @@ static PyObject *__pyx_pf_11variantpost_16variantalignment_16VariantAlignment___
     PyObject *__pyx_callargs[12] = {__pyx_t_8, __pyx_v_chrom, __pyx_v_pos, __pyx_v_chrom_len, __pyx_v_bam, __pyx_v_second_bam, __pyx_v_unspliced_local_reference, __pyx_v_unspliced_local_reference_start, __pyx_v_reference, __pyx_v_exclude_duplicates, __pyx_v_window, __pyx_v_downsample_threshold};
     __pyx_t_7 = __Pyx_PyObject_FastCall(__pyx_t_9, __pyx_callargs+1-__pyx_t_10, 11+__pyx_t_10);
     __Pyx_XDECREF(__pyx_t_8); __pyx_t_8 = 0;
-    if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 40, __pyx_L1_error)
+    if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 48, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_7);
     __Pyx_DECREF(__pyx_t_9); __pyx_t_9 = 0;
   }
   __pyx_v_reads = __pyx_t_7;
   __pyx_t_7 = 0;
 
-  /* "variantpost/variantalignment.pyx":54
+  /* "variantpost/variantalignment.pyx":62
  *         )
  * 
  *         tt = time.time()             # <<<<<<<<<<<<<<
  *         print(tt -t, "preprosess")
  * 
  */
-  __Pyx_GetModuleGlobalName(__pyx_t_9, __pyx_n_s_time); if (unlikely(!__pyx_t_9)) __PYX_ERR(0, 54, __pyx_L1_error)
+  __Pyx_GetModuleGlobalName(__pyx_t_9, __pyx_n_s_time); if (unlikely(!__pyx_t_9)) __PYX_ERR(0, 62, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_9);
-  __pyx_t_8 = __Pyx_PyObject_GetAttrStr(__pyx_t_9, __pyx_n_s_time); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 54, __pyx_L1_error)
+  __pyx_t_8 = __Pyx_PyObject_GetAttrStr(__pyx_t_9, __pyx_n_s_time); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 62, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_8);
   __Pyx_DECREF(__pyx_t_9); __pyx_t_9 = 0;
   __pyx_t_9 = NULL;
@@ -2746,23 +2754,23 @@ static PyObject *__pyx_pf_11variantpost_16variantalignment_16VariantAlignment___
     PyObject *__pyx_callargs[1] = {__pyx_t_9, };
     __pyx_t_7 = __Pyx_PyObject_FastCall(__pyx_t_8, __pyx_callargs+1-__pyx_t_10, 0+__pyx_t_10);
     __Pyx_XDECREF(__pyx_t_9); __pyx_t_9 = 0;
-    if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 54, __pyx_L1_error)
+    if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 62, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_7);
     __Pyx_DECREF(__pyx_t_8); __pyx_t_8 = 0;
   }
   __pyx_v_tt = __pyx_t_7;
   __pyx_t_7 = 0;
 
-  /* "variantpost/variantalignment.pyx":55
+  /* "variantpost/variantalignment.pyx":63
  * 
  *         tt = time.time()
  *         print(tt -t, "preprosess")             # <<<<<<<<<<<<<<
  * 
  *         res = test_it(fastafile,
  */
-  __pyx_t_7 = PyNumber_Subtract(__pyx_v_tt, __pyx_v_t); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 55, __pyx_L1_error)
+  __pyx_t_7 = PyNumber_Subtract(__pyx_v_tt, __pyx_v_t); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 63, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_7);
-  __pyx_t_8 = PyTuple_New(2); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 55, __pyx_L1_error)
+  __pyx_t_8 = PyTuple_New(2); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 63, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_8);
   __Pyx_GIVEREF(__pyx_t_7);
   PyTuple_SET_ITEM(__pyx_t_8, 0, __pyx_t_7);
@@ -2770,28 +2778,28 @@ static PyObject *__pyx_pf_11variantpost_16variantalignment_16VariantAlignment___
   __Pyx_GIVEREF(__pyx_n_s_preprosess);
   PyTuple_SET_ITEM(__pyx_t_8, 1, __pyx_n_s_preprosess);
   __pyx_t_7 = 0;
-  __pyx_t_7 = __Pyx_PyObject_Call(__pyx_builtin_print, __pyx_t_8, NULL); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 55, __pyx_L1_error)
+  __pyx_t_7 = __Pyx_PyObject_Call(__pyx_builtin_print, __pyx_t_8, NULL); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 63, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_7);
   __Pyx_DECREF(__pyx_t_8); __pyx_t_8 = 0;
   __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
 
-  /* "variantpost/variantalignment.pyx":57
+  /* "variantpost/variantalignment.pyx":65
  *         print(tt -t, "preprosess")
  * 
  *         res = test_it(fastafile,             # <<<<<<<<<<<<<<
  *                       chrom.encode(),
  *                       pos, ref.encode(), alt.encode(),
  */
-  __pyx_t_11 = __pyx_convert_string_from_py_std__in_string(__pyx_v_fastafile); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 57, __pyx_L1_error)
+  __pyx_t_11 = __pyx_convert_string_from_py_std__in_string(__pyx_v_fastafile); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 65, __pyx_L1_error)
 
-  /* "variantpost/variantalignment.pyx":58
+  /* "variantpost/variantalignment.pyx":66
  * 
  *         res = test_it(fastafile,
  *                       chrom.encode(),             # <<<<<<<<<<<<<<
  *                       pos, ref.encode(), alt.encode(),
  *                       mapping_quality_threshold,
  */
-  __pyx_t_8 = __Pyx_PyObject_GetAttrStr(__pyx_v_chrom, __pyx_n_s_encode); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 58, __pyx_L1_error)
+  __pyx_t_8 = __Pyx_PyObject_GetAttrStr(__pyx_v_chrom, __pyx_n_s_encode); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 66, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_8);
   __pyx_t_9 = NULL;
   __pyx_t_10 = 0;
@@ -2809,22 +2817,22 @@ static PyObject *__pyx_pf_11variantpost_16variantalignment_16VariantAlignment___
     PyObject *__pyx_callargs[1] = {__pyx_t_9, };
     __pyx_t_7 = __Pyx_PyObject_FastCall(__pyx_t_8, __pyx_callargs+1-__pyx_t_10, 0+__pyx_t_10);
     __Pyx_XDECREF(__pyx_t_9); __pyx_t_9 = 0;
-    if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 58, __pyx_L1_error)
+    if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 66, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_7);
     __Pyx_DECREF(__pyx_t_8); __pyx_t_8 = 0;
   }
-  __pyx_t_12 = __pyx_convert_string_from_py_std__in_string(__pyx_t_7); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 58, __pyx_L1_error)
+  __pyx_t_12 = __pyx_convert_string_from_py_std__in_string(__pyx_t_7); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 66, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
 
-  /* "variantpost/variantalignment.pyx":59
+  /* "variantpost/variantalignment.pyx":67
  *         res = test_it(fastafile,
  *                       chrom.encode(),
  *                       pos, ref.encode(), alt.encode(),             # <<<<<<<<<<<<<<
  *                       mapping_quality_threshold,
  *                       base_quality_threshold,
  */
-  __pyx_t_10 = __Pyx_PyInt_As_int(__pyx_v_pos); if (unlikely((__pyx_t_10 == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 59, __pyx_L1_error)
-  __pyx_t_8 = __Pyx_PyObject_GetAttrStr(__pyx_v_ref, __pyx_n_s_encode); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 59, __pyx_L1_error)
+  __pyx_t_10 = __Pyx_PyInt_As_int(__pyx_v_pos); if (unlikely((__pyx_t_10 == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 67, __pyx_L1_error)
+  __pyx_t_8 = __Pyx_PyObject_GetAttrStr(__pyx_v_ref, __pyx_n_s_encode); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 67, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_8);
   __pyx_t_9 = NULL;
   __pyx_t_13 = 0;
@@ -2842,13 +2850,13 @@ static PyObject *__pyx_pf_11variantpost_16variantalignment_16VariantAlignment___
     PyObject *__pyx_callargs[1] = {__pyx_t_9, };
     __pyx_t_7 = __Pyx_PyObject_FastCall(__pyx_t_8, __pyx_callargs+1-__pyx_t_13, 0+__pyx_t_13);
     __Pyx_XDECREF(__pyx_t_9); __pyx_t_9 = 0;
-    if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 59, __pyx_L1_error)
+    if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 67, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_7);
     __Pyx_DECREF(__pyx_t_8); __pyx_t_8 = 0;
   }
-  __pyx_t_14 = __pyx_convert_string_from_py_std__in_string(__pyx_t_7); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 59, __pyx_L1_error)
+  __pyx_t_14 = __pyx_convert_string_from_py_std__in_string(__pyx_t_7); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 67, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
-  __pyx_t_8 = __Pyx_PyObject_GetAttrStr(__pyx_v_alt, __pyx_n_s_encode); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 59, __pyx_L1_error)
+  __pyx_t_8 = __Pyx_PyObject_GetAttrStr(__pyx_v_alt, __pyx_n_s_encode); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 67, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_8);
   __pyx_t_9 = NULL;
   __pyx_t_13 = 0;
@@ -2866,112 +2874,112 @@ static PyObject *__pyx_pf_11variantpost_16variantalignment_16VariantAlignment___
     PyObject *__pyx_callargs[1] = {__pyx_t_9, };
     __pyx_t_7 = __Pyx_PyObject_FastCall(__pyx_t_8, __pyx_callargs+1-__pyx_t_13, 0+__pyx_t_13);
     __Pyx_XDECREF(__pyx_t_9); __pyx_t_9 = 0;
-    if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 59, __pyx_L1_error)
+    if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 67, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_7);
     __Pyx_DECREF(__pyx_t_8); __pyx_t_8 = 0;
   }
-  __pyx_t_15 = __pyx_convert_string_from_py_std__in_string(__pyx_t_7); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 59, __pyx_L1_error)
+  __pyx_t_15 = __pyx_convert_string_from_py_std__in_string(__pyx_t_7); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 67, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
 
-  /* "variantpost/variantalignment.pyx":60
+  /* "variantpost/variantalignment.pyx":68
  *                       chrom.encode(),
  *                       pos, ref.encode(), alt.encode(),
  *                       mapping_quality_threshold,             # <<<<<<<<<<<<<<
  *                       base_quality_threshold,
  *                       low_quality_base_rate_threshold,
  */
-  __pyx_t_13 = __Pyx_PyInt_As_int(__pyx_v_mapping_quality_threshold); if (unlikely((__pyx_t_13 == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 60, __pyx_L1_error)
+  __pyx_t_13 = __Pyx_PyInt_As_int(__pyx_v_mapping_quality_threshold); if (unlikely((__pyx_t_13 == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 68, __pyx_L1_error)
 
-  /* "variantpost/variantalignment.pyx":61
+  /* "variantpost/variantalignment.pyx":69
  *                       pos, ref.encode(), alt.encode(),
  *                       mapping_quality_threshold,
  *                       base_quality_threshold,             # <<<<<<<<<<<<<<
  *                       low_quality_base_rate_threshold,
  *                       kmer_size,
  */
-  __pyx_t_16 = __Pyx_PyInt_As_int(__pyx_v_base_quality_threshold); if (unlikely((__pyx_t_16 == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 61, __pyx_L1_error)
+  __pyx_t_16 = __Pyx_PyInt_As_int(__pyx_v_base_quality_threshold); if (unlikely((__pyx_t_16 == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 69, __pyx_L1_error)
 
-  /* "variantpost/variantalignment.pyx":62
+  /* "variantpost/variantalignment.pyx":70
  *                       mapping_quality_threshold,
  *                       base_quality_threshold,
  *                       low_quality_base_rate_threshold,             # <<<<<<<<<<<<<<
  *                       kmer_size,
  *                       unspliced_local_reference_start,
  */
-  __pyx_t_17 = __pyx_PyFloat_AsFloat(__pyx_v_low_quality_base_rate_threshold); if (unlikely((__pyx_t_17 == (float)-1) && PyErr_Occurred())) __PYX_ERR(0, 62, __pyx_L1_error)
+  __pyx_t_17 = __pyx_PyFloat_AsFloat(__pyx_v_low_quality_base_rate_threshold); if (unlikely((__pyx_t_17 == (float)-1) && PyErr_Occurred())) __PYX_ERR(0, 70, __pyx_L1_error)
 
-  /* "variantpost/variantalignment.pyx":63
+  /* "variantpost/variantalignment.pyx":71
  *                       base_quality_threshold,
  *                       low_quality_base_rate_threshold,
  *                       kmer_size,             # <<<<<<<<<<<<<<
  *                       unspliced_local_reference_start,
  *                       unspliced_local_reference_end,
  */
-  __pyx_t_18 = __Pyx_PyInt_As_int(__pyx_v_kmer_size); if (unlikely((__pyx_t_18 == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 63, __pyx_L1_error)
+  __pyx_t_18 = __Pyx_PyInt_As_int(__pyx_v_kmer_size); if (unlikely((__pyx_t_18 == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 71, __pyx_L1_error)
 
-  /* "variantpost/variantalignment.pyx":64
+  /* "variantpost/variantalignment.pyx":72
  *                       low_quality_base_rate_threshold,
  *                       kmer_size,
  *                       unspliced_local_reference_start,             # <<<<<<<<<<<<<<
  *                       unspliced_local_reference_end,
  *                       #unspliced_local_reference.encode("utf-8"),
  */
-  __pyx_t_19 = __Pyx_PyInt_As_int(__pyx_v_unspliced_local_reference_start); if (unlikely((__pyx_t_19 == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 64, __pyx_L1_error)
+  __pyx_t_19 = __Pyx_PyInt_As_int(__pyx_v_unspliced_local_reference_start); if (unlikely((__pyx_t_19 == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 72, __pyx_L1_error)
 
-  /* "variantpost/variantalignment.pyx":65
+  /* "variantpost/variantalignment.pyx":73
  *                       kmer_size,
  *                       unspliced_local_reference_start,
  *                       unspliced_local_reference_end,             # <<<<<<<<<<<<<<
  *                       #unspliced_local_reference.encode("utf-8"),
  *                       reads[0], reads[1], reads[2], reads[3], reads[4], reads[5], reads[6], reads[7], reads[8]) #refseq removed
  */
-  __pyx_t_20 = __Pyx_PyInt_As_int(__pyx_v_unspliced_local_reference_end); if (unlikely((__pyx_t_20 == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 65, __pyx_L1_error)
+  __pyx_t_20 = __Pyx_PyInt_As_int(__pyx_v_unspliced_local_reference_end); if (unlikely((__pyx_t_20 == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 73, __pyx_L1_error)
 
-  /* "variantpost/variantalignment.pyx":67
+  /* "variantpost/variantalignment.pyx":75
  *                       unspliced_local_reference_end,
  *                       #unspliced_local_reference.encode("utf-8"),
  *                       reads[0], reads[1], reads[2], reads[3], reads[4], reads[5], reads[6], reads[7], reads[8]) #refseq removed             # <<<<<<<<<<<<<<
  * 
  *         print(time.time() - tt, "c++ time")
  */
-  __pyx_t_7 = __Pyx_GetItemInt(__pyx_v_reads, 0, long, 1, __Pyx_PyInt_From_long, 0, 0, 1); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 67, __pyx_L1_error)
+  __pyx_t_7 = __Pyx_GetItemInt(__pyx_v_reads, 0, long, 1, __Pyx_PyInt_From_long, 0, 0, 1); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 75, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_7);
-  __pyx_t_21 = __pyx_convert_vector_from_py_std_3a__3a_string(__pyx_t_7); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 67, __pyx_L1_error)
+  __pyx_t_21 = __pyx_convert_vector_from_py_std_3a__3a_string(__pyx_t_7); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 75, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
-  __pyx_t_7 = __Pyx_GetItemInt(__pyx_v_reads, 1, long, 1, __Pyx_PyInt_From_long, 0, 0, 1); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 67, __pyx_L1_error)
+  __pyx_t_7 = __Pyx_GetItemInt(__pyx_v_reads, 1, long, 1, __Pyx_PyInt_From_long, 0, 0, 1); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 75, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_7);
-  __pyx_t_22 = __pyx_convert_vector_from_py_bool(__pyx_t_7); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 67, __pyx_L1_error)
+  __pyx_t_22 = __pyx_convert_vector_from_py_bool(__pyx_t_7); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 75, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
-  __pyx_t_7 = __Pyx_GetItemInt(__pyx_v_reads, 2, long, 1, __Pyx_PyInt_From_long, 0, 0, 1); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 67, __pyx_L1_error)
+  __pyx_t_7 = __Pyx_GetItemInt(__pyx_v_reads, 2, long, 1, __Pyx_PyInt_From_long, 0, 0, 1); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 75, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_7);
-  __pyx_t_23 = __pyx_convert_vector_from_py_std_3a__3a_string(__pyx_t_7); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 67, __pyx_L1_error)
+  __pyx_t_23 = __pyx_convert_vector_from_py_std_3a__3a_string(__pyx_t_7); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 75, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
-  __pyx_t_7 = __Pyx_GetItemInt(__pyx_v_reads, 3, long, 1, __Pyx_PyInt_From_long, 0, 0, 1); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 67, __pyx_L1_error)
+  __pyx_t_7 = __Pyx_GetItemInt(__pyx_v_reads, 3, long, 1, __Pyx_PyInt_From_long, 0, 0, 1); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 75, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_7);
-  __pyx_t_24 = __pyx_convert_vector_from_py_int(__pyx_t_7); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 67, __pyx_L1_error)
+  __pyx_t_24 = __pyx_convert_vector_from_py_int(__pyx_t_7); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 75, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
-  __pyx_t_7 = __Pyx_GetItemInt(__pyx_v_reads, 4, long, 1, __Pyx_PyInt_From_long, 0, 0, 1); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 67, __pyx_L1_error)
+  __pyx_t_7 = __Pyx_GetItemInt(__pyx_v_reads, 4, long, 1, __Pyx_PyInt_From_long, 0, 0, 1); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 75, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_7);
-  __pyx_t_25 = __pyx_convert_vector_from_py_int(__pyx_t_7); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 67, __pyx_L1_error)
+  __pyx_t_25 = __pyx_convert_vector_from_py_int(__pyx_t_7); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 75, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
-  __pyx_t_7 = __Pyx_GetItemInt(__pyx_v_reads, 5, long, 1, __Pyx_PyInt_From_long, 0, 0, 1); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 67, __pyx_L1_error)
+  __pyx_t_7 = __Pyx_GetItemInt(__pyx_v_reads, 5, long, 1, __Pyx_PyInt_From_long, 0, 0, 1); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 75, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_7);
-  __pyx_t_26 = __pyx_convert_vector_from_py_std_3a__3a_string(__pyx_t_7); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 67, __pyx_L1_error)
+  __pyx_t_26 = __pyx_convert_vector_from_py_std_3a__3a_string(__pyx_t_7); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 75, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
-  __pyx_t_7 = __Pyx_GetItemInt(__pyx_v_reads, 6, long, 1, __Pyx_PyInt_From_long, 0, 0, 1); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 67, __pyx_L1_error)
+  __pyx_t_7 = __Pyx_GetItemInt(__pyx_v_reads, 6, long, 1, __Pyx_PyInt_From_long, 0, 0, 1); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 75, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_7);
-  __pyx_t_27 = __pyx_convert_vector_from_py_std_3a__3a_vector_3c_int_3e___(__pyx_t_7); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 67, __pyx_L1_error)
+  __pyx_t_27 = __pyx_convert_vector_from_py_std_3a__3a_vector_3c_int_3e___(__pyx_t_7); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 75, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
-  __pyx_t_7 = __Pyx_GetItemInt(__pyx_v_reads, 7, long, 1, __Pyx_PyInt_From_long, 0, 0, 1); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 67, __pyx_L1_error)
+  __pyx_t_7 = __Pyx_GetItemInt(__pyx_v_reads, 7, long, 1, __Pyx_PyInt_From_long, 0, 0, 1); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 75, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_7);
-  __pyx_t_28 = __pyx_convert_vector_from_py_int(__pyx_t_7); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 67, __pyx_L1_error)
+  __pyx_t_28 = __pyx_convert_vector_from_py_int(__pyx_t_7); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 75, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
-  __pyx_t_7 = __Pyx_GetItemInt(__pyx_v_reads, 8, long, 1, __Pyx_PyInt_From_long, 0, 0, 1); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 67, __pyx_L1_error)
+  __pyx_t_7 = __Pyx_GetItemInt(__pyx_v_reads, 8, long, 1, __Pyx_PyInt_From_long, 0, 0, 1); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 75, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_7);
-  __pyx_t_29 = __pyx_convert_vector_from_py_bool(__pyx_t_7); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 67, __pyx_L1_error)
+  __pyx_t_29 = __pyx_convert_vector_from_py_bool(__pyx_t_7); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 75, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
 
-  /* "variantpost/variantalignment.pyx":57
+  /* "variantpost/variantalignment.pyx":65
  *         print(tt -t, "preprosess")
  * 
  *         res = test_it(fastafile,             # <<<<<<<<<<<<<<
@@ -2980,15 +2988,15 @@ static PyObject *__pyx_pf_11variantpost_16variantalignment_16VariantAlignment___
  */
   __pyx_v_res = __pyx_f_11variantpost_17processor_wrapper_test_it(__pyx_t_11, __pyx_t_12, __pyx_t_10, __pyx_t_14, __pyx_t_15, __pyx_t_13, __pyx_t_16, __pyx_t_17, __pyx_t_18, __pyx_t_19, __pyx_t_20, __pyx_t_21, __pyx_t_22, __pyx_t_23, __pyx_t_24, __pyx_t_25, __pyx_t_26, __pyx_t_27, __pyx_t_28, __pyx_t_29);
 
-  /* "variantpost/variantalignment.pyx":69
+  /* "variantpost/variantalignment.pyx":77
  *                       reads[0], reads[1], reads[2], reads[3], reads[4], reads[5], reads[6], reads[7], reads[8]) #refseq removed
  * 
  *         print(time.time() - tt, "c++ time")             # <<<<<<<<<<<<<<
  *         print(time.time() - t, "total varaln --- {}".format(res))
  */
-  __Pyx_GetModuleGlobalName(__pyx_t_8, __pyx_n_s_time); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 69, __pyx_L1_error)
+  __Pyx_GetModuleGlobalName(__pyx_t_8, __pyx_n_s_time); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 77, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_8);
-  __pyx_t_9 = __Pyx_PyObject_GetAttrStr(__pyx_t_8, __pyx_n_s_time); if (unlikely(!__pyx_t_9)) __PYX_ERR(0, 69, __pyx_L1_error)
+  __pyx_t_9 = __Pyx_PyObject_GetAttrStr(__pyx_t_8, __pyx_n_s_time); if (unlikely(!__pyx_t_9)) __PYX_ERR(0, 77, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_9);
   __Pyx_DECREF(__pyx_t_8); __pyx_t_8 = 0;
   __pyx_t_8 = NULL;
@@ -3007,14 +3015,14 @@ static PyObject *__pyx_pf_11variantpost_16variantalignment_16VariantAlignment___
     PyObject *__pyx_callargs[1] = {__pyx_t_8, };
     __pyx_t_7 = __Pyx_PyObject_FastCall(__pyx_t_9, __pyx_callargs+1-__pyx_t_20, 0+__pyx_t_20);
     __Pyx_XDECREF(__pyx_t_8); __pyx_t_8 = 0;
-    if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 69, __pyx_L1_error)
+    if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 77, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_7);
     __Pyx_DECREF(__pyx_t_9); __pyx_t_9 = 0;
   }
-  __pyx_t_9 = PyNumber_Subtract(__pyx_t_7, __pyx_v_tt); if (unlikely(!__pyx_t_9)) __PYX_ERR(0, 69, __pyx_L1_error)
+  __pyx_t_9 = PyNumber_Subtract(__pyx_t_7, __pyx_v_tt); if (unlikely(!__pyx_t_9)) __PYX_ERR(0, 77, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_9);
   __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
-  __pyx_t_7 = PyTuple_New(2); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 69, __pyx_L1_error)
+  __pyx_t_7 = PyTuple_New(2); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 77, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_7);
   __Pyx_GIVEREF(__pyx_t_9);
   PyTuple_SET_ITEM(__pyx_t_7, 0, __pyx_t_9);
@@ -3022,19 +3030,19 @@ static PyObject *__pyx_pf_11variantpost_16variantalignment_16VariantAlignment___
   __Pyx_GIVEREF(__pyx_kp_s_c_time);
   PyTuple_SET_ITEM(__pyx_t_7, 1, __pyx_kp_s_c_time);
   __pyx_t_9 = 0;
-  __pyx_t_9 = __Pyx_PyObject_Call(__pyx_builtin_print, __pyx_t_7, NULL); if (unlikely(!__pyx_t_9)) __PYX_ERR(0, 69, __pyx_L1_error)
+  __pyx_t_9 = __Pyx_PyObject_Call(__pyx_builtin_print, __pyx_t_7, NULL); if (unlikely(!__pyx_t_9)) __PYX_ERR(0, 77, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_9);
   __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
   __Pyx_DECREF(__pyx_t_9); __pyx_t_9 = 0;
 
-  /* "variantpost/variantalignment.pyx":70
+  /* "variantpost/variantalignment.pyx":78
  * 
  *         print(time.time() - tt, "c++ time")
  *         print(time.time() - t, "total varaln --- {}".format(res))             # <<<<<<<<<<<<<<
  */
-  __Pyx_GetModuleGlobalName(__pyx_t_7, __pyx_n_s_time); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 70, __pyx_L1_error)
+  __Pyx_GetModuleGlobalName(__pyx_t_7, __pyx_n_s_time); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 78, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_7);
-  __pyx_t_8 = __Pyx_PyObject_GetAttrStr(__pyx_t_7, __pyx_n_s_time); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 70, __pyx_L1_error)
+  __pyx_t_8 = __Pyx_PyObject_GetAttrStr(__pyx_t_7, __pyx_n_s_time); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 78, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_8);
   __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
   __pyx_t_7 = NULL;
@@ -3053,16 +3061,16 @@ static PyObject *__pyx_pf_11variantpost_16variantalignment_16VariantAlignment___
     PyObject *__pyx_callargs[1] = {__pyx_t_7, };
     __pyx_t_9 = __Pyx_PyObject_FastCall(__pyx_t_8, __pyx_callargs+1-__pyx_t_20, 0+__pyx_t_20);
     __Pyx_XDECREF(__pyx_t_7); __pyx_t_7 = 0;
-    if (unlikely(!__pyx_t_9)) __PYX_ERR(0, 70, __pyx_L1_error)
+    if (unlikely(!__pyx_t_9)) __PYX_ERR(0, 78, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_9);
     __Pyx_DECREF(__pyx_t_8); __pyx_t_8 = 0;
   }
-  __pyx_t_8 = PyNumber_Subtract(__pyx_t_9, __pyx_v_t); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 70, __pyx_L1_error)
+  __pyx_t_8 = PyNumber_Subtract(__pyx_t_9, __pyx_v_t); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 78, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_8);
   __Pyx_DECREF(__pyx_t_9); __pyx_t_9 = 0;
-  __pyx_t_7 = __Pyx_PyObject_GetAttrStr(__pyx_kp_s_total_varaln, __pyx_n_s_format); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 70, __pyx_L1_error)
+  __pyx_t_7 = __Pyx_PyObject_GetAttrStr(__pyx_kp_s_total_varaln, __pyx_n_s_format); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 78, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_7);
-  __pyx_t_6 = __pyx_convert_PyBytes_string_to_py_std__in_string(__pyx_v_res); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 70, __pyx_L1_error)
+  __pyx_t_6 = __pyx_convert_PyBytes_string_to_py_std__in_string(__pyx_v_res); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 78, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_6);
   __pyx_t_5 = NULL;
   __pyx_t_20 = 0;
@@ -3081,11 +3089,11 @@ static PyObject *__pyx_pf_11variantpost_16variantalignment_16VariantAlignment___
     __pyx_t_9 = __Pyx_PyObject_FastCall(__pyx_t_7, __pyx_callargs+1-__pyx_t_20, 1+__pyx_t_20);
     __Pyx_XDECREF(__pyx_t_5); __pyx_t_5 = 0;
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-    if (unlikely(!__pyx_t_9)) __PYX_ERR(0, 70, __pyx_L1_error)
+    if (unlikely(!__pyx_t_9)) __PYX_ERR(0, 78, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_9);
     __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
   }
-  __pyx_t_7 = PyTuple_New(2); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 70, __pyx_L1_error)
+  __pyx_t_7 = PyTuple_New(2); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 78, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_7);
   __Pyx_GIVEREF(__pyx_t_8);
   PyTuple_SET_ITEM(__pyx_t_7, 0, __pyx_t_8);
@@ -3093,7 +3101,7 @@ static PyObject *__pyx_pf_11variantpost_16variantalignment_16VariantAlignment___
   PyTuple_SET_ITEM(__pyx_t_7, 1, __pyx_t_9);
   __pyx_t_8 = 0;
   __pyx_t_9 = 0;
-  __pyx_t_9 = __Pyx_PyObject_Call(__pyx_builtin_print, __pyx_t_7, NULL); if (unlikely(!__pyx_t_9)) __PYX_ERR(0, 70, __pyx_L1_error)
+  __pyx_t_9 = __Pyx_PyObject_Call(__pyx_builtin_print, __pyx_t_7, NULL); if (unlikely(!__pyx_t_9)) __PYX_ERR(0, 78, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_9);
   __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
   __Pyx_DECREF(__pyx_t_9); __pyx_t_9 = 0;
@@ -3102,8 +3110,8 @@ static PyObject *__pyx_pf_11variantpost_16variantalignment_16VariantAlignment___
  * 
  * class VariantAlignment(object):
  *     def __init__(             # <<<<<<<<<<<<<<
- *         self, variant, bam, second_bam=None, window=200, exclude_duplicates=True, downsample_threshold=-1, mapping_quality_threshold=1, base_quality_threshold=20, low_quality_base_rate_threshold=0.1, kmer_size=15,
- *     ):
+ *         self, variant, bam,
+ *         second_bam=None,
  */
 
   /* function exit code */
@@ -4094,7 +4102,7 @@ static __Pyx_StringTabEntry __pyx_string_tab[] = {
 /* #### Code section: cached_builtins ### */
 static CYTHON_SMALL_CODE int __Pyx_InitCachedBuiltins(void) {
   __pyx_builtin_object = __Pyx_GetBuiltinName(__pyx_n_s_object); if (!__pyx_builtin_object) __PYX_ERR(0, 6, __pyx_L1_error)
-  __pyx_builtin_print = __Pyx_GetBuiltinName(__pyx_n_s_print); if (!__pyx_builtin_print) __PYX_ERR(0, 55, __pyx_L1_error)
+  __pyx_builtin_print = __Pyx_GetBuiltinName(__pyx_n_s_print); if (!__pyx_builtin_print) __PYX_ERR(0, 63, __pyx_L1_error)
   return 0;
   __pyx_L1_error:;
   return -1;
@@ -4110,7 +4118,7 @@ static CYTHON_SMALL_CODE int __Pyx_InitCachedConstants(void) {
  * 
  * class VariantAlignment(object):             # <<<<<<<<<<<<<<
  *     def __init__(
- *         self, variant, bam, second_bam=None, window=200, exclude_duplicates=True, downsample_threshold=-1, mapping_quality_threshold=1, base_quality_threshold=20, low_quality_base_rate_threshold=0.1, kmer_size=15,
+ *         self, variant, bam,
  */
   __pyx_tuple__2 = PyTuple_Pack(1, __pyx_builtin_object); if (unlikely(!__pyx_tuple__2)) __PYX_ERR(0, 6, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_tuple__2);
@@ -4123,14 +4131,14 @@ static CYTHON_SMALL_CODE int __Pyx_InitCachedConstants(void) {
  * 
  * class VariantAlignment(object):
  *     def __init__(             # <<<<<<<<<<<<<<
- *         self, variant, bam, second_bam=None, window=200, exclude_duplicates=True, downsample_threshold=-1, mapping_quality_threshold=1, base_quality_threshold=20, low_quality_base_rate_threshold=0.1, kmer_size=15,
- *     ):
+ *         self, variant, bam,
+ *         second_bam=None,
  */
   __pyx_tuple__4 = PyTuple_Pack(25, __pyx_n_s_self, __pyx_n_s_variant, __pyx_n_s_bam, __pyx_n_s_second_bam, __pyx_n_s_window, __pyx_n_s_exclude_duplicates, __pyx_n_s_downsample_threshold, __pyx_n_s_mapping_quality_threshold, __pyx_n_s_base_quality_threshold, __pyx_n_s_low_quality_base_rate_threshold, __pyx_n_s_kmer_size, __pyx_n_s_chrom, __pyx_n_s_pos, __pyx_n_s_ref, __pyx_n_s_alt, __pyx_n_s_chrom_len, __pyx_n_s_unspliced_local_reference, __pyx_n_s_unspliced_local_reference_start, __pyx_n_s_unspliced_local_reference_end, __pyx_n_s_reference, __pyx_n_s_t, __pyx_n_s_fastafile, __pyx_n_s_reads, __pyx_n_s_tt, __pyx_n_s_res); if (unlikely(!__pyx_tuple__4)) __PYX_ERR(0, 7, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_tuple__4);
   __Pyx_GIVEREF(__pyx_tuple__4);
   __pyx_codeobj__5 = (PyObject*)__Pyx_PyCode_New(11, 0, 0, 25, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__4, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_variantpost_variantalignment_pyx, __pyx_n_s_init, 7, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__5)) __PYX_ERR(0, 7, __pyx_L1_error)
-  __pyx_tuple__6 = PyTuple_Pack(8, ((PyObject *)Py_None), ((PyObject *)__pyx_int_200), ((PyObject *)Py_True), ((PyObject *)__pyx_int_neg_1), ((PyObject *)__pyx_int_1), ((PyObject *)__pyx_int_20), ((PyObject*)__pyx_float_0_1), ((PyObject *)__pyx_int_15)); if (unlikely(!__pyx_tuple__6)) __PYX_ERR(0, 7, __pyx_L1_error)
+  __pyx_tuple__6 = PyTuple_Pack(8, ((PyObject *)Py_None), ((PyObject *)__pyx_int_200), ((PyObject *)Py_True), ((PyObject *)__pyx_int_neg_1), ((PyObject *)__pyx_int_1), ((PyObject *)__pyx_int_20), ((PyObject*)__pyx_float_0_05), ((PyObject *)__pyx_int_32)); if (unlikely(!__pyx_tuple__6)) __PYX_ERR(0, 7, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_tuple__6);
   __Pyx_GIVEREF(__pyx_tuple__6);
   __Pyx_RefNannyFinishContext();
@@ -4210,10 +4218,10 @@ static CYTHON_SMALL_CODE int __Pyx_InitGlobals(void) {
   #if !CYTHON_USE_MODULE_STATE
   if (__Pyx_InitStrings(__pyx_string_tab) < 0) __PYX_ERR(0, 1, __pyx_L1_error);
   #endif
-  __pyx_float_0_1 = PyFloat_FromDouble(0.1); if (unlikely(!__pyx_float_0_1)) __PYX_ERR(0, 1, __pyx_L1_error)
+  __pyx_float_0_05 = PyFloat_FromDouble(0.05); if (unlikely(!__pyx_float_0_05)) __PYX_ERR(0, 1, __pyx_L1_error)
   __pyx_int_1 = PyInt_FromLong(1); if (unlikely(!__pyx_int_1)) __PYX_ERR(0, 1, __pyx_L1_error)
-  __pyx_int_15 = PyInt_FromLong(15); if (unlikely(!__pyx_int_15)) __PYX_ERR(0, 1, __pyx_L1_error)
   __pyx_int_20 = PyInt_FromLong(20); if (unlikely(!__pyx_int_20)) __PYX_ERR(0, 1, __pyx_L1_error)
+  __pyx_int_32 = PyInt_FromLong(32); if (unlikely(!__pyx_int_32)) __PYX_ERR(0, 1, __pyx_L1_error)
   __pyx_int_200 = PyInt_FromLong(200); if (unlikely(!__pyx_int_200)) __PYX_ERR(0, 1, __pyx_L1_error)
   __pyx_int_neg_1 = PyInt_FromLong(-1); if (unlikely(!__pyx_int_neg_1)) __PYX_ERR(0, 1, __pyx_L1_error)
   return 0;
@@ -4606,7 +4614,7 @@ if (!__Pyx_RefNanny) {
  * 
  * class VariantAlignment(object):             # <<<<<<<<<<<<<<
  *     def __init__(
- *         self, variant, bam, second_bam=None, window=200, exclude_duplicates=True, downsample_threshold=-1, mapping_quality_threshold=1, base_quality_threshold=20, low_quality_base_rate_threshold=0.1, kmer_size=15,
+ *         self, variant, bam,
  */
   __pyx_t_2 = __Pyx_PEP560_update_bases(__pyx_tuple__3); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 6, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
@@ -4622,8 +4630,8 @@ if (!__Pyx_RefNanny) {
  * 
  * class VariantAlignment(object):
  *     def __init__(             # <<<<<<<<<<<<<<
- *         self, variant, bam, second_bam=None, window=200, exclude_duplicates=True, downsample_threshold=-1, mapping_quality_threshold=1, base_quality_threshold=20, low_quality_base_rate_threshold=0.1, kmer_size=15,
- *     ):
+ *         self, variant, bam,
+ *         second_bam=None,
  */
   __pyx_t_4 = __Pyx_CyFunction_New(&__pyx_mdef_11variantpost_16variantalignment_16VariantAlignment_1__init__, 0, __pyx_n_s_VariantAlignment___init, NULL, __pyx_n_s_variantpost_variantalignment, __pyx_d, ((PyObject *)__pyx_codeobj__5)); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 7, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_4);
@@ -4636,7 +4644,7 @@ if (!__Pyx_RefNanny) {
  * 
  * class VariantAlignment(object):             # <<<<<<<<<<<<<<
  *     def __init__(
- *         self, variant, bam, second_bam=None, window=200, exclude_duplicates=True, downsample_threshold=-1, mapping_quality_threshold=1, base_quality_threshold=20, low_quality_base_rate_threshold=0.1, kmer_size=15,
+ *         self, variant, bam,
  */
   __pyx_t_4 = __Pyx_Py3ClassCreate(__pyx_t_1, __pyx_n_s_VariantAlignment, __pyx_t_2, __pyx_t_3, NULL, 0, 0); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 6, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_4);

@@ -24,6 +24,9 @@ void process_aligned_target(const std::string & chrom,
                             Reads & candidates,
                             Reads & non_targets);
 */
+
+std::string construct_ref_contig(const Reads & reads, const std::string & chrom, FastaReference & fr, std::vector<std::pair<int, int>> & coordinates);
+
 void process_aligned_target(Variant & target,
                             FastaReference & fr, 
                             const int base_quality_threshold,

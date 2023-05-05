@@ -8,6 +8,8 @@
 #include <iterator>
 #include <algorithm>
 
+#include "swlib.h"
+
 #include "util.h"
 #include "localn.h"
 #include "aligned_target.h"
@@ -17,27 +19,14 @@
 
 
 
-/*
-struct
-{
-    bool operator()(const Read & a, 
-                    const Read & b, 
-                    const std::set<std::string> & target_kmers)
-    {
-        return (count_kmer_overlap(a.seq, target_kmers) 
-                > count_kmer_overlap(b.seq, target_kmers));               
-    }
-
-} 
-more_similar;
-*/
-
-void mock_target_seq(std::string & mocked_seq,
-                     std::vector<std::pair<int, int>> & layout,
-                     std::string & ref_seq,
-                     const Variant & target,
-                     FastaReference & fr,
-                     const size_t kmer_size)
+//TODO spliced cases
+void mock_target_seq(
+        std::string & mocked_seq,
+        std::vector<std::pair<int, int>> & layout,
+        std::string & ref_seq,
+        const Variant & target,
+        FastaReference & fr,
+        const size_t kmer_size)
 {
     int lt_frag_end = target.pos;
     int rt_frag_start = lt_frag_end + (target.ref.size() - 1);
@@ -114,6 +103,14 @@ int dist_to_closest(const Variant & target,
     int min_dist = INT_MAX, tmp_dist = INT_MAX;
     for (size_t i = 0; i < variants.size(); ++i)
     {
+        if (variants[i].ref.find("N") != std::string::npos
+            ||
+            variants[i].alt.find("N") != std::string::npos)
+        {
+            continue;
+        }
+        
+        
         if (variants[i].is_del)
         {
             if (variants[i].pos < target_pos)
@@ -258,6 +255,9 @@ inline void add_to_input(
        
     }  
 }
+
+/*
+//TODO spliced cases
 void prep_reads_to_merge(std::vector<SimplifiedRead> & inputs, std::vector<Read> & candidates)
 {
     
@@ -283,11 +283,8 @@ void prep_reads_to_merge(std::vector<SimplifiedRead> & inputs, std::vector<Read>
                 break;
         }
     }
-
-    
-
 }
-
+*/
 
 SimplifiedRead merge_to_fragment(std::vector<Read> & candidates, char clip_ptrn)
 {
@@ -328,24 +325,40 @@ SimplifiedRead merge_to_fragment(std::vector<Read> & candidates, char clip_ptrn)
         return merge_reads(inputs);
      }
 }
-/*
+
+
 SimplifiedRead stitch_fragments(std::vector<SimplifiedRead> & fragments)
 {
-    for (int i = 0; i < 3; ++i)
+    bool lt_extension = false;
+    size_t frag_size = fragments.size();
+     
+    if (frag_size == 1)
     {
-        if (i == 0)
-        {
-            if (fragments[0].empty()) continue;
-            else
-            {
-                
-            }
-        }
+        return fragments[0];
     }
+    else if (frag_size == 2)
+    {
+        return pairwise_stitch(fragments, lt_extension); 
+    }
+    else if (frag_size == 3)
+    {
+        std::vector<SimplifiedRead> tmp = {fragments[0], fragments[1]};
+        SimplifiedRead _intermediate = pairwise_stitch(tmp, lt_extension);
+        return pairwise_stitch({_intermediate, fragments[2]}, lt_extension);
+    }
+            
+    SimplifiedRead empty_read;
+    return empty_read;
 }
-*/
 
-void process_unaligned_target(Variant & target, FastaReference & fr, 
+
+
+
+
+
+
+void process_unaligned_target(Variant & target, 
+                              FastaReference & fr, 
                               const int base_quality_threshold,
                               const double low_quality_base_rate_threshold, 
                               std::vector<Read> & targets, 
@@ -381,8 +394,37 @@ void process_unaligned_target(Variant & target, FastaReference & fr,
     std::vector<SimplifiedRead> fragments = {};
     for (const auto & ptrn : ptrns)
     {
-        fragments.emplace_back(merge_to_fragment(candidates, ptrn));
+        SimplifiedRead _frag = merge_to_fragment(candidates, ptrn);   
+        if (!_frag.empty())fragments.push_back(_frag);
     }
+    
+    std::vector<Read> refinputs = {};
+    for (auto & r : candidates)
+    {
+        if (r.used4contig) refinputs.push_back(r);
+    }
+    std::vector<std::pair<int, int>> coord = {};
+    std::string aa = construct_ref_contig(refinputs, target.chrom, fr, coord);
+    
+    std::cout << stitch_fragments(fragments).seq << std::endl;
+    std::cout << aa << std::endl;
 
+    const uint8_t match_score = 3, mismatch_penalty = 2;
+    const uint8_t gap_open_penalty = 3, gap_extention_penalty = 0;
+    Filter filter;
+    Alignment aln;
+    Aligner aligner(
+                match_score, mismatch_penalty,
+                gap_open_penalty, gap_extention_penalty
+            );
+
+    int32_t mask_len = strlen(stitch_fragments(fragments).seq.c_str()) / 2;
+    mask_len = mask_len < 15 ? 15 : mask_len;
+    aligner.Align(stitch_fragments(fragments).seq.c_str(), 
+                  aa.c_str(),
+                  aa.size(), 
+                  filter, &aln, mask_len); 
+    std::cout << aln.cigar_string << std::endl; 
+    std::cout << aln.ref_begin << " " << aln.query_begin << std::endl;
 }
 

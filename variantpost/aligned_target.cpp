@@ -63,6 +63,7 @@ Reads find_seed_reads(const Reads & targets, const double dirty_thresh, const si
 
 
 // input: seed reads 
+// input as starts/end vectors -> easier to reuse
 std::vector<std::pair<int, int>> find_coordinates_union(const Reads & reads) 
 {
     std::vector<int> starts, ends;
@@ -852,12 +853,10 @@ void process_aligned_target(Variant & target,
     std::cout << "target: " << targets.size() + lt_extenders.size() + extra_targets.size() + rt_extenders.size()<< std::endl;
     std::cout << "non_target: " << non_targets.size() << " " << std::endl;
     std::cout << "undetermined: " << undetermined.size() << std::endl;
-    /*
-    for (auto & r : non_targets)
+    for (auto & r : targets)
     {
         std::cout << r.read_name << " " << r.cigar_string << std::endl;
     }
-    */
 }
 
 
