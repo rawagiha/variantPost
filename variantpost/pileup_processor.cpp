@@ -75,24 +75,26 @@ pp::ProcessedPileup  pp::process_pileup(
     
     Variant target = Variant(pos, ref, alt, chrom);
     
-    classify_reads(targets, candidates, non_targets,
-                   fr,
-                   target,
-                   mapping_quality_threshold,
-                   base_quality_threshold,
-                   unspl_loc_ref_start,
-                   unspl_loc_ref_end,
-                   unspl_loc_ref,
-                   ref_dict,
-                   is_from_first_bam,
-                   read_names,
-                   are_reverse,
-                   cigar_strings,
-                   aln_starts,
-                   aln_ends,
-                   read_seqs,
-                   quals,
-                   mapqs);
+    classify_reads(
+        targets, candidates, non_targets,
+        fr,
+        target,
+        mapping_quality_threshold,
+        base_quality_threshold,
+        unspl_loc_ref_start,
+        unspl_loc_ref_end,
+        unspl_loc_ref,
+        ref_dict,
+        is_from_first_bam,
+        read_names,
+        are_reverse,
+        cigar_strings,
+        aln_starts,
+        aln_ends,
+        read_seqs,
+        quals,
+        mapqs
+    );
     
     std::cout << "hello! classified" << std::endl;
     
@@ -135,6 +137,7 @@ pp::ProcessedPileup  pp::process_pileup(
                                 candidates,
                                 non_targets);
        */
+       //pass variables needed for equ check, 
         process_aligned_target(target, fr, base_quality_threshold, low_quality_base_rate_threshold, kmer_size, contig, targets, candidates, non_targets);
     }
     else if (candidates.size() > 0) 

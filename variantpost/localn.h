@@ -54,6 +54,15 @@ struct SimplifiedRead
 };
 
 
+void sw_aln(
+    const uint8_t match_score, const uint8_t mismatch_penalty,
+    const uint8_t gap_open_penalty, const uint8_t gap_extention_penalty,
+    const std::string & ref_seq, const std::string & read_seq,
+    const Filter & filter, Alignment & alignment
+); 
+
+
+
 /*
 struct MergedRead
 {

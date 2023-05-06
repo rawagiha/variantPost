@@ -45,6 +45,27 @@ inline bool has_gaps(std::string & cigar_string)
 }
 
 
+void sw_aln(
+    const uint8_t match_score, const uint8_t mismatch_penalty,
+    const uint8_t gap_open_penalty, const uint8_t gap_extention_penalty,
+    const std::string & ref_seq, const std::string & read_seq,
+    const Filter & filter, Alignment & alignment
+) 
+{
+    Aligner aligner(
+                match_score, mismatch_penalty, 
+                gap_open_penalty, gap_extention_penalty
+            ); 
+       
+    int32_t mask_len = strlen(read_seq.c_str()) / 2;
+    mask_len = mask_len < 15 ? 15 : mask_len;
+
+    aligner.Align(read_seq.c_str(), 
+                  ref_seq.c_str(), ref_seq.size(),
+                  filter, &alignment, mask_len); 
+}
+
+
 struct Overlap
 {   
     int index;

@@ -8,7 +8,7 @@
 #include <iterator>
 #include <algorithm>
 
-#include "swlib.h"
+//#include "swlib.h"
 
 #include "util.h"
 #include "localn.h"

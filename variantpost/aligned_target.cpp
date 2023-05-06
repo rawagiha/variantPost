@@ -9,7 +9,6 @@
 #include <algorithm>
 
 #include "util.h"
-#include "swlib.h"
 #include "localn.h"
 #include "fasta/Fasta.h"
 #include "read_classifier.h"
@@ -717,8 +716,12 @@ void align_to_contig(const std::string & chrom, FastaReference & fr,
     std::cout << extended_contig.base_qualities.size() << std::endl;
     
      
+    //try gap_ext = 1 first
+    //if not as target, try gap_ext=0
+    //use whichever larget margin
+    //rosenfeld case
     const uint8_t match_score = 3, mismatch_penalty = 2;
-    const uint8_t gap_open_penalty = 3, gap_extention_penalty = 0;
+    const uint8_t gap_open_penalty = 3, gap_extention_penalty = 1;
     Filter filter;
     Alignment aln;
     Aligner aligner(
@@ -753,8 +756,55 @@ void align_to_contig(const std::string & chrom, FastaReference & fr,
     }
 }
 
+void realn_extended_contig
+    (const std::string & chrom, FastaReference & fr,
+     SimplifiedRead & extended_contig,
+     std::vector<std::pair<int, int>> & extended_coordinates)
+ //    const int unspl_loc_ref_start,
+ //    const std::unordered_map<int, char> & indexed_local_reference)
+{
+    std::string extended_ref = ""; 
+    for (const auto & coord : extended_coordinates)
+    {
+        extended_ref += fr.getSubSequence(chrom, coord.first - 1, (coord.second -  coord.first + 1));
+    }
+    
+    Filter filter;
+    Alignment aln;
+    sw_aln(3, 2, 3, 1, extended_ref, extended_contig.seq, filter, aln);
+    
+    std::vector<int> genomic_pos = expand_coordinates(extended_coordinates);
+    std::vector<std::pair<char, int>> cigar_vec = to_cigar_vector(aln.cigar_string);
+    splice_cigar(cigar_vec, aln.ref_begin, genomic_pos, extended_coordinates);
+    move_up_insertion(cigar_vec);
 
+    int aln_start = genomic_pos[aln.ref_begin];
+    int aln_end = genomic_pos[aln.ref_end];
+    std::cout << aln_start << " " << aln_end << std::endl;
+    std::string non;
+    std::vector<Variant> aa = find_mapped_variants(aln_start, aln_end, extended_ref.substr(aln.ref_begin), extended_contig.seq.substr(aln.query_begin), extended_contig.base_qualities,  cigar_vec, non);
+    for (auto & v : aa)
+    {    
+        std::cout << v.pos << " " << v.ref << " " << v.alt << std::endl;
+    }
+    
+    sw_aln(3, 2, 3, 0, extended_ref, extended_contig.seq, filter, aln);
+    
+    //std::vector<int> genomic_pos = expand_coordinates(extended_coordinates);
+    //std::vector<std::pair<char, int>> cigar_vec = to_cigar_vector(aln.cigar_string);
+    splice_cigar(cigar_vec, aln.ref_begin, genomic_pos, extended_coordinates);
+    move_up_insertion(cigar_vec);
 
+    //int aln_start = genomic_pos[aln.ref_begin];
+    //int aln_end = genomic_pos[aln.ref_end];
+    std::cout << aln_start << " " << aln_end << std::endl;
+    //std::string non;
+    aa = find_mapped_variants(aln_start, aln_end, extended_ref.substr(aln.ref_begin), extended_contig.seq.substr(aln.query_begin), extended_contig.base_qualities,  cigar_vec, non);
+    for (auto & v : aa)
+    {    
+        std::cout << v.pos << " " << v.ref << " " << v.alt << std::endl;
+    }
+}
 
 //void process_aligned_target(const std::string & chrom, FastaReference & fr, const int base_quality_threshold, const double low_quality_base_rate_threshold, const int kmer_size, 
 //                            std::string & _contig, int & target_pos, std::string & target_ref, std::string & target_alt, std::string & _repeat_unit,
@@ -828,7 +878,9 @@ void process_aligned_target(Variant & target,
     std::cout << std::endl;
     
     
-    align_to_contig(target.chrom, fr, extended, ext_coord);
+    //align_to_contig(target.chrom, fr, extended, ext_coord);
+    
+    realn_extended_contig(target.chrom, fr, extended, ext_coord);
     
     /*const size_t lt_len = contig.decomposition[0].second;
     const size_t rt_len = contig.decomposition[2].second;
