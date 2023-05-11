@@ -11,8 +11,10 @@
 void process_unaligned_target(Variant & target, FastaReference & fr, 
                               const int base_quality_threshold,
                               const double low_quality_base_rate_threshold, 
-                              std::vector<Read> & targets, 
-                              std::vector<Read> & candidates, 
-                              std::vector<Read> & non_targets,
-                              const size_t kmer_size);
+                              const size_t kmer_size,
+                              const int unspl_loc_ref_start,
+                              const std::unordered_map<int, char> & indexed_local_reference,
+                              Reads & targets, 
+                              Reads & candidates, 
+                              Reads & non_targets);
 #endif 

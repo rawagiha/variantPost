@@ -756,12 +756,43 @@ void align_to_contig(const std::string & chrom, FastaReference & fr,
     }
 }
 
+void make_grid(const int gap_open_penalty, const int gap_extension_penalty, std::vector<std::pair<int, int>> & grid)
+{
+    std::pair<int, int> _default = {gap_open_penalty, gap_extension_penalty};
+
+    //std::vector<std::pair<int, int>> grid = {};
+    uint8_t max_gap_open = 5, min_gap_open = 3;
+    if (gap_open_penalty > 5) max_gap_open = gap_open_penalty;
+    
+    for (uint8_t i = min_gap_open; i <= max_gap_open; ++i)
+    {      
+        grid.emplace_back(i, 1);
+        grid.emplace_back(i, 0);
+    }
+    
+    if (std::find(grid.begin(), grid.end(), _default) !=  grid.end())
+    {
+        // pass
+    }
+    else
+    {
+        grid.push_back(_default);
+        //return grid;
+    }
+}
+
+
 void realn_extended_contig
     (const std::string & chrom, FastaReference & fr,
      SimplifiedRead & extended_contig,
-     std::vector<std::pair<int, int>> & extended_coordinates)
- //    const int unspl_loc_ref_start,
- //    const std::unordered_map<int, char> & indexed_local_reference)
+     std::vector<std::pair<int, int>> & extended_coordinates,
+     const int match_score,
+     const int mismatch_penalty,
+     const int gap_open_penalty,
+     const int gap_extention_penalty,
+     const Variant & target,
+     const int unspl_loc_ref_start,
+     const std::unordered_map<int, char> & indexed_local_reference)
 {
     std::string extended_ref = ""; 
     for (const auto & coord : extended_coordinates)
@@ -769,41 +800,68 @@ void realn_extended_contig
         extended_ref += fr.getSubSequence(chrom, coord.first - 1, (coord.second -  coord.first + 1));
     }
     
+    std::vector<int> genomic_pos = expand_coordinates(extended_coordinates);
+    std::vector<std::pair<char, int>> cigar_vec = {};
+    std::vector<Variant> aa = {};
+    std::string non;
+    int aln_start = 0, aln_end = 0;
+
+
     Filter filter;
     Alignment aln;
-    sw_aln(3, 2, 3, 1, extended_ref, extended_contig.seq, filter, aln);
+    std::vector<std::pair<int, int>> grid;
+    make_grid(gap_open_penalty, gap_extention_penalty, grid);  
     
-    std::vector<int> genomic_pos = expand_coordinates(extended_coordinates);
-    std::vector<std::pair<char, int>> cigar_vec = to_cigar_vector(aln.cigar_string);
-    splice_cigar(cigar_vec, aln.ref_begin, genomic_pos, extended_coordinates);
-    move_up_insertion(cigar_vec);
-
-    int aln_start = genomic_pos[aln.ref_begin];
-    int aln_end = genomic_pos[aln.ref_end];
-    std::cout << aln_start << " " << aln_end << std::endl;
-    std::string non;
-    std::vector<Variant> aa = find_mapped_variants(aln_start, aln_end, extended_ref.substr(aln.ref_begin), extended_contig.seq.substr(aln.query_begin), extended_contig.base_qualities,  cigar_vec, non);
-    for (auto & v : aa)
-    {    
-        std::cout << v.pos << " " << v.ref << " " << v.alt << std::endl;
+    for (auto & gap_param : grid)
+    {
+        sw_aln(match_score, mismatch_penalty, gap_param.first, gap_param.second, extended_ref, extended_contig.seq, filter, aln);
+        cigar_vec = to_cigar_vector(aln.cigar_string);
+        splice_cigar(cigar_vec, aln.ref_begin, genomic_pos, extended_coordinates);
+        move_up_insertion(cigar_vec);
+        aln_start = genomic_pos[aln.ref_begin];
+        aln_end = genomic_pos[aln.ref_end];
+        aa = find_mapped_variants(aln_start, aln_end, extended_ref.substr(aln.ref_begin), extended_contig.seq.substr(aln.query_begin), extended_contig.base_qualities,  cigar_vec, non);
+        
+        for (auto & v : aa)
+        {
+            if (v.is_equivalent(target, unspl_loc_ref_start, indexed_local_reference))
+            {
+                std::cout << "found  -> " << v.pos << " " << v.ref << " " << v.alt << std::endl;
+                return;
+            }
+        }          
     }
-    
-    sw_aln(3, 2, 3, 0, extended_ref, extended_contig.seq, filter, aln);
-    
     //std::vector<int> genomic_pos = expand_coordinates(extended_coordinates);
     //std::vector<std::pair<char, int>> cigar_vec = to_cigar_vector(aln.cigar_string);
-    splice_cigar(cigar_vec, aln.ref_begin, genomic_pos, extended_coordinates);
-    move_up_insertion(cigar_vec);
+    //splice_cigar(cigar_vec, aln.ref_begin, genomic_pos, extended_coordinates);
+    //move_up_insertion(cigar_vec);
 
     //int aln_start = genomic_pos[aln.ref_begin];
     //int aln_end = genomic_pos[aln.ref_end];
-    std::cout << aln_start << " " << aln_end << std::endl;
+    //std::cout << aln_start << " " << aln_end << std::endl;
     //std::string non;
-    aa = find_mapped_variants(aln_start, aln_end, extended_ref.substr(aln.ref_begin), extended_contig.seq.substr(aln.query_begin), extended_contig.base_qualities,  cigar_vec, non);
-    for (auto & v : aa)
-    {    
-        std::cout << v.pos << " " << v.ref << " " << v.alt << std::endl;
-    }
+    //std::vector<Variant> aa = find_mapped_variants(aln_start, aln_end, extended_ref.substr(aln.ref_begin), extended_contig.seq.substr(aln.query_begin), extended_contig.base_qualities,  cigar_vec, non);
+    //for (auto & v : aa)
+    //{    
+    //    std::cout << v.pos << " " << v.ref << " " << v.alt << std::endl;
+    //}
+    
+    //sw_aln(3, 2, 3, 0, extended_ref, extended_contig.seq, filter, aln);
+    
+    //std::vector<int> genomic_pos = expand_coordinates(extended_coordinates);
+    //std::vector<std::pair<char, int>> cigar_vec = to_cigar_vector(aln.cigar_string);
+    //splice_cigar(cigar_vec, aln.ref_begin, genomic_pos, extended_coordinates);
+    //move_up_insertion(cigar_vec);
+
+    //int aln_start = genomic_pos[aln.ref_begin];
+    //int aln_end = genomic_pos[aln.ref_end];
+    //std::cout << aln_start << " " << aln_end << std::endl;
+    //std::string non;
+    //aa = find_mapped_variants(aln_start, aln_end, extended_ref.substr(aln.ref_begin), extended_contig.seq.substr(aln.query_begin), extended_contig.base_qualities,  cigar_vec, non);
+    //for (auto & v : aa)
+    //{    
+    //    std::cout << v.pos << " " << v.ref << " " << v.alt << std::endl;
+    //}
 }
 
 //void process_aligned_target(const std::string & chrom, FastaReference & fr, const int base_quality_threshold, const double low_quality_base_rate_threshold, const int kmer_size, 
@@ -813,7 +871,13 @@ void process_aligned_target(Variant & target,
                             FastaReference & fr, 
                             const int base_quality_threshold,
                             const double low_quality_base_rate_threshold, 
+                            const int match_score,
+                            const int mismatch_penalty,
+                            const int gap_open_penalty,
+                            const int gap_extention_penalty,
                             const int kmer_size,
+                            const int unspl_loc_ref_start,
+                            const std::unordered_map<int, char> & indexed_local_reference,
                             std::string & _contig,
                             Reads & targets, Reads & candidates, Reads & non_targets)
 
@@ -841,13 +905,14 @@ void process_aligned_target(Variant & target,
     repeat_check(observed_target, contig, repeat_unit, n_tandem_repeats, is_complete_tandem_repeat, repeat_boundary);
     
     //gap-less alignment
-    const uint8_t match_score = 3, mismatch_penalty = 2;
-    const uint8_t gap_open_penalty = 255, gap_extention_penalty = 255;
+    //const uint8_t match_score = 3, mismatch_penalty = 2;
+    const uint8_t _gap_open_penalty = 255, _gap_extention_penalty = 255;
+    //gap_open_penalty = 255, gap_extention_penalty=255;
     Filter filter;
     Alignment aln;
     Aligner aligner(
                 match_score, mismatch_penalty,
-                gap_open_penalty, gap_extention_penalty
+                _gap_open_penalty, _gap_extention_penalty
             );
      
     
@@ -880,7 +945,7 @@ void process_aligned_target(Variant & target,
     
     //align_to_contig(target.chrom, fr, extended, ext_coord);
     
-    realn_extended_contig(target.chrom, fr, extended, ext_coord);
+    realn_extended_contig(target.chrom, fr, extended, ext_coord, match_score, mismatch_penalty, gap_open_penalty, gap_extention_penalty, target, unspl_loc_ref_start, indexed_local_reference);
     
     /*const size_t lt_len = contig.decomposition[0].second;
     const size_t rt_len = contig.decomposition[2].second;

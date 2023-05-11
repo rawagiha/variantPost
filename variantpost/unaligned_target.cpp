@@ -361,10 +361,12 @@ void process_unaligned_target(Variant & target,
                               FastaReference & fr, 
                               const int base_quality_threshold,
                               const double low_quality_base_rate_threshold, 
-                              std::vector<Read> & targets, 
-                              std::vector<Read> & candidates, 
-                              std::vector<Read> & non_targets,
-                              const size_t kmer_size)
+                              const size_t kmer_size,
+                              const int unspl_loc_ref_start,
+                              const std::unordered_map<int, char> & indexed_local_reference,
+                              Reads & targets, 
+                              Reads & candidates, 
+                              Reads & non_targets)
 {
     
     std::string mocked_seq = "";
@@ -381,7 +383,11 @@ void process_unaligned_target(Variant & target,
     if (is_retargetable)   
     {    
         std::string _c;
-        process_aligned_target(target, fr, base_quality_threshold, low_quality_base_rate_threshold, kmer_size, _c, targets, candidates, non_targets);
+        process_aligned_target(target, fr, 
+                               base_quality_threshold, low_quality_base_rate_threshold, 
+                               3,2,3,1,
+                               kmer_size, unspl_loc_ref_start, indexed_local_reference,
+                               _c, targets, candidates, non_targets);
         return;
     }
 

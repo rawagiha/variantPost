@@ -43,6 +43,10 @@ pp::ProcessedPileup  pp::process_pileup(
     const int mapping_quality_threshold,
     const int base_quality_threshold,
     const double low_quality_base_rate_threshold,
+    const int match_score,
+    const int mismatch_penalty,
+    const int gap_open_penalty,
+    const int gap_extention_penalty,
     const int kmer_size,
     const int unspl_loc_ref_start,
     const int unspl_loc_ref_end,
@@ -138,11 +142,18 @@ pp::ProcessedPileup  pp::process_pileup(
                                 non_targets);
        */
        //pass variables needed for equ check, 
-        process_aligned_target(target, fr, base_quality_threshold, low_quality_base_rate_threshold, kmer_size, contig, targets, candidates, non_targets);
+        process_aligned_target(target, fr, 
+                               base_quality_threshold, low_quality_base_rate_threshold, 
+                               match_score, mismatch_penalty, gap_open_penalty, gap_extention_penalty,
+                               kmer_size, unspl_loc_ref_start, ref_dict, 
+                               contig, targets, candidates, non_targets);
     }
     else if (candidates.size() > 0) 
     {
-        process_unaligned_target(target, fr, base_quality_threshold, low_quality_base_rate_threshold, targets, candidates, non_targets, kmer_size);
+        process_unaligned_target(target, fr, 
+                                 base_quality_threshold, low_quality_base_rate_threshold, 
+                                 kmer_size, unspl_loc_ref_start, ref_dict,
+                                 targets, candidates, non_targets);
     }
     
     

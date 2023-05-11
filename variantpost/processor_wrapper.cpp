@@ -1259,7 +1259,7 @@ static PyObject *__pyx_n_s_print;
 static PyObject *__pyx_n_s_test;
 /* Late includes */
 
-/* "variantpost/processor_wrapper.pyx":55
+/* "variantpost/processor_wrapper.pyx":59
  * 
  * 
  * cdef string test_it(             # <<<<<<<<<<<<<<
@@ -1267,7 +1267,7 @@ static PyObject *__pyx_n_s_test;
  *     string & chrom,
  */
 
-static std::string __pyx_f_11variantpost_17processor_wrapper_test_it(std::string &__pyx_v_fastafile, std::string &__pyx_v_chrom, int __pyx_v_pos, std::string &__pyx_v_ref, std::string &__pyx_v_alt, int __pyx_v_mapping_quality_threshold, int __pyx_v_base_quality_threshold, float __pyx_v_low_quality_base_rate_threshold, int __pyx_v_kmer_size, int __pyx_v_unspliced_local_reference_start, int __pyx_v_unspliced_local_reference_end, std::vector<std::string>  &__pyx_v_read_names, std::vector<bool>  &__pyx_v_are_reverse, std::vector<std::string>  &__pyx_v_cigar_strings, std::vector<int>  &__pyx_v_aln_starts, std::vector<int>  &__pyx_v_aln_ends, std::vector<std::string>  &__pyx_v_read_seqs, std::vector<std::vector<int> >  &__pyx_v_quals, std::vector<int>  &__pyx_v_mapqs, std::vector<bool>  &__pyx_v_are_first_bam) {
+static std::string __pyx_f_11variantpost_17processor_wrapper_test_it(std::string &__pyx_v_fastafile, std::string &__pyx_v_chrom, int __pyx_v_pos, std::string &__pyx_v_ref, std::string &__pyx_v_alt, int __pyx_v_mapping_quality_threshold, int __pyx_v_base_quality_threshold, float __pyx_v_low_quality_base_rate_threshold, int __pyx_v_match_score, int __pyx_v_mismatch_penalty, int __pyx_v_gap_open_penalty, int __pyx_v_gap_extention_penalty, int __pyx_v_kmer_size, int __pyx_v_unspliced_local_reference_start, int __pyx_v_unspliced_local_reference_end, std::vector<std::string>  &__pyx_v_read_names, std::vector<bool>  &__pyx_v_are_reverse, std::vector<std::string>  &__pyx_v_cigar_strings, std::vector<int>  &__pyx_v_aln_starts, std::vector<int>  &__pyx_v_aln_ends, std::vector<std::string>  &__pyx_v_read_seqs, std::vector<std::vector<int> >  &__pyx_v_quals, std::vector<int>  &__pyx_v_mapqs, std::vector<bool>  &__pyx_v_are_first_bam) {
   pp::ProcessedPileup __pyx_v_res;
   std::string __pyx_r;
   __Pyx_RefNannyDeclarations
@@ -1282,30 +1282,30 @@ static std::string __pyx_f_11variantpost_17processor_wrapper_test_it(std::string
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("test_it", 0);
 
-  /* "variantpost/processor_wrapper.pyx":80
+  /* "variantpost/processor_wrapper.pyx":88
  * ):
  * 
  *     res = process_pileup(             # <<<<<<<<<<<<<<
  *         fastafile,
  *         chrom,
  */
-  __pyx_v_res = pp::process_pileup(__pyx_v_fastafile, __pyx_v_chrom, __pyx_v_pos, __pyx_v_ref, __pyx_v_alt, __pyx_v_mapping_quality_threshold, __pyx_v_base_quality_threshold, __pyx_v_low_quality_base_rate_threshold, __pyx_v_kmer_size, __pyx_v_unspliced_local_reference_start, __pyx_v_unspliced_local_reference_end, __pyx_v_read_names, __pyx_v_are_reverse, __pyx_v_cigar_strings, __pyx_v_aln_starts, __pyx_v_aln_ends, __pyx_v_read_seqs, __pyx_v_quals, __pyx_v_mapqs, __pyx_v_are_first_bam);
+  __pyx_v_res = pp::process_pileup(__pyx_v_fastafile, __pyx_v_chrom, __pyx_v_pos, __pyx_v_ref, __pyx_v_alt, __pyx_v_mapping_quality_threshold, __pyx_v_base_quality_threshold, __pyx_v_low_quality_base_rate_threshold, __pyx_v_match_score, __pyx_v_mismatch_penalty, __pyx_v_gap_open_penalty, __pyx_v_gap_extention_penalty, __pyx_v_kmer_size, __pyx_v_unspliced_local_reference_start, __pyx_v_unspliced_local_reference_end, __pyx_v_read_names, __pyx_v_are_reverse, __pyx_v_cigar_strings, __pyx_v_aln_starts, __pyx_v_aln_ends, __pyx_v_read_seqs, __pyx_v_quals, __pyx_v_mapqs, __pyx_v_are_first_bam);
 
-  /* "variantpost/processor_wrapper.pyx":107
+  /* "variantpost/processor_wrapper.pyx":119
  *     #res is not a python obj..
  * 
  *     print(res.contig, res.target_pos, res.ref, res.alt)             # <<<<<<<<<<<<<<
  *     return "aaa"
  */
-  __pyx_t_1 = __pyx_convert_PyBytes_string_to_py_std__in_string(__pyx_v_res.contig); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 107, __pyx_L1_error)
+  __pyx_t_1 = __pyx_convert_PyBytes_string_to_py_std__in_string(__pyx_v_res.contig); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 119, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
-  __pyx_t_2 = __Pyx_PyInt_From_int(__pyx_v_res.target_pos); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 107, __pyx_L1_error)
+  __pyx_t_2 = __Pyx_PyInt_From_int(__pyx_v_res.target_pos); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 119, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
-  __pyx_t_3 = __pyx_convert_PyBytes_string_to_py_std__in_string(__pyx_v_res.ref); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 107, __pyx_L1_error)
+  __pyx_t_3 = __pyx_convert_PyBytes_string_to_py_std__in_string(__pyx_v_res.ref); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 119, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);
-  __pyx_t_4 = __pyx_convert_PyBytes_string_to_py_std__in_string(__pyx_v_res.alt); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 107, __pyx_L1_error)
+  __pyx_t_4 = __pyx_convert_PyBytes_string_to_py_std__in_string(__pyx_v_res.alt); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 119, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_4);
-  __pyx_t_5 = PyTuple_New(4); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 107, __pyx_L1_error)
+  __pyx_t_5 = PyTuple_New(4); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 119, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_5);
   __Pyx_GIVEREF(__pyx_t_1);
   PyTuple_SET_ITEM(__pyx_t_5, 0, __pyx_t_1);
@@ -1319,19 +1319,19 @@ static std::string __pyx_f_11variantpost_17processor_wrapper_test_it(std::string
   __pyx_t_2 = 0;
   __pyx_t_3 = 0;
   __pyx_t_4 = 0;
-  if (__Pyx_PrintOne(0, __pyx_t_5) < 0) __PYX_ERR(0, 107, __pyx_L1_error)
+  if (__Pyx_PrintOne(0, __pyx_t_5) < 0) __PYX_ERR(0, 119, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
 
-  /* "variantpost/processor_wrapper.pyx":108
+  /* "variantpost/processor_wrapper.pyx":120
  * 
  *     print(res.contig, res.target_pos, res.ref, res.alt)
  *     return "aaa"             # <<<<<<<<<<<<<<
  */
-  __pyx_t_6 = __pyx_convert_string_from_py_std__in_string(__pyx_n_b_aaa); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 108, __pyx_L1_error)
+  __pyx_t_6 = __pyx_convert_string_from_py_std__in_string(__pyx_n_b_aaa); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 120, __pyx_L1_error)
   __pyx_r = __pyx_t_6;
   goto __pyx_L0;
 
-  /* "variantpost/processor_wrapper.pyx":55
+  /* "variantpost/processor_wrapper.pyx":59
  * 
  * 
  * cdef string test_it(             # <<<<<<<<<<<<<<
@@ -1772,7 +1772,7 @@ static int __Pyx_modinit_function_export_code(void) {
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("__Pyx_modinit_function_export_code", 0);
   /*--- Function export code ---*/
-  if (__Pyx_ExportFunction("test_it", (void (*)(void))__pyx_f_11variantpost_17processor_wrapper_test_it, "std::string (std::string &, std::string &, int, std::string &, std::string &, int, int, float, int, int, int, std::vector<std::string>  &, std::vector<bool>  &, std::vector<std::string>  &, std::vector<int>  &, std::vector<int>  &, std::vector<std::string>  &, std::vector<std::vector<int> >  &, std::vector<int>  &, std::vector<bool>  &)") < 0) __PYX_ERR(0, 1, __pyx_L1_error)
+  if (__Pyx_ExportFunction("test_it", (void (*)(void))__pyx_f_11variantpost_17processor_wrapper_test_it, "std::string (std::string &, std::string &, int, std::string &, std::string &, int, int, float, int, int, int, int, int, int, int, std::vector<std::string>  &, std::vector<bool>  &, std::vector<std::string>  &, std::vector<int>  &, std::vector<int>  &, std::vector<std::string>  &, std::vector<std::vector<int> >  &, std::vector<int>  &, std::vector<bool>  &)") < 0) __PYX_ERR(0, 1, __pyx_L1_error)
   __Pyx_RefNannyFinishContext();
   return 0;
   __pyx_L1_error:;

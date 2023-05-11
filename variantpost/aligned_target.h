@@ -31,7 +31,13 @@ void process_aligned_target(Variant & target,
                             FastaReference & fr, 
                             const int base_quality_threshold,
                             const double low_quality_base_rate_threshold, 
+                            const int match_score,
+                            const int mismatch_penalty,
+                            const int gap_open_penalty,
+                            const int gap_extention_penalty,
                             const int kmer_size,
+                            const int unspl_loc_ref_start,
+                            const std::unordered_map<int, char> & indexed_local_reference,
                             std::string & _contig,
                             Reads & targets, Reads & candidates, Reads & non_targets);
 

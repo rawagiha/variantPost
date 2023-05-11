@@ -13,6 +13,10 @@ class VariantAlignment(object):
         mapping_quality_threshold=1, 
         base_quality_threshold=20, 
         low_quality_base_rate_threshold=0.05, 
+        match_score=3,
+        mismatch_penalty=2,
+        gap_open_penalty=3,
+        gap_extention_penalty=1, 
         kmer_size=32, 
     ):
 
@@ -68,6 +72,10 @@ class VariantAlignment(object):
                       mapping_quality_threshold,
                       base_quality_threshold, 
                       low_quality_base_rate_threshold,
+                      match_score,
+                      mismatch_penalty,
+                      gap_open_penalty,
+                      gap_extention_penalty,
                       kmer_size,
                       unspliced_local_reference_start, 
                       unspliced_local_reference_end, 

@@ -8,10 +8,14 @@ cdef string  test_it(
                 int,
                 string &,
                 string &,
+                int, #map qual
+                int, #base qual 
+                float, #low qual rate
+                int, 
+                int, 
+                int, 
                 int,
-                int,
-                float,
-                int,
+                int, # kmer
                 int, 
                 int,
                 #string &, 
