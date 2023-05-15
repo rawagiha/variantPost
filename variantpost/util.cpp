@@ -853,8 +853,14 @@ std::vector<Variant> find_variants(const int aln_start,
 std::set<std::string> make_kmers(const std::string & seq, const size_t k)
 {
     size_t n = seq.size();
+    std::set<std::string> kmers = {};
     
-    std::set<std::string> kmers;
+    if (n <= k) 
+    {
+        kmers.insert(seq);
+        return kmers;
+    }
+    
     for (size_t i = 0; i < n - k; ++i) {
         kmers.insert(seq.substr(i, k));
     }

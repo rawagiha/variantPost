@@ -152,7 +152,7 @@ std::vector<Overlap> find_overlaps(const std::vector<SimplifiedRead> & inputs)
 {
     std::vector<Overlap> overlaps;   
     
-    const uint8_t match_score = 3, mismatch_penalty = 10;
+    const uint8_t match_score = 2, mismatch_penalty = 2;
     const uint8_t gap_open_penalty = 255, gap_extention_penalty = 255;
 
     Filter filter;
@@ -228,6 +228,8 @@ SimplifiedRead pairwise_stitch(const std::vector<SimplifiedRead> & inputs, bool 
 
 SimplifiedRead merge_reads(const std::vector<SimplifiedRead> & inputs)
 {
+    for (auto & h : inputs) std::cout << h.seq << std::endl;
+    
     if (inputs.size() == 1)
     {
         SimplifiedRead _unmerged(inputs[0].seq, inputs[0].base_qualities, -1);
@@ -255,6 +257,8 @@ SimplifiedRead merge_reads(const std::vector<SimplifiedRead> & inputs)
         std::string seq = inputs[overlaps[i].index].seq;
         std::string seq_qual = inputs[overlaps[i].index].base_qualities;
              
+        std::cout << i << " " << prev_start << " " << prev_end << " " << curr_start << " " << curr_end << " " << merge_start << " " << merge_end << std::endl;
+        
         if (!i)
         {
             for (int j = 0; j <= (curr_end - curr_start); ++j)
@@ -280,18 +284,22 @@ SimplifiedRead merge_reads(const std::vector<SimplifiedRead> & inputs)
                         if (merge_start + j < merge_end) 
                         {    
                             if (target_start == curr_start + j) is_target_start = 1;
+                            //std::cout << seq[curr_start + j] << " " << prev_end << " " << curr_start << " " << curr_end << " ; ";
                             base_cnts[merge_start + j].add(seq[curr_start + j], seq_qual[curr_start + j], is_target_start);
                             is_target_start = 0;
                         }
                     }
                     
                     // right extension (meaningful if prev_end < curr_end)
+                    
+                    std::cout << seq << " " << prev_end << " " << curr_end << std::endl;
                     if (!is_last)
                     {
                         for (int j = 1; j <= (curr_end - prev_end); ++j)
                         {
                             BaseCount bc;
                             if (target_start == prev_end + j) is_target_start = 1;
+                            //std::cout << seq[prev_end + j] << " " << prev_end << " " << curr_end << " ; ";
                             bc.add(seq[prev_end + j], seq_qual[prev_end + j], is_target_start);
                             base_cnts.push_back(bc);
                             is_target_start = 0;

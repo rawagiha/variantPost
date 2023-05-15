@@ -445,6 +445,7 @@ void repeat_check(const Variant & trgt,
 void classify_candidates(Reads & candidates, const Contig & contig, 
                          const Filter & filter, const Aligner & aligner, Alignment & alignment, 
                          const std::set<std::string> & target_kmers,
+                         const std::set<std::string> & core_kmers,
                          const bool is_complete_tandem_repeat, const int n_tandem_repeats,
                          const std::pair<int, int> & repeat_boundary,
                          const std::string & repeat_unit, const std::string & rv_repeat_unit,
@@ -463,13 +464,12 @@ void classify_candidates(Reads & candidates, const Contig & contig,
         
         int kmer_score = count_kmer_overlap(candidates[i].seq, target_kmers);
         
-        /*
-        const char* read_seq = read.seq.c_str();
-        for (const auto & kmer : informative_kmers)
+        //covering reads must have core kmers
+        if (kmer_score && candidates[i].covering_ptrn == 'A')
         {
-            if(strstr(read_seq, kmer.c_str())) ++kmer_score;
-        }
-        */
+            kmer_score = count_kmer_overlap(candidates[i].seq, core_kmers);
+        } 
+        
         const bool is_dirty_query = (candidates[i].dirty_base_rate < low_quality_base_rate_threshold);
 
         if (kmer_score)
@@ -799,70 +799,85 @@ void realn_extended_contig
     {
         extended_ref += fr.getSubSequence(chrom, coord.first - 1, (coord.second -  coord.first + 1));
     }
-    
     std::vector<int> genomic_pos = expand_coordinates(extended_coordinates);
-    std::vector<std::pair<char, int>> cigar_vec = {};
-    std::vector<Variant> aa = {};
-    std::string non;
-    int aln_start = 0, aln_end = 0;
-
-
+    
+    
     Filter filter;
     Alignment aln;
+    std::vector<Variant> _variants = {};
+    std::vector<std::pair<char, int>> _cigar_vec = {};
+    std::string variant_quals = "";
+    std::vector<RealignedGenomicSegment> realns = {};
+
     std::vector<std::pair<int, int>> grid;
     make_grid(gap_open_penalty, gap_extention_penalty, grid);  
-    
     for (auto & gap_param : grid)
     {
         sw_aln(match_score, mismatch_penalty, gap_param.first, gap_param.second, extended_ref, extended_contig.seq, filter, aln);
-        cigar_vec = to_cigar_vector(aln.cigar_string);
-        splice_cigar(cigar_vec, aln.ref_begin, genomic_pos, extended_coordinates);
-        move_up_insertion(cigar_vec);
-        aln_start = genomic_pos[aln.ref_begin];
-        aln_end = genomic_pos[aln.ref_end];
-        aa = find_mapped_variants(aln_start, aln_end, extended_ref.substr(aln.ref_begin), extended_contig.seq.substr(aln.query_begin), extended_contig.base_qualities,  cigar_vec, non);
+        _cigar_vec = to_cigar_vector(aln.cigar_string);
+        splice_cigar(_cigar_vec, aln.ref_begin, genomic_pos, extended_coordinates);
+        move_up_insertion(_cigar_vec);
         
-        for (auto & v : aa)
+        int begin_with_offset = aln.query_begin;
+        if (_cigar_vec[0].first == 'S') begin_with_offset -= _cigar_vec[0].second;
+
+        _variants = find_mapped_variants(
+                            genomic_pos[aln.ref_begin], 
+                            genomic_pos[aln.ref_end],
+                            extended_ref.substr(aln.ref_begin), 
+                            extended_contig.seq.substr(begin_with_offset), 
+                            extended_contig.base_qualities.substr(begin_with_offset), 
+                            _cigar_vec, variant_quals
+                    );
+        
+        
+        RealignedGenomicSegment realn(genomic_pos[aln.ref_begin], genomic_pos[aln.ref_end], -1, 
+                                      extended_ref.substr(aln.ref_begin), 
+                                      extended_contig.seq.substr(begin_with_offset),
+                                      extended_contig.base_qualities.substr(begin_with_offset),
+                                      _cigar_vec, _variants);
+        
+        for (auto & v : _variants)
         {
+            //std::cout << v.pos << " " << v.ref << " " << v.alt << std::endl;
             if (v.is_equivalent(target, unspl_loc_ref_start, indexed_local_reference))
             {
+                realn.target_pos = v.pos;
+                realns.push_back(realn);
                 std::cout << "found  -> " << v.pos << " " << v.ref << " " << v.alt << std::endl;
-                return;
             }
         }          
     }
-    //std::vector<int> genomic_pos = expand_coordinates(extended_coordinates);
-    //std::vector<std::pair<char, int>> cigar_vec = to_cigar_vector(aln.cigar_string);
-    //splice_cigar(cigar_vec, aln.ref_begin, genomic_pos, extended_coordinates);
-    //move_up_insertion(cigar_vec);
-
-    //int aln_start = genomic_pos[aln.ref_begin];
-    //int aln_end = genomic_pos[aln.ref_end];
-    //std::cout << aln_start << " " << aln_end << std::endl;
-    //std::string non;
-    //std::vector<Variant> aa = find_mapped_variants(aln_start, aln_end, extended_ref.substr(aln.ref_begin), extended_contig.seq.substr(aln.query_begin), extended_contig.base_qualities,  cigar_vec, non);
-    //for (auto & v : aa)
-    //{    
-    //    std::cout << v.pos << " " << v.ref << " " << v.alt << std::endl;
-    //}
-    
-    //sw_aln(3, 2, 3, 0, extended_ref, extended_contig.seq, filter, aln);
-    
-    //std::vector<int> genomic_pos = expand_coordinates(extended_coordinates);
-    //std::vector<std::pair<char, int>> cigar_vec = to_cigar_vector(aln.cigar_string);
-    //splice_cigar(cigar_vec, aln.ref_begin, genomic_pos, extended_coordinates);
-    //move_up_insertion(cigar_vec);
-
-    //int aln_start = genomic_pos[aln.ref_begin];
-    //int aln_end = genomic_pos[aln.ref_end];
-    //std::cout << aln_start << " " << aln_end << std::endl;
-    //std::string non;
-    //aa = find_mapped_variants(aln_start, aln_end, extended_ref.substr(aln.ref_begin), extended_contig.seq.substr(aln.query_begin), extended_contig.base_qualities,  cigar_vec, non);
-    //for (auto & v : aa)
-    //{    
-    //    std::cout << v.pos << " " << v.ref << " " << v.alt << std::endl;
-    //}
 }
+
+
+void find_core_kmers(const Contig & contig, const int kmer_size, 
+                     const std::set<std::string> & differential_kmers, std::set<std::string> & core_kmers)
+{
+     std::set<std::string> left_diff_kmers = diff_kmers(contig.seq.substr(contig.decomposition[0].first, contig.decomposition[0].second),
+                                                        contig.ref_seq,
+                                                        kmer_size); 
+     
+     std::set<std::string> right_diff_kmers = diff_kmers(contig.seq.substr(contig.decomposition[2].first, contig.decomposition[2].second),
+                                                         contig.ref_seq,
+                                                         kmer_size); 
+     
+     for (auto & kmer : differential_kmers)
+     {
+        if (
+            (left_diff_kmers.find(kmer) == left_diff_kmers.end()) 
+            &&
+            (right_diff_kmers.find(kmer) == right_diff_kmers.end())
+        ) core_kmers.insert(kmer);
+     }
+
+     /* peripheral kmers
+     std::set_difference(differential_kmers.begin(), differential_kmers.end(),
+                         core_kmers.begin(), core_kmers.end(),
+                         std::inserter(peripheral_kmers, peripheral_kmers.end()));      
+     */
+}
+
 
 //void process_aligned_target(const std::string & chrom, FastaReference & fr, const int base_quality_threshold, const double low_quality_base_rate_threshold, const int kmer_size, 
 //                            std::string & _contig, int & target_pos, std::string & target_ref, std::string & target_alt, std::string & _repeat_unit,
@@ -891,6 +906,17 @@ void process_aligned_target(Variant & target,
     Contig contig = set_up_contig(target.chrom, targets, low_quality_base_rate_threshold, base_quality_threshold, fr);
     
     std::set<std::string> informative_kmers = diff_kmers(contig.seq, contig.ref_seq, kmer_size);
+    std::set<std::string> core_kmers = {};
+    find_core_kmers(contig, kmer_size, informative_kmers, core_kmers);
+
+    // may happen for pure mapping artifacts 
+    if (core_kmers.empty())
+    {
+        transfer_vector(non_targets, targets);
+        transfer_vector(non_targets, candidates);
+        return;
+    }
+
     
     Variant observed_target = Variant(contig.target_pos, 
                                       contig.target_ref, 
@@ -905,9 +931,7 @@ void process_aligned_target(Variant & target,
     repeat_check(observed_target, contig, repeat_unit, n_tandem_repeats, is_complete_tandem_repeat, repeat_boundary);
     
     //gap-less alignment
-    //const uint8_t match_score = 3, mismatch_penalty = 2;
     const uint8_t _gap_open_penalty = 255, _gap_extention_penalty = 255;
-    //gap_open_penalty = 255, gap_extention_penalty=255;
     Filter filter;
     Alignment aln;
     Aligner aligner(
@@ -918,7 +942,7 @@ void process_aligned_target(Variant & target,
     
     Reads lt_extenders, extra_targets, rt_extenders, undetermined;
     
-    classify_candidates(candidates, contig, filter, aligner, aln, informative_kmers,
+    classify_candidates(candidates, contig, filter, aligner, aln, informative_kmers, core_kmers,
                         is_complete_tandem_repeat, n_tandem_repeats, repeat_boundary,
                         repeat_unit, rv_repeat_unit, low_quality_base_rate_threshold,
                         lt_extenders, extra_targets, rt_extenders, undetermined, non_targets);

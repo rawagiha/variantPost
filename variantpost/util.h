@@ -159,6 +159,33 @@ struct Variant {
     
 };
 
+struct RealignedGenomicSegment
+{
+    int start = 0; //1-based
+    int end = 0;
+    int target_pos = 0;
+    std::string ref_seq = "";
+    std::string seq = "";
+    std::string base_qualities = "";
+    std::vector<std::pair<char, int>> cigar_vec = {};
+    std::vector<Variant> variants = {};
+
+    RealignedGenomicSegment() {}   
+    
+    RealignedGenomicSegment(
+        const int start,
+        const int end,
+        int target_pos, 
+        const std::string & ref_seq,
+        const std::string & seq, 
+        const std::string & base_qualities,
+        const std::vector<std::pair<char, int>> & cigar_vec,
+        const std::vector<Variant> & variants 
+    ) : start(start), end(end), target_pos(target_pos), 
+        ref_seq(ref_seq), seq(seq), base_qualities(base_qualities),
+        cigar_vec(cigar_vec), variants(variants) {}
+};
+
 
 std::vector<Variant> find_mapped_variants(const int aln_start, const int aln_end, 
                                           const std::string & ref_seq, 

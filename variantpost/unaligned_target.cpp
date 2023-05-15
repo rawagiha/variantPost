@@ -401,7 +401,11 @@ void process_unaligned_target(Variant & target,
     for (const auto & ptrn : ptrns)
     {
         SimplifiedRead _frag = merge_to_fragment(candidates, ptrn);   
-        if (!_frag.empty())fragments.push_back(_frag);
+        if (!_frag.empty())
+        {
+            fragments.push_back(_frag);
+            std::cout << ptrn << " " << _frag.seq << std::endl; 
+        }
     }
     
     std::vector<Read> refinputs = {};
