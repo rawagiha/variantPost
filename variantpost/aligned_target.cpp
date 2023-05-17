@@ -53,7 +53,7 @@ Reads find_seed_reads(const Reads & targets, const double dirty_thresh, const si
         Reads tmp = {seeds.begin(), seeds.begin() + seed_size};
         
         std::sort(tmp.begin(), tmp.end(), 
-                  [](const Read & a, const Read & b){return a.aln_start < b.aln_start ? true : false;});   
+                  [](const Read & a, const Read & b){return a.read_start < b.read_start ? true : false;});   
          
         return tmp;
     }

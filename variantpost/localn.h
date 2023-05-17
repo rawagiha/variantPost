@@ -84,6 +84,7 @@ struct MergedRead
 
 
 SimplifiedRead merge_reads(const std::vector<SimplifiedRead> & inputs);
+SimplifiedRead _merge_reads(const std::vector<SimplifiedRead> & inputs);
 
 SimplifiedRead pairwise_stitch(const std::vector<SimplifiedRead> & inputs, bool lt_extention);
 

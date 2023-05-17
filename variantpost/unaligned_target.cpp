@@ -313,7 +313,7 @@ SimplifiedRead merge_to_fragment(std::vector<Read> & candidates, char clip_ptrn)
         else
         {
             std::sort(tmp.begin(), tmp.end(),
-                [](const Read & a, const Read & b){return a.aln_start < b.aln_start ? true : false;});
+                [](const Read & a, const Read & b){return a.read_start < b.read_start ? true : false;});
         }
 
         std::vector<SimplifiedRead> inputs;
