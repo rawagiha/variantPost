@@ -950,22 +950,7 @@ void process_aligned_target(Variant & target,
     
     SimplifiedRead extended(contig.seq, contig.base_qualities);
     std::vector<std::pair<int, int>> ext_coord = contig.coordinates;
-    
-    for (auto i : ext_coord)
-    {
-        std::cout << i.first << " - " << i.second << ", ";
-    }
-    std::cout << std::endl;
-    
     extend_contig_seq(contig, lt_extenders, rt_extenders, extended, ext_coord);
-    
-    
-    for (auto i : ext_coord)
-    {
-        std::cout << i.first << " - " << i.second << ", ";
-    }
-    std::cout << std::endl;
-    
     
     //align_to_contig(target.chrom, fr, extended, ext_coord);
     
@@ -979,12 +964,6 @@ void process_aligned_target(Variant & target,
     std::cout << "high quality conting: " << contig.is_high_quality() << std::endl;
    */ 
 
-    _contig = contig.seq;
-    std::cout << contig.central << " " << contig.closer_to_lt_end << std::endl;    
-    
-    Alignment alna;
-    
-     
     transfer_vector(targets, lt_extenders);
     transfer_vector(targets, extra_targets);
     transfer_vector(targets, rt_extenders); 
@@ -992,10 +971,11 @@ void process_aligned_target(Variant & target,
     std::cout << "target: " << targets.size() + lt_extenders.size() + extra_targets.size() + rt_extenders.size()<< std::endl;
     std::cout << "non_target: " << non_targets.size() << " " << std::endl;
     std::cout << "undetermined: " << undetermined.size() << std::endl;
+    /*
     for (auto & r : targets)
     {
         std::cout << r.read_name << " " << r.cigar_string << std::endl;
-    }
+    }*/
 }
 
 

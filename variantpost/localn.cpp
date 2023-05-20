@@ -152,7 +152,7 @@ std::vector<Overlap> find_overlaps(const std::vector<SimplifiedRead> & inputs)
 {
     std::vector<Overlap> overlaps;   
     
-    const uint8_t match_score = 2, mismatch_penalty = 2;
+    const uint8_t match_score = 3, mismatch_penalty = 10;
     const uint8_t gap_open_penalty = 255, gap_extention_penalty = 255;
 
     Filter filter;
@@ -225,6 +225,57 @@ SimplifiedRead pairwise_stitch(const std::vector<SimplifiedRead> & inputs, bool 
     }
 }
 
+
+void merge_to_right(const int prev_start, const int curr_start,
+                    const int prev_end, const int curr_end,
+                    const int target_start,
+                    const std::string & seq,
+                    const std::string & seq_qual,
+                    int & merge_start, int & merge_end,
+                    std::deque<BaseCount> & base_cnts,
+                    bool & is_target_start)
+{
+    merge_start += (curr_start - prev_start);
+    merge_end = base_cnts.size(); 
+    const int _merge_end = merge_end;
+    int merge_idx = 0;
+
+    for (int j = 0; j <= (prev_end - curr_start); ++j)
+    {
+        if (merge_start + j < merge_end) 
+        {    
+            if (target_start == curr_start + j) is_target_start = 1;
+            //std::cout << i << " " << seq[curr_start + j] << " " << prev_end << " " << curr_start << " " << curr_end << " ; ";
+            base_cnts[merge_start + j].add(seq[curr_start + j], seq_qual[curr_start + j], is_target_start);
+            is_target_start = 0;
+        }
+        
+        merge_idx = merge_start + j;
+                    
+    }
+                                        
+    for (int j = 1; j <= (curr_end - prev_end); ++j)
+    {
+        if (target_start == prev_end + j) is_target_start = 1;
+        //std::cout << seq[prev_end + j] << " " << prev_end << " " << curr_end << " ; ";
+                            
+        if (merge_idx + j < _merge_end)
+        {
+            //base_cnts[prev_end + j].add(seq[prev_end + j], seq_qual[prev_j + j], is_target_start);
+            base_cnts[merge_idx + j].add(seq[prev_end + j], seq_qual[prev_end + j], is_target_start);
+        }
+        else
+        {
+            BaseCount bc;
+            bc.add(seq[prev_end + j], seq_qual[prev_end + j], is_target_start);
+            base_cnts.push_back(bc);
+            //std::cout << seq[prev_end + j] << " " << prev_end << " " << curr_end << " ; ";
+        }                           
+        
+        is_target_start = 0;
+    }
+}
+
 SimplifiedRead merge_reads(const std::vector<SimplifiedRead> & inputs)
 {
     
@@ -249,8 +300,8 @@ SimplifiedRead merge_reads(const std::vector<SimplifiedRead> & inputs)
     for (int i = 0; i < n_overlap_reads; ++i)
     {
         
+        //check early curr_start prev_end    
         
-        std::cout << i << " " << prev_start << " " << prev_end << " " << curr_start << " " << curr_end << " " << merge_start << " " << merge_end << std::endl;
         
         is_last = (i == (n_overlap_reads - 1));
         
@@ -262,6 +313,8 @@ SimplifiedRead merge_reads(const std::vector<SimplifiedRead> & inputs)
         std::string seq = inputs[overlaps[i].index].seq;
         std::string seq_qual = inputs[overlaps[i].index].base_qualities;
              
+        std::cout << i << " " << prev_start << " " << prev_end << " " << curr_start << " " << curr_end << " " << merge_start << " " << merge_end << std::endl;
+
         std::cout << seq << std::endl;
 
         if (i == 0)
@@ -281,8 +334,14 @@ SimplifiedRead merge_reads(const std::vector<SimplifiedRead> & inputs)
         {
             if (prev_start <= curr_start)
             {
+                
+                merge_to_right(prev_start, curr_start, prev_end, curr_end, target_start, seq, seq_qual, merge_start, merge_end, base_cnts, is_target_start);
+                
+                /*
                 merge_start += (curr_start - prev_start);
                 merge_end = base_cnts.size(); 
+                const int _merge_end = merge_end;
+                int merge_idx = 0;
 
                 if (curr_start <= prev_end) 
                 {
@@ -291,43 +350,56 @@ SimplifiedRead merge_reads(const std::vector<SimplifiedRead> & inputs)
                         if (merge_start + j < merge_end) 
                         {    
                             if (target_start == curr_start + j) is_target_start = 1;
-                            //std::cout << seq[curr_start + j] << " " << prev_end << " " << curr_start << " " << curr_end << " ; ";
+                            //std::cout << i << " " << seq[curr_start + j] << " " << prev_end << " " << curr_start << " " << curr_end << " ; ";
                             base_cnts[merge_start + j].add(seq[curr_start + j], seq_qual[curr_start + j], is_target_start);
                             is_target_start = 0;
                         }
+                        merge_idx = merge_start + j;
                     }
                     
-                    std::cout << seq << " " << prev_end << " " << curr_end << std::endl;
-                    if (!is_last)
+                    if (1)
                     {
                         for (int j = 1; j <= (curr_end - prev_end); ++j)
                         {
                             if (target_start == prev_end + j) is_target_start = 1;
                             //std::cout << seq[prev_end + j] << " " << prev_end << " " << curr_end << " ; ";
                             
-                            BaseCount bc;
-                            bc.add(seq[prev_end + j], seq_qual[prev_end + j], is_target_start);
-                            base_cnts.push_back(bc);                           
+                            if (merge_idx + j < _merge_end)
+                            {
+                                //base_cnts[prev_end + j].add(seq[prev_end + j], seq_qual[prev_j + j], is_target_start);
+                                base_cnts[merge_idx + j].add(seq[prev_end + j], seq_qual[prev_end + j], is_target_start);
+                            }
+                            else
+                            {
+                                BaseCount bc;
+                                bc.add(seq[prev_end + j], seq_qual[prev_end + j], is_target_start);
+                                base_cnts.push_back(bc);
+                                
+                                std::cout << seq[prev_end + j] << " " << prev_end << " " << curr_end << " ; ";
+                            }                           
                             is_target_start = 0;
                         }
                     }
-                }
+                }*/
             }
             else
             {
+                int _ps = prev_start;                
+                merge_to_right(prev_start, _ps, prev_end, curr_end, target_start, seq, seq_qual, merge_start, merge_end, base_cnts, is_target_start);
                 
                 int lt_move = prev_start - curr_start;
                 std::cout << "here " << lt_move << std::endl;
+                const int _merge_start = merge_start;
                 //if (prev_start <= curr_end)
                 //{
                     for (int j = 0; j <= lt_move; ++j)
                     {
                         if (target_start == prev_start - j) is_target_start = 1;
                         
-                        if (merge_start - j >= 0)
+                        if (_merge_start - j >= 0)
                         {
-                            base_cnts[merge_start - j].add(seq[prev_start - j], seq_qual[prev_start - j], is_target_start);
-                            merge_start -= 1;
+                            base_cnts[_merge_start - j].add(seq[prev_start - j], seq_qual[prev_start - j], is_target_start);
+                            if (j) merge_start -= 1;
                         }
                         else
                         {
@@ -342,13 +414,23 @@ SimplifiedRead merge_reads(const std::vector<SimplifiedRead> & inputs)
                         }    
                     } 
                 //}
+                //
+                // add right extension
             }
         }
         
         prev_start = overlaps[i].query_start;
         prev_end = overlaps[i].query_end;   
+    
+        std::string __merged_read = "";
+        for (const auto & b : base_cnts)
+        {
+            __merged_read += b.get_consensus().first;
+        }
+        std::cout << "merged at " << i << " " << __merged_read << std::endl;
     }
 
+    
     std::string merged_read = "";
     std::string merged_qualities = "";
     std::vector<int> n_start_checks;

@@ -100,7 +100,6 @@ pp::ProcessedPileup  pp::process_pileup(
         mapqs
     );
     
-    std::cout << "hello! classified" << std::endl;
     
     if (target.is_substitute)
     {
