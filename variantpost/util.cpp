@@ -850,6 +850,7 @@ std::vector<Variant> find_variants(const int aln_start,
     return variants;
 }
 
+
 std::set<std::string> make_kmers(const std::string & seq, const size_t k)
 {
     size_t n = seq.size();
@@ -948,3 +949,105 @@ double euclidean_dist(const std::string & query,
     */
     return 0.1;
 }
+
+
+
+// for aligned case
+void make_contig(const std::vector<RealignedGenomicSegment> & realns)
+{
+    bool contains_target = false;
+    std::vector<double> frac_end_matches;
+    for (const auto & realn : realns)
+    { 
+        if (!contains_target) contains_target = realn.has_target;
+        
+        int lt_matched = 0, rt_matched = 0;
+        if (realn.first_cigar.first == '=') lt_matched = realn.first_cigar.second;
+        if (realn.last_cigar.first == '=')  rt_matched = realn.last_cigar.second;
+        
+        int end_matched = (lt_matched < rt_matched) ? lt_matched : rt_matched;
+        
+
+        frac_end_matches.push_back(static_cast<double>(end_matched) / realn.seq_len);   
+    }
+    
+    size_t idx_most_centered = std::distance(frac_end_matches.begin(), std::max_element(frac_end_matches.begin(), frac_end_matches.end()));
+    
+    RealignedGenomicSegment _realn = realns[idx_most_centered];   
+    
+    const std::string seq = _realn.seq;
+    const std::string ref_seq = _realn.ref_seq;
+    const std::string base_qualities = _realn.base_qualities;
+    const std::vector<Variant> variants = _realn.variants;
+    
+    int genomic_pos = _realn.start;
+    size_t seq_idx = 0, ref_idx = 0, v_idx = 0;
+    std::vector<PairwiseBaseAlignmnent> aligned_bases;
+    for (const auto & cigar : _realn.cigar_vec)
+    {  
+        char op = cigar.first;
+        char op_len = cigar.second;
+        
+        switch (op)
+        {
+            case '=':
+                for (int i = 0; i < op_len; ++i)
+                {
+                    aligned_bases.emplace_back(genomic_pos, 
+                                               ref_seq.substr(ref_idx, 1), 
+                                               seq.substr(seq_idx, 1),
+                                               base_qualities.substr(seq_idx, 1));
+                    ++genomic_pos;
+                    ++ref_idx;
+                    ++seq_idx;
+                }
+                break;
+            case 'X':
+                aligned_bases.emplace_back(genomic_pos,
+                                           variants[v_idx].ref,
+                                           variants[v_idx].alt,
+                                           base_qualities.substr(seq_idx, 1));
+                ++genomic_pos;
+                ++ref_idx;
+                ++seq_idx;
+                ++v_idx;
+                break; 
+            case 'I':
+                //will fail if first
+                aligned_bases.pop_back();
+                aligned_bases.emplace_back(genomic_pos - 1, 
+                                           variants[v_idx].ref,
+                                           seq.substr(seq_idx - 1, op_len + 1), 
+                                           base_qualities.substr(seq_idx - 1, op_len + 1));
+                seq_idx += op_len;
+                ++v_idx;
+                break;
+            case 'D':
+                //will fail if first
+                aligned_bases.pop_back();
+                aligned_bases.emplace_back(genomic_pos - 1,
+                                           variants[v_idx].ref,
+                                           seq.substr(seq_idx - 1, 1),
+                                           base_qualities.substr(seq_idx - 1, 1)); 
+                ref_idx += op_len;
+                ++v_idx;
+                break;
+            case 'N':
+                genomic_pos += op_len;
+                break;
+            case 'S':
+                seq_idx += op_len;
+                break;
+        }
+    }
+
+    for (const auto & b : aligned_bases)
+    {
+        std::cout << b.genomic_pos << " " << b.ref_base << " " << b.alt_base << " " << b.base_qual << ",  ";
+    }
+    std::cout << std::endl; 
+}
+
+// for unaligned case
+//void infer_contig()
+

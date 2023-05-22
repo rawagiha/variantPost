@@ -349,8 +349,8 @@ char classify_local_ptrn(
     
     int read_len = read_seq.length();
     double cplx_thresh = 10;
-    double variant_free_dist = read_len / 5; //20%
-    double clip_free_dist = read_len / 2; //50% 
+    double variant_free_dist = target.ref_len + target.alt_len + 10; //50%
+    double clip_free_dist = read_len / 2;
     
     if (has_gteq_five_indel || d2var <= cplx_thresh || d2clip <= 2 * cplx_thresh) may_be_complex = true;
                    

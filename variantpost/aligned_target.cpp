@@ -233,7 +233,7 @@ SimplifiedRead merge_target_reads(const Reads & targets, const double dirty_thre
 }
 
 
-struct Contig
+struct RawContig
 {
 private:
     const double dirty_thresh = .1;
@@ -319,13 +319,13 @@ public:
 };
 
 
-Contig set_up_contig(const std::string & chrom, const Reads & targets, const double dirty_rate_thresh, const int qual_thresh, FastaReference & fr)
+RawContig set_up_contig(const std::string & chrom, const Reads & targets, const double dirty_rate_thresh, const int qual_thresh, FastaReference & fr)
 {
     Reads seeds;
     
     SimplifiedRead mr = merge_target_reads(targets, dirty_rate_thresh, seeds);
     
-    Contig contig;
+    RawContig contig;
 
     contig.seq = mr.seq;
     contig.base_qualities = mr.base_qualities;
@@ -372,7 +372,7 @@ inline bool is_rotatable(const std::string & unpadded_allele)
 }
 
 void repeat_check(const Variant & trgt, 
-                  const Contig & contig, 
+                  const RawContig & contig, 
                   const std::string & repeat_unit, 
                   int & n_tandem_repeats, 
                   bool & is_complete_tandem_repeat, 
@@ -442,7 +442,7 @@ void repeat_check(const Variant & trgt,
 }
 
 
-void classify_candidates(Reads & candidates, const Contig & contig, 
+void classify_candidates(Reads & candidates, const RawContig & contig, 
                          const Filter & filter, const Aligner & aligner, Alignment & alignment, 
                          const std::set<std::string> & target_kmers,
                          const std::set<std::string> & core_kmers,
@@ -603,7 +603,7 @@ bool is_compatible_spl_ptrn(const Read & read, const std::vector<std::pair<int, 
 //splice compatibility check
 //bool is_splice_compatible (in util?)
 //do we need commonest prtn check (as in seed)??
-void extend_contig_seq(const Contig & contig, 
+void extend_contig_seq(const RawContig & contig, 
                        const Reads & lt_extenders, 
                        const Reads & rt_extenders, 
                        SimplifiedRead & extended_contig,
@@ -792,7 +792,8 @@ void realn_extended_contig
      const int gap_extention_penalty,
      const Variant & target,
      const int unspl_loc_ref_start,
-     const std::unordered_map<int, char> & indexed_local_reference)
+     const std::unordered_map<int, char> & indexed_local_reference,
+     std::vector<RealignedGenomicSegment> & realns)
 {
     std::string extended_ref = ""; 
     for (const auto & coord : extended_coordinates)
@@ -807,13 +808,15 @@ void realn_extended_contig
     std::vector<Variant> _variants = {};
     std::vector<std::pair<char, int>> _cigar_vec = {};
     std::string variant_quals = "";
-    std::vector<RealignedGenomicSegment> realns = {};
 
     std::vector<std::pair<int, int>> grid;
     make_grid(gap_open_penalty, gap_extention_penalty, grid);  
     for (auto & gap_param : grid)
     {
-        sw_aln(match_score, mismatch_penalty, gap_param.first, gap_param.second, extended_ref, extended_contig.seq, filter, aln);
+        sw_aln(match_score, mismatch_penalty, 
+               gap_param.first, gap_param.second, 
+               extended_ref, extended_contig.seq, filter, aln);
+        
         _cigar_vec = to_cigar_vector(aln.cigar_string);
         splice_cigar(_cigar_vec, aln.ref_begin, genomic_pos, extended_coordinates);
         move_up_insertion(_cigar_vec);
@@ -830,28 +833,32 @@ void realn_extended_contig
                             _cigar_vec, variant_quals
                     );
         
+        int target_pos = target.pos;
+        bool has_target = false;
+        for (const auto & v : _variants)
+        {
+            if (v.is_equivalent(target, unspl_loc_ref_start, indexed_local_reference))
+            {
+                target_pos = v.pos;
+                has_target = true;
+            }
+        }
         
-        RealignedGenomicSegment realn(genomic_pos[aln.ref_begin], genomic_pos[aln.ref_end], -1, 
+        RealignedGenomicSegment realn(genomic_pos[aln.ref_begin], 
+                                      genomic_pos[aln.ref_end], 
+                                      target_pos, 
+                                      has_target,
                                       extended_ref.substr(aln.ref_begin), 
                                       extended_contig.seq.substr(begin_with_offset),
                                       extended_contig.base_qualities.substr(begin_with_offset),
                                       _cigar_vec, _variants);
         
-        for (auto & v : _variants)
-        {
-            //std::cout << v.pos << " " << v.ref << " " << v.alt << std::endl;
-            if (v.is_equivalent(target, unspl_loc_ref_start, indexed_local_reference))
-            {
-                realn.target_pos = v.pos;
-                realns.push_back(realn);
-                std::cout << "found  -> " << v.pos << " " << v.ref << " " << v.alt << std::endl;
-            }
-        }          
+        realns.push_back(realn);
     }
 }
 
 
-void find_core_kmers(const Contig & contig, const int kmer_size, 
+void find_core_kmers(const RawContig & contig, const int kmer_size, 
                      const std::set<std::string> & differential_kmers, std::set<std::string> & core_kmers)
 {
      std::set<std::string> left_diff_kmers = diff_kmers(contig.seq.substr(contig.decomposition[0].first, contig.decomposition[0].second),
@@ -903,7 +910,7 @@ void process_aligned_target(Variant & target,
         std::cout << read.read_name << " " << read.is_reverse << " " << read.may_be_complex << " " << read.non_ref_ptrn_str << " " << read.has_non_target_in_critical_region << " " << std::endl;
     }
     */
-    Contig contig = set_up_contig(target.chrom, targets, low_quality_base_rate_threshold, base_quality_threshold, fr);
+    RawContig contig = set_up_contig(target.chrom, targets, low_quality_base_rate_threshold, base_quality_threshold, fr);
     
     std::set<std::string> informative_kmers = diff_kmers(contig.seq, contig.ref_seq, kmer_size);
     std::set<std::string> core_kmers = {};
@@ -952,18 +959,11 @@ void process_aligned_target(Variant & target,
     std::vector<std::pair<int, int>> ext_coord = contig.coordinates;
     extend_contig_seq(contig, lt_extenders, rt_extenders, extended, ext_coord);
     
-    //align_to_contig(target.chrom, fr, extended, ext_coord);
+    std::vector<RealignedGenomicSegment> realns = {};
+    realn_extended_contig(target.chrom, fr, extended, ext_coord, match_score, mismatch_penalty, gap_open_penalty, gap_extention_penalty, target, unspl_loc_ref_start, indexed_local_reference, realns);
     
-    realn_extended_contig(target.chrom, fr, extended, ext_coord, match_score, mismatch_penalty, gap_open_penalty, gap_extention_penalty, target, unspl_loc_ref_start, indexed_local_reference);
+    make_contig(realns);
     
-    /*const size_t lt_len = contig.decomposition[0].second;
-    const size_t rt_len = contig.decomposition[2].second;
-
-    std::cout << lt_len << " " << rt_len << std::endl;
-    std::cout << lt_extenders.size() << " " << extra_targets.size() << " " << rt_extenders.size() << std::endl;
-    std::cout << "high quality conting: " << contig.is_high_quality() << std::endl;
-   */ 
-
     transfer_vector(targets, lt_extenders);
     transfer_vector(targets, extra_targets);
     transfer_vector(targets, rt_extenders); 
@@ -971,11 +971,6 @@ void process_aligned_target(Variant & target,
     std::cout << "target: " << targets.size() + lt_extenders.size() + extra_targets.size() + rt_extenders.size()<< std::endl;
     std::cout << "non_target: " << non_targets.size() << " " << std::endl;
     std::cout << "undetermined: " << undetermined.size() << std::endl;
-    /*
-    for (auto & r : targets)
-    {
-        std::cout << r.read_name << " " << r.cigar_string << std::endl;
-    }*/
 }
 
 

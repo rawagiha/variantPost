@@ -319,6 +319,7 @@ SimplifiedRead merge_to_fragment(std::vector<Read> & candidates, char clip_ptrn)
         std::vector<SimplifiedRead> inputs;
         for (auto & read : tmp)
         {
+            std::cout << read.read_name << " " << read.is_reverse << std::endl;
             inputs.emplace_back(read.seq, read.base_qualities, -1);
         }
 

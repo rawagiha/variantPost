@@ -152,7 +152,7 @@ std::vector<Overlap> find_overlaps(const std::vector<SimplifiedRead> & inputs)
 {
     std::vector<Overlap> overlaps;   
     
-    const uint8_t match_score = 3, mismatch_penalty = 10;
+    const uint8_t match_score = 2, mismatch_penalty = 2;
     const uint8_t gap_open_penalty = 255, gap_extention_penalty = 255;
 
     Filter filter;
@@ -313,9 +313,9 @@ SimplifiedRead merge_reads(const std::vector<SimplifiedRead> & inputs)
         std::string seq = inputs[overlaps[i].index].seq;
         std::string seq_qual = inputs[overlaps[i].index].base_qualities;
              
-        std::cout << i << " " << prev_start << " " << prev_end << " " << curr_start << " " << curr_end << " " << merge_start << " " << merge_end << std::endl;
+        //std::cout << i << " " << prev_start << " " << prev_end << " " << curr_start << " " << curr_end << " " << merge_start << " " << merge_end << std::endl;
 
-        std::cout << seq << std::endl;
+        //std::cout << seq << std::endl;
 
         if (i == 0)
         {
@@ -388,7 +388,7 @@ SimplifiedRead merge_reads(const std::vector<SimplifiedRead> & inputs)
                 merge_to_right(prev_start, _ps, prev_end, curr_end, target_start, seq, seq_qual, merge_start, merge_end, base_cnts, is_target_start);
                 
                 int lt_move = prev_start - curr_start;
-                std::cout << "here " << lt_move << std::endl;
+                //std::cout << "here " << lt_move << std::endl;
                 const int _merge_start = merge_start;
                 //if (prev_start <= curr_end)
                 //{
@@ -405,7 +405,7 @@ SimplifiedRead merge_reads(const std::vector<SimplifiedRead> & inputs)
                         {
                             if (target_start == prev_start - j) is_target_start = 1;
 
-                            std::cout << i << " " << seq[prev_start - j] << " " << merge_start - j << std::endl;
+                            //std::cout << i << " " << seq[prev_start - j] << " " << merge_start - j << std::endl;
                             BaseCount bc;
                             bc.add(seq[prev_start - j], seq_qual[prev_start - j], is_target_start);
                             base_cnts.push_front(bc);
@@ -422,12 +422,12 @@ SimplifiedRead merge_reads(const std::vector<SimplifiedRead> & inputs)
         prev_start = overlaps[i].query_start;
         prev_end = overlaps[i].query_end;   
     
-        std::string __merged_read = "";
+        /*std::string __merged_read = "";
         for (const auto & b : base_cnts)
         {
             __merged_read += b.get_consensus().first;
         }
-        std::cout << "merged at " << i << " " << __merged_read << std::endl;
+        std::cout << "merged at " << i << " " << __merged_read << std::endl;*/
     }
 
     
@@ -441,7 +441,7 @@ SimplifiedRead merge_reads(const std::vector<SimplifiedRead> & inputs)
         n_start_checks.push_back(std::accumulate(b.start_checks.begin(), b.start_checks.end(), 0));
     }
     
-    std::cout << "=merged--  " << merged_read << std::endl;
+    //std::cout << "=merged--  " << merged_read << std::endl;
 
     int target_start_idx = get_max_indices(n_start_checks)[0];   
     

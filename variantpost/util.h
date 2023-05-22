@@ -164,11 +164,15 @@ struct RealignedGenomicSegment
     int start = 0; //1-based
     int end = 0;
     int target_pos = 0;
+    bool has_target = false;
     std::string ref_seq = "";
     std::string seq = "";
     std::string base_qualities = "";
     std::vector<std::pair<char, int>> cigar_vec = {};
     std::vector<Variant> variants = {};
+    int seq_len = 0;
+    std::pair<char, int> first_cigar;
+    std::pair<char, int> last_cigar;
 
     RealignedGenomicSegment() {}   
     
@@ -176,16 +180,54 @@ struct RealignedGenomicSegment
         const int start,
         const int end,
         int target_pos, 
+        bool has_target,
         const std::string & ref_seq,
         const std::string & seq, 
         const std::string & base_qualities,
         const std::vector<std::pair<char, int>> & cigar_vec,
         const std::vector<Variant> & variants 
     ) : start(start), end(end), target_pos(target_pos), 
+        has_target(has_target),
         ref_seq(ref_seq), seq(seq), base_qualities(base_qualities),
-        cigar_vec(cigar_vec), variants(variants) {}
+        cigar_vec(cigar_vec), variants(variants) 
+        {
+            seq_len = seq.size();
+            first_cigar = cigar_vec[0];
+            last_cigar = cigar_vec[cigar_vec.size() - 1];   
+        }
 };
 
+struct PairwiseBaseAlignmnent
+{
+    int genomic_pos = 0;
+    std::string ref_base = "";
+    std::string alt_base = "";
+    std::string base_qual = "";
+
+    PairwiseBaseAlignmnent() {}
+
+    PairwiseBaseAlignmnent(
+        const int genomic_pos,
+        const std::string & ref_base,
+        const std::string & alt_base,
+        const std::string &  base_qual
+    ) : genomic_pos(genomic_pos), 
+        ref_base(ref_base), alt_base(alt_base),
+        base_qual(base_qual) {}
+};
+
+struct Contig
+{
+    std::vector<PairwiseBaseAlignmnent> alignment;
+    std::vector<std::pair<int, int>> skips;
+    
+    Contig(
+        const std::vector<PairwiseBaseAlignmnent> & alignment;
+        const std::vector<std::pair<int, int>> & skips
+    ) : alignment(alignment), skips(skips) {}
+};
+
+void make_contig(const std::vector<RealignedGenomicSegment> & realns);
 
 std::vector<Variant> find_mapped_variants(const int aln_start, const int aln_end, 
                                           const std::string & ref_seq, 

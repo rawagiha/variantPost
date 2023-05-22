@@ -1618,11 +1618,11 @@ static PyObject *__pyx_pw_11variantpost_16variantalignment_16VariantAlignment_1_
  *         window=200,
  *         exclude_duplicates=True,             # <<<<<<<<<<<<<<
  *         downsample_threshold=-1,
- *         mapping_quality_threshold=1,
+ *         mapping_quality_threshold=-1,
  */
     values[5] = ((PyObject *)((PyObject *)Py_True));
     values[6] = ((PyObject *)((PyObject *)__pyx_int_neg_1));
-    values[7] = ((PyObject *)((PyObject *)__pyx_int_1));
+    values[7] = ((PyObject *)((PyObject *)__pyx_int_neg_1));
     values[8] = ((PyObject *)((PyObject *)__pyx_int_20));
     values[9] = ((PyObject *)((PyObject*)__pyx_float_0_05));
     values[10] = ((PyObject *)((PyObject *)__pyx_int_3));
@@ -3466,7 +3466,7 @@ static CYTHON_SMALL_CODE int __Pyx_InitCachedConstants(void) {
   __Pyx_GOTREF(__pyx_tuple__2);
   __Pyx_GIVEREF(__pyx_tuple__2);
   __pyx_codeobj__3 = (PyObject*)__Pyx_PyCode_New(15, 0, 29, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__2, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_variantpost_variantalignment_pyx, __pyx_n_s_init, 7, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__3)) __PYX_ERR(0, 7, __pyx_L1_error)
-  __pyx_tuple__4 = PyTuple_Pack(12, ((PyObject *)Py_None), ((PyObject *)__pyx_int_200), ((PyObject *)Py_True), ((PyObject *)__pyx_int_neg_1), ((PyObject *)__pyx_int_1), ((PyObject *)__pyx_int_20), ((PyObject*)__pyx_float_0_05), ((PyObject *)__pyx_int_3), ((PyObject *)__pyx_int_2), ((PyObject *)__pyx_int_3), ((PyObject *)__pyx_int_1), ((PyObject *)__pyx_int_32)); if (unlikely(!__pyx_tuple__4)) __PYX_ERR(0, 7, __pyx_L1_error)
+  __pyx_tuple__4 = PyTuple_Pack(12, ((PyObject *)Py_None), ((PyObject *)__pyx_int_200), ((PyObject *)Py_True), ((PyObject *)__pyx_int_neg_1), ((PyObject *)__pyx_int_neg_1), ((PyObject *)__pyx_int_20), ((PyObject*)__pyx_float_0_05), ((PyObject *)__pyx_int_3), ((PyObject *)__pyx_int_2), ((PyObject *)__pyx_int_3), ((PyObject *)__pyx_int_1), ((PyObject *)__pyx_int_32)); if (unlikely(!__pyx_tuple__4)) __PYX_ERR(0, 7, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_tuple__4);
   __Pyx_GIVEREF(__pyx_tuple__4);
   __Pyx_RefNannyFinishContext();
