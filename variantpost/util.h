@@ -222,7 +222,7 @@ struct Contig
     std::vector<std::pair<int, int>> skips;
     
     Contig(
-        const std::vector<PairwiseBaseAlignmnent> & alignment;
+        const std::vector<PairwiseBaseAlignmnent> & alignment,
         const std::vector<std::pair<int, int>> & skips
     ) : alignment(alignment), skips(skips) {}
 };
