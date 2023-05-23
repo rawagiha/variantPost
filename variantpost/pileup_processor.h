@@ -1,14 +1,21 @@
 #ifndef PILEUP_PROCESSOR_H
 #define PILEUP_PROCESSOR_H
 
+
+#include "util.h"
+
 #include <string>
 #include <vector>
+
 
 namespace pp {
 
     struct ProcessedPileup 
     {
-        std::string contig;
+        std::vector<int> positions;
+        std::vector<std::string> ref_bases;
+        std::vector<std::string> alt_bases;
+        std::vector<std::string> base_quals;
         int target_pos;
         std::string ref;
         std::string alt;
@@ -19,7 +26,10 @@ namespace pp {
 
         ProcessedPileup();
                                                 
-        ProcessedPileup(const std::string & contig,
+        ProcessedPileup(const std::vector<int> & positions,
+                        const std::vector<std::string> & ref_bases,
+                        const std::vector<std::string> & alt_bases,
+                        const std::vector<std::string> & base_quals,
                         const int target_pos,
                         const std::string ref,
                         const std::string alt,
@@ -29,7 +39,7 @@ namespace pp {
                         std::vector<bool> & are_from_first_bam);
     };
 
-    ProcessedPileup  process_pileup(const std::string &,
+    ProcessedPileup  _process_pileup(const std::string &,
                                     const std::string &,
                                     const int,
                                     const std::string &,

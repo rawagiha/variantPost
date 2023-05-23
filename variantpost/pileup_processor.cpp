@@ -8,7 +8,7 @@
 #include "aligned_target.h"
 #include "unaligned_target.h"
 
-pp::ProcessedPileup prepare_processed_rslt(std::string & contig,
+pp::ProcessedPileup prepare_processed_rslt(const Contig & contig,
                                        int target_pos,
                                        std::string & target_ref,
                                        std::string & target_alt,
@@ -20,7 +20,10 @@ pp::ProcessedPileup::ProcessedPileup() {}
 
 pp::ProcessedPileup::ProcessedPileup
 (
-    const std::string & contig,
+    const std::vector<int> & positions,
+    const std::vector<std::string> & ref_bases,
+    const std::vector<std::string> & alt_bases,
+    const std::vector<std::string> & base_quals,
     const int target_pos,
     const std::string ref,
     const std::string alt,
@@ -28,13 +31,14 @@ pp::ProcessedPileup::ProcessedPileup
     std::vector<bool> & are_reverse,
     std::vector<bool> & are_target,
     std::vector<bool> & are_from_first_bam
-) : contig(contig), target_pos(target_pos), ref(ref), alt(alt), 
+) : positions(positions), ref_bases(ref_bases), alt_bases(alt_bases),
+    target_pos(target_pos), ref(ref), alt(alt), 
     read_names(read_names), are_reverse(are_reverse),
     are_target(are_target), 
     are_from_first_bam(are_from_first_bam)                
 {}
 
-pp::ProcessedPileup  pp::process_pileup(
+pp::ProcessedPileup  pp::_process_pileup(
     const std::string & fastafile,
     const std::string & chrom,
     const int pos, 
@@ -117,8 +121,9 @@ pp::ProcessedPileup  pp::process_pileup(
     }
     
     
-    std::string contig = "";
+    //std::string contig = "";
     
+    Contig contig;
     
     //std::string minimal_repeat = target.minimal_repeat_unit();
      
@@ -189,7 +194,7 @@ pp::ProcessedPileup  pp::process_pileup(
     return prp;
 }
 
-pp::ProcessedPileup prepare_processed_rslt(std::string & contig,
+pp::ProcessedPileup prepare_processed_rslt(const Contig & contig,
                                        int target_pos,
                                        std::string & target_ref,
                                        std::string & target_alt,
@@ -197,6 +202,10 @@ pp::ProcessedPileup prepare_processed_rslt(std::string & contig,
                                        //const std::vector<ParsedRead> & candidates, //this shouldn't exit at this stage
                                        const std::vector<Read> & non_targets)
 {
+    std::vector<int> positions;
+    std::vector<std::string> ref_bases;
+    std::vector<std::string> alt_bases;
+    std::vector<std::string> base_quals;
     std::vector<std::string> read_names;
     std::vector<bool> are_reverse;
     std::vector<bool> are_target;
@@ -216,7 +225,15 @@ pp::ProcessedPileup prepare_processed_rslt(std::string & contig,
         are_from_first_bam.push_back(read.is_from_first);   
     }
 
-    pp::ProcessedPileup prp {contig, target_pos, target_ref, target_alt, read_names, are_reverse, are_target, are_from_first_bam};
+    for (const auto & base_level_aln : contig.alignment)
+    {
+        positions.push_back(base_level_aln.genomic_pos);
+        ref_bases.push_back(base_level_aln.ref_base);
+        alt_bases.push_back(base_level_aln.alt_base);
+        base_quals.push_back(base_level_aln.base_qual);
+    }
+    
+    pp::ProcessedPileup prp {positions, ref_bases, alt_bases, base_quals, target_pos, target_ref, target_alt, read_names, are_reverse, are_target, are_from_first_bam};
     
     return prp;
 }        

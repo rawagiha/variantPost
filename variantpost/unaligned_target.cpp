@@ -383,13 +383,18 @@ void process_unaligned_target(Variant & target,
     
     if (is_retargetable)   
     {    
+        
+        std::cout << "retargeted ..." << std::endl;
+        return;
+        
+        /*
         std::string _c;
         process_aligned_target(target, fr, 
                                base_quality_threshold, low_quality_base_rate_threshold, 
                                3,2,3,1,
                                kmer_size, unspl_loc_ref_start, indexed_local_reference,
                                _c, targets, candidates, non_targets);
-        return;
+        return;*/
     }
 
     sift_by_kmer(target, fr, candidates, non_targets);

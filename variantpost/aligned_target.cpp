@@ -900,7 +900,8 @@ void process_aligned_target(Variant & target,
                             const int kmer_size,
                             const int unspl_loc_ref_start,
                             const std::unordered_map<int, char> & indexed_local_reference,
-                            std::string & _contig,
+                            //std::string & _contig,
+                            Contig & _contig,
                             Reads & targets, Reads & candidates, Reads & non_targets)
 
 {   
@@ -962,7 +963,7 @@ void process_aligned_target(Variant & target,
     std::vector<RealignedGenomicSegment> realns = {};
     realn_extended_contig(target.chrom, fr, extended, ext_coord, match_score, mismatch_penalty, gap_open_penalty, gap_extention_penalty, target, unspl_loc_ref_start, indexed_local_reference, realns);
     
-    make_contig(realns);
+    make_contig(realns, _contig);
     
     transfer_vector(targets, lt_extenders);
     transfer_vector(targets, extra_targets);

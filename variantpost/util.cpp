@@ -953,7 +953,7 @@ double euclidean_dist(const std::string & query,
 
 
 // for aligned case
-void make_contig(const std::vector<RealignedGenomicSegment> & realns)
+void make_contig(const std::vector<RealignedGenomicSegment> & realns, Contig & contig)
 {
     bool contains_target = false;
     std::vector<double> frac_end_matches;
@@ -1042,12 +1042,9 @@ void make_contig(const std::vector<RealignedGenomicSegment> & realns)
                 break;
         }
     }
+    
+    contig.alignment = aligned_bases;
 
-    for (const auto & b : aligned_bases)
-    {
-        std::cout << b.genomic_pos << " " << b.ref_base << " " << b.alt_base << " " << b.base_qual << ",  ";
-    }
-    std::cout << std::endl; 
 }
 
 // for unaligned case

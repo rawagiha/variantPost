@@ -219,15 +219,18 @@ struct PairwiseBaseAlignmnent
 struct Contig
 {
     std::vector<PairwiseBaseAlignmnent> alignment;
-    std::vector<std::pair<int, int>> skips;
+    //std::vector<std::pair<int, int>> skips;
     
+    Contig() {}
+
     Contig(
-        const std::vector<PairwiseBaseAlignmnent> & alignment,
-        const std::vector<std::pair<int, int>> & skips
-    ) : alignment(alignment), skips(skips) {}
+        const std::vector<PairwiseBaseAlignmnent> & alignment
+        //const std::vector<std::pair<int, int>> & skips
+    ) : alignment(alignment) {} 
+        //skips(skips) {}
 };
 
-void make_contig(const std::vector<RealignedGenomicSegment> & realns);
+void make_contig(const std::vector<RealignedGenomicSegment> & realns, Contig & contig);
 
 std::vector<Variant> find_mapped_variants(const int aln_start, const int aln_end, 
                                           const std::string & ref_seq, 

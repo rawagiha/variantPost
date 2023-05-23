@@ -4,7 +4,9 @@
 #include <string>
 #include <vector>
 
+#include "util.h"
 #include "read_classifier.h"
+
 #include "fasta/Fasta.h"
 
 typedef std::vector<Read> Reads;
@@ -38,7 +40,8 @@ void process_aligned_target(Variant & target,
                             const int kmer_size,
                             const int unspl_loc_ref_start,
                             const std::unordered_map<int, char> & indexed_local_reference,
-                            std::string & _contig,
+                            //std::string & _contig,
+                            Contig & _contig,
                             Reads & targets, Reads & candidates, Reads & non_targets);
 
 

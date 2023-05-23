@@ -2,12 +2,16 @@ from libcpp.string cimport string
 from libcpp.vector cimport vector
 from libcpp cimport bool as bool_t
 
+#cdef extern from "util.h":
 cdef extern from "pileup_processor.h" namespace "pp":
     
     cdef cppclass ProcessedPileup:
         
         ProcessedPileup() except +
-        ProcessedPileup(string &, 
+        ProcessedPileup(vector[int] &,
+                        vector[string] &,
+                        vector[string] &,
+                        vector[string] &, 
                         int,
                         string &,
                         string &,
@@ -16,7 +20,10 @@ cdef extern from "pileup_processor.h" namespace "pp":
                         vector[bool_t] &,
                         vector[bool_t] &) except +
         
-        string contig
+        vector[int] positions
+        vector[string] ref_bases
+        vector[string] alt_bases
+        vector[string] base_quals
         int target_pos
         string ref, alt
         vector[string] read_names
@@ -26,7 +33,7 @@ cdef extern from "pileup_processor.h" namespace "pp":
     
     
     
-    ProcessedPileup  process_pileup(
+    ProcessedPileup  _process_pileup(
             string &,
             string &,
             int,
@@ -56,7 +63,7 @@ cdef extern from "pileup_processor.h" namespace "pp":
     )
 
 
-cdef string test_it(
+cdef object process_pileup(
     string & fastafile,
     string & chrom,
     int pos, 
@@ -85,7 +92,7 @@ cdef string test_it(
     vector[bool_t] & are_first_bam,
 ):
 
-    res = process_pileup(
+    res = _process_pileup(
         fastafile,
         chrom,
         pos, 
@@ -116,5 +123,5 @@ cdef string test_it(
     
     #res is not a python obj..
     
-    print(res.contig, res.target_pos, res.ref, res.alt) 
-    return "aaa"
+    #print(res.positions, res.ref_bases, res.target_pos, res.ref, res.alt) 
+    return res.positions, res.ref_bases, res.target_pos, res.ref, res.alt

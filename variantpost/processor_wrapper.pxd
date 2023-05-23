@@ -2,7 +2,7 @@ from libcpp.string cimport string
 from libcpp.vector cimport vector
 from libcpp cimport bool as bool_t
 
-cdef string  test_it(
+cdef object  process_pileup(
                 string &,
                 string &,
                 int,
