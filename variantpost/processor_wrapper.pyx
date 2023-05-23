@@ -2,8 +2,7 @@ from libcpp.string cimport string
 from libcpp.vector cimport vector
 from libcpp cimport bool as bool_t
 
-#cdef extern from "util.h":
-cdef extern from "pileup_processor.h" namespace "pp":
+cdef extern from "pileup_processor.h":
     
     cdef cppclass ProcessedPileup:
         
@@ -33,7 +32,7 @@ cdef extern from "pileup_processor.h" namespace "pp":
     
     
     
-    ProcessedPileup  _process_pileup(
+    ProcessedPileup  cpp_process_pileup(
             string &,
             string &,
             int,
@@ -49,14 +48,12 @@ cdef extern from "pileup_processor.h" namespace "pp":
             int, 
             int,
             int,
-            #string &, 
             vector[string] &,
             vector[bool_t] &, 
             vector[string] &,
             vector[int] &, 
             vector[int] &,
             vector[string] &,
-            #vector[string] &,           
             vector[vector[int]] &, 
             vector[int] &,
             vector[bool_t] &
@@ -79,49 +76,43 @@ cdef object process_pileup(
     int kmer_size,
     int unspliced_local_reference_start,
     int unspliced_local_reference_end,
-    #string & unspliced_local_reference,
     vector[string] & read_names,
     vector[bool_t] & are_reverse,
     vector[string] & cigar_strings,
     vector[int] & aln_starts,
     vector[int] & aln_ends,
     vector[string] & read_seqs,
-    #vector[string] & ref_seqs,
     vector[vector[int]] & quals,
     vector[int] & mapqs,
     vector[bool_t] & are_first_bam,
 ):
 
-    res = _process_pileup(
-        fastafile,
-        chrom,
-        pos, 
-        ref, 
-        alt,
-        mapping_quality_threshold,
-        base_quality_threshold,
-        low_quality_base_rate_threshold,
-        match_score,
-        mismatch_penalty,
-        gap_open_penalty,
-        gap_extention_penalty,
-        kmer_size,
-        unspliced_local_reference_start,
-        unspliced_local_reference_end,
-        #unspliced_local_reference,
-        read_names,
-        are_reverse,
-        cigar_strings,
-        aln_starts,
-        aln_ends,
-        read_seqs,
-        #ref_seqs,
-        quals,
-        mapqs,
-        are_first_bam
+    res = cpp_process_pileup(
+            fastafile,
+            chrom,
+            pos, 
+            ref, 
+            alt,
+            mapping_quality_threshold,
+            base_quality_threshold,
+            low_quality_base_rate_threshold,
+            match_score,
+            mismatch_penalty,
+            gap_open_penalty,
+            gap_extention_penalty,
+            kmer_size,
+            unspliced_local_reference_start,
+            unspliced_local_reference_end,
+            read_names,
+            are_reverse,
+            cigar_strings,
+            aln_starts,
+            aln_ends,
+            read_seqs,
+            quals,
+            mapqs,
+            are_first_bam
     )
     
-    #res is not a python obj..
     
-    #print(res.positions, res.ref_bases, res.target_pos, res.ref, res.alt) 
-    return res.positions, res.ref_bases, res.target_pos, res.ref, res.alt
+    return res.positions, res.ref_bases, res.alt_bases, res.base_quals, res.read_names, res.are_reverse, res.are_target, res.are_from_first_bam

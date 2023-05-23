@@ -8,7 +8,7 @@
 #include "aligned_target.h"
 #include "unaligned_target.h"
 
-pp::ProcessedPileup prepare_processed_rslt(const Contig & contig,
+ProcessedPileup prepare_processed_rslt(const Contig & contig,
                                        int target_pos,
                                        std::string & target_ref,
                                        std::string & target_alt,
@@ -16,9 +16,9 @@ pp::ProcessedPileup prepare_processed_rslt(const Contig & contig,
                                        const std::vector<Read> & non_targets);
 
 
-pp::ProcessedPileup::ProcessedPileup() {}
+ProcessedPileup::ProcessedPileup() {}
 
-pp::ProcessedPileup::ProcessedPileup
+ProcessedPileup::ProcessedPileup
 (
     const std::vector<int> & positions,
     const std::vector<std::string> & ref_bases,
@@ -38,7 +38,7 @@ pp::ProcessedPileup::ProcessedPileup
     are_from_first_bam(are_from_first_bam)                
 {}
 
-pp::ProcessedPileup  pp::_process_pileup(
+ProcessedPileup  cpp_process_pileup(
     const std::string & fastafile,
     const std::string & chrom,
     const int pos, 
@@ -194,7 +194,7 @@ pp::ProcessedPileup  pp::_process_pileup(
     return prp;
 }
 
-pp::ProcessedPileup prepare_processed_rslt(const Contig & contig,
+ProcessedPileup prepare_processed_rslt(const Contig & contig,
                                        int target_pos,
                                        std::string & target_ref,
                                        std::string & target_alt,
@@ -233,7 +233,7 @@ pp::ProcessedPileup prepare_processed_rslt(const Contig & contig,
         base_quals.push_back(base_level_aln.base_qual);
     }
     
-    pp::ProcessedPileup prp {positions, ref_bases, alt_bases, base_quals, target_pos, target_ref, target_alt, read_names, are_reverse, are_target, are_from_first_bam};
+    ProcessedPileup prp {positions, ref_bases, alt_bases, base_quals, target_pos, target_ref, target_alt, read_names, are_reverse, are_target, are_from_first_bam};
     
     return prp;
 }        
