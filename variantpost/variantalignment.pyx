@@ -1,3 +1,4 @@
+from .phaser import phase
 from .preprocessor import preprocess
 from variantpost.processor_wrapper cimport process_pileup
 
@@ -17,7 +18,7 @@ class VariantAlignment(object):
         mismatch_penalty=2,
         gap_open_penalty=3,
         gap_extention_penalty=1, 
-        kmer_size=32, 
+        kmer_size=16, 
     ):
 
         (
@@ -48,8 +49,8 @@ class VariantAlignment(object):
         fastafile = variant.reference.filename
         #########
         
-        #processed reads for c++ wrapper
-        reads = preprocess(
+       #processed reads for c++ wrapper
+        preprocessed_pileup = preprocess(
             chrom,
             pos,
             chrom_len,
@@ -66,21 +67,45 @@ class VariantAlignment(object):
         tt = time.time()
         print(tt -t, "preprosess")
 
-        res = process_pileup(fastafile,
-                                 chrom.encode(), 
-                                 pos, ref.encode(), alt.encode(),
-                                 mapping_quality_threshold,
-                                 base_quality_threshold, 
-                                 low_quality_base_rate_threshold,
-                                 match_score,
-                                 mismatch_penalty,
-                                 gap_open_penalty,
-                                 gap_extention_penalty,
-                                 kmer_size,
-                                 unspliced_local_reference_start, 
-                                 unspliced_local_reference_end, 
-                      #unspliced_local_reference.encode("utf-8"), 
-                                 reads[0], reads[1], reads[2], reads[3], reads[4], reads[5], reads[6], reads[7], reads[8]) #refseq removed
+        # interact with c++ code
+        (
+            contig_dict, 
+            annotated_reads,
+        ) = process_pileup(
+                fastafile,
+                chrom.encode(), 
+                pos, ref.encode(), alt.encode(),
+                mapping_quality_threshold,
+                base_quality_threshold, 
+                low_quality_base_rate_threshold,
+                match_score,
+                mismatch_penalty,
+                gap_open_penalty,
+                gap_extention_penalty,
+                kmer_size,
+                unspliced_local_reference_start, 
+                unspliced_local_reference_end, 
+                preprocessed_pileup.read_names,
+                preprocessed_pileup.are_reverse,
+                preprocessed_pileup.cigar_strings,
+                preprocessed_pileup.aln_starts,
+                preprocessed_pileup.aln_ends,
+                preprocessed_pileup.read_seqs,
+                preprocessed_pileup.qual_seqs,
+                preprocessed_pileup.mapqs,
+                preprocessed_pileup.are_first_bam
+        )
 
+        for a in annotated_reads:
+            if not a.target_status:
+                print(a.read_name, "non-tar")
+            if a.target_status < 0:
+                print(a.read_name, "undeter")
+        
         print(time.time() - tt, "c++ time")
-        print(time.time() - t, "total varaln --- {}".format(res))
+        
+        phase(contig_dict, pos)
+        
+        print(time.time() - t, "total varaln --- {}".format("aho"))
+
+

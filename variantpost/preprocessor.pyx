@@ -12,6 +12,23 @@ import cython
 RAW_DEPTH=0
 cigar_ptrn = re.compile(b"[0-9]+[MIDNSHPX=]")
 
+class PreprocessedPileup(object):
+    def __init__(
+        self, read_names, are_reverse, 
+        cigar_strings, aln_starts, aln_ends, 
+        read_seqs, qual_seqs, mapqs, are_first_bam
+    ):
+        self.read_names = read_names
+        self.are_reverse = are_reverse
+        self.cigar_strings = cigar_strings
+        self.aln_starts = aln_starts
+        self.aln_ends = aln_ends
+        self.read_seqs = read_seqs
+        self.qual_seqs = qual_seqs
+        self.mapqs = mapqs
+        self.are_first_bam = are_first_bam
+
+
 def edit_chrom_prefix(chrom, bam):
     """Add/delete "chr" prefix for incomaptibe nomenclature
     """
@@ -185,25 +202,6 @@ def preprocess(
     cdef int aln_start, aln_end
     
     ttt = time.time()
-    #cdef int i = 0
-    
-    #for i, read in enumerate(reads):
-   # 
-   #     read_names[i] = read.query_name.encode() 
-   #     are_reverse[i] =  read.is_reverse
-   #     
-   #     cigar_string = read.cigarstring.encode()
-   #     aln_start = read.reference_start + 1
-   #     
-   #     cigar_strings[i] = cigar_string
-   #     aln_starts[i] = aln_start
-   #     aln_ends[i] = read.reference_end
-   #     read_seqs[i] = read.query_sequence.encode()
-   #     if b"N" in cigar_string:
-   #         cigar_list = cigar_ptrn.findall(cigar_string)
-   #         ref_seqs[i] = get_spliced_reference_seq(chrom, aln_start, cigar_list, fasta)        
-   #     qual_seqs[i] = read.query_qualities
-   #     mapqs[i] = read.mapping_quality
     
     for read in reads: 
        
@@ -220,15 +218,8 @@ def preprocess(
             process(_read, chrom, fasta, read_names, are_reverse, cigar_strings,
                     aln_starts, aln_ends, read_seqs, ref_seqs, qual_seqs, mapqs, are_first_bam, True)
     
-    return (
-        read_names,
-        are_reverse,
-        cigar_strings,
-        aln_starts,
-        aln_ends,
-        read_seqs,
-        #ref_seqs,
-        qual_seqs,
-        mapqs,
-        are_first_bam
+    return PreprocessedPileup(
+                read_names, are_reverse,
+                cigar_strings, aln_starts, aln_ends,
+                read_seqs, qual_seqs, mapqs, are_first_bam
     )

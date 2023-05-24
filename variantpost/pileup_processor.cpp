@@ -13,6 +13,7 @@ ProcessedPileup prepare_processed_rslt(const Contig & contig,
                                        std::string & target_ref,
                                        std::string & target_alt,
                                        const std::vector<Read> & targets,
+                                       const std::vector<Read> & candidates,
                                        const std::vector<Read> & non_targets);
 
 
@@ -29,16 +30,16 @@ ProcessedPileup::ProcessedPileup
     const std::string alt,
     std::vector<std::string> & read_names,
     std::vector<bool> & are_reverse,
-    std::vector<bool> & are_target,
+    std::vector<int> & target_statuses,
     std::vector<bool> & are_from_first_bam
-) : positions(positions), ref_bases(ref_bases), alt_bases(alt_bases),
+) : positions(positions), ref_bases(ref_bases), alt_bases(alt_bases), base_quals(base_quals),
     target_pos(target_pos), ref(ref), alt(alt), 
     read_names(read_names), are_reverse(are_reverse),
-    are_target(are_target), 
+    target_statuses(target_statuses), 
     are_from_first_bam(are_from_first_bam)                
 {}
 
-ProcessedPileup  cpp_process_pileup(
+ProcessedPileup cpp_process_pileup(
     const std::string & fastafile,
     const std::string & chrom,
     const int pos, 
@@ -67,7 +68,7 @@ ProcessedPileup  cpp_process_pileup(
     std::vector<Read> targets = {};
     std::vector<Read> candidates = {};
     std::vector<Read> non_targets = {}; 
-
+    
     //prep preference
     FastaReference fr;
     fr.open(fastafile); //closed in destructor
@@ -166,6 +167,7 @@ ProcessedPileup  cpp_process_pileup(
                                                  target.ref, 
                                                  target.alt, 
                                                  targets, 
+                                                 candidates,
                                                  non_targets);
     
     
@@ -199,7 +201,7 @@ ProcessedPileup prepare_processed_rslt(const Contig & contig,
                                        std::string & target_ref,
                                        std::string & target_alt,
                                        const std::vector<Read> & targets,
-                                       //const std::vector<ParsedRead> & candidates, //this shouldn't exit at this stage
+                                       const std::vector<Read> & candidates, //consider as undetermined
                                        const std::vector<Read> & non_targets)
 {
     std::vector<int> positions;
@@ -208,21 +210,29 @@ ProcessedPileup prepare_processed_rslt(const Contig & contig,
     std::vector<std::string> base_quals;
     std::vector<std::string> read_names;
     std::vector<bool> are_reverse;
-    std::vector<bool> are_target;
+    std::vector<int> target_statuses;
     std::vector<bool> are_from_first_bam;   
        
     for (const auto & read : targets) {
         read_names.push_back(read.read_name);
         are_reverse.push_back(read.is_reverse);
-        are_target.push_back(true);
+        target_statuses.push_back(1);
         are_from_first_bam.push_back(read.is_from_first);
     }
     
     for (const auto & read : non_targets) {
         read_names.push_back(read.read_name);
         are_reverse.push_back(read.is_reverse);
-        are_target.push_back(false);
+        target_statuses.push_back(0);
         are_from_first_bam.push_back(read.is_from_first);   
+    }
+
+    for (const auto & read : candidates) 
+    {
+        read_names.push_back(read.read_name);
+        are_reverse.push_back(read.is_reverse);
+        target_statuses.push_back(-1);
+        are_from_first_bam.push_back(read.is_from_first);
     }
 
     for (const auto & base_level_aln : contig.alignment)
@@ -233,7 +243,7 @@ ProcessedPileup prepare_processed_rslt(const Contig & contig,
         base_quals.push_back(base_level_aln.base_qual);
     }
     
-    ProcessedPileup prp {positions, ref_bases, alt_bases, base_quals, target_pos, target_ref, target_alt, read_names, are_reverse, are_target, are_from_first_bam};
+    ProcessedPileup prp {positions, ref_bases, alt_bases, base_quals, target_pos, target_ref, target_alt, read_names, are_reverse, target_statuses, are_from_first_bam};
     
     return prp;
 }        

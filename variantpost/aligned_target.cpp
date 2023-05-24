@@ -463,7 +463,7 @@ void classify_candidates(Reads & candidates, const RawContig & contig,
         }
         
         int kmer_score = count_kmer_overlap(candidates[i].seq, target_kmers);
-        
+
         //covering reads must have core kmers
         if (kmer_score && candidates[i].covering_ptrn == 'A')
         {

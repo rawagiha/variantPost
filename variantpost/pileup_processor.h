@@ -15,7 +15,7 @@ struct ProcessedPileup
     std::string alt;
     std::vector<std::string> read_names;
     std::vector<bool> are_reverse;
-    std::vector<bool> are_target;
+    std::vector<int> target_statuses;
     std::vector<bool> are_from_first_bam;
 
     ProcessedPileup();
@@ -30,7 +30,7 @@ struct ProcessedPileup
         const std::string alt,
         std::vector<std::string> & read_names,
         std::vector<bool> & are_reverse,
-        std::vector<bool> & are_target,
+        std::vector<int> & target_statuses,
         std::vector<bool> & are_from_first_bam);
 };
 
