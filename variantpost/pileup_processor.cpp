@@ -25,6 +25,8 @@ ProcessedPileup::ProcessedPileup
     const std::vector<std::string> & ref_bases,
     const std::vector<std::string> & alt_bases,
     const std::vector<std::string> & base_quals,
+    const std::vector<int> & skip_starts,
+    const std::vector<int> & skip_ends,
     const int target_pos,
     const std::string ref,
     const std::string alt,
@@ -33,6 +35,7 @@ ProcessedPileup::ProcessedPileup
     std::vector<int> & target_statuses,
     std::vector<bool> & are_from_first_bam
 ) : positions(positions), ref_bases(ref_bases), alt_bases(alt_bases), base_quals(base_quals),
+    skip_starts(skip_starts), skip_ends(skip_ends),
     target_pos(target_pos), ref(ref), alt(alt), 
     read_names(read_names), are_reverse(are_reverse),
     target_statuses(target_statuses), 
@@ -243,7 +246,7 @@ ProcessedPileup prepare_processed_rslt(const Contig & contig,
         base_quals.push_back(base_level_aln.base_qual);
     }
     
-    ProcessedPileup prp {positions, ref_bases, alt_bases, base_quals, target_pos, target_ref, target_alt, read_names, are_reverse, target_statuses, are_from_first_bam};
+    ProcessedPileup prp {positions, ref_bases, alt_bases, base_quals, contig.skip_starts, contig.skip_ends,  target_pos, target_ref, target_alt, read_names, are_reverse, target_statuses, are_from_first_bam};
     
     return prp;
 }        

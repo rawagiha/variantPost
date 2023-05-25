@@ -2,6 +2,8 @@ from libcpp.string cimport string
 from libcpp.vector cimport vector
 from libcpp cimport bool as bool_t
 
+from collections import OrderedDict
+
 cdef extern from "pileup_processor.h":
 
     cdef cppclass ProcessedPileup:
@@ -11,6 +13,8 @@ cdef extern from "pileup_processor.h":
                         vector[string] &,
                         vector[string] &,
                         vector[string] &,
+                        vector[int] &,
+                        vector[int] &,
                         int,
                         string &,
                         string &,
@@ -23,6 +27,8 @@ cdef extern from "pileup_processor.h":
         vector[string] ref_bases
         vector[string] alt_bases
         vector[string] base_quals
+        vector[int] skip_starts
+        vector[int] skip_ends
         int target_pos
         string ref, alt
         vector[string] read_names
@@ -122,16 +128,18 @@ cdef object process_pileup(
         are_first_bam,
     )
     
-    contig_dict = {}
+    contig_dict = OrderedDict()
     for pos, ref_base, alt_base, base_qual in zip(
         res.positions, res.ref_bases, res.alt_bases, res.base_quals
     ):
-        contig_dict[pos] = (ref_base, alt_base, base_qual)
+        contig_dict[pos] = (ref_base.decode("utf-8"), alt_base.decode("utf-8"), base_qual)
 
     annot_reads = []
     for read_name, is_reverse, target_status, is_first_bam in zip(
         res.read_names, res.are_reverse, res.target_statuses, res.are_from_first_bam
     ):
         annot_reads.append(AnnotatedRead(read_name, is_reverse, is_first_bam, target_status))
-
-    return contig_dict, annot_reads
+    
+    skips = [(start, end) for start, end in zip(res.skip_starts, res.skip_ends)]
+    
+    return contig_dict, skips, annot_reads

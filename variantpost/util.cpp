@@ -983,7 +983,7 @@ void make_contig(const std::vector<RealignedGenomicSegment> & realns, Contig & c
     int genomic_pos = _realn.start;
     size_t seq_idx = 0, ref_idx = 0, v_idx = 0;
     std::vector<PairwiseBaseAlignmnent> aligned_bases;
-
+    std::vector<int> skip_starts = {}, skip_ends = {};
     for (const auto & cigar : _realn.cigar_vec)
     {  
         char op = cigar.first;
@@ -1035,7 +1035,9 @@ void make_contig(const std::vector<RealignedGenomicSegment> & realns, Contig & c
                 ++v_idx;
                 break;
             case 'N':
+                skip_starts.push_back(genomic_pos);
                 genomic_pos += op_len;
+                skip_ends.push_back(genomic_pos - 1);
                 break;
             case 'S':
                 seq_idx += op_len;
@@ -1044,7 +1046,8 @@ void make_contig(const std::vector<RealignedGenomicSegment> & realns, Contig & c
     }
     
     contig.alignment = aligned_bases;
-
+    contig.skip_starts = skip_starts;
+    contig.skip_ends = skip_ends;
 }
 
 // for unaligned case

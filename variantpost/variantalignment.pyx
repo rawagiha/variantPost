@@ -69,7 +69,8 @@ class VariantAlignment(object):
 
         # interact with c++ code
         (
-            contig_dict, 
+            contig_dict,
+            skips,
             annotated_reads,
         ) = process_pileup(
                 fastafile,
@@ -96,15 +97,15 @@ class VariantAlignment(object):
                 preprocessed_pileup.are_first_bam
         )
 
-        for a in annotated_reads:
-            if not a.target_status:
-                print(a.read_name, "non-tar")
-            if a.target_status < 0:
-                print(a.read_name, "undeter")
+        #for a in annotated_reads:
+        #    if not a.target_status:
+        #        print(a.read_name, "non-tar")
+        #    if a.target_status < 0:
+        #        print(a.read_name, "undeter")
         
         print(time.time() - tt, "c++ time")
         
-        phase(contig_dict, pos)
+        phase(contig_dict, skips,  pos)
         
         print(time.time() - t, "total varaln --- {}".format("aho"))
 

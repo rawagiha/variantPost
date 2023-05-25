@@ -10,6 +10,8 @@ struct ProcessedPileup
     std::vector<std::string> ref_bases;
     std::vector<std::string> alt_bases;
     std::vector<std::string> base_quals;
+    std::vector<int> skip_starts;
+    std::vector<int> skip_ends;
     int target_pos;
     std::string ref;
     std::string alt;
@@ -25,6 +27,8 @@ struct ProcessedPileup
         const std::vector<std::string> & ref_bases,
         const std::vector<std::string> & alt_bases,
         const std::vector<std::string> & base_quals,
+        const std::vector<int> & skip_starts,
+        const std::vector<int> & skip_ends,
         const int target_pos,
         const std::string ref,
         const std::string alt,
