@@ -8,8 +8,6 @@
 #include <iterator>
 #include <algorithm>
 
-//#include "swlib.h"
-
 #include "util.h"
 #include "localn.h"
 #include "aligned_target.h"
@@ -362,9 +360,14 @@ void process_unaligned_target(Variant & target,
                               FastaReference & fr, 
                               const int base_quality_threshold,
                               const double low_quality_base_rate_threshold, 
+                              const int match_score,
+                              const int mismatch_penalty,
+                              const int gap_open_penalty,
+                              const int gap_extention_penalty,
                               const size_t kmer_size,
                               const int unspl_loc_ref_start,
                               const std::unordered_map<int, char> & indexed_local_reference,
+                              Contig & contig,
                               Reads & targets, 
                               Reads & candidates, 
                               Reads & non_targets)
@@ -385,16 +388,14 @@ void process_unaligned_target(Variant & target,
     {    
         
         std::cout << "retargeted ..." << std::endl;
-        return;
+        //return;
         
-        /*
-        std::string _c;
         process_aligned_target(target, fr, 
                                base_quality_threshold, low_quality_base_rate_threshold, 
-                               3,2,3,1,
+                               match_score, mismatch_penalty, gap_open_penalty, gap_extention_penalty,
                                kmer_size, unspl_loc_ref_start, indexed_local_reference,
-                               _c, targets, candidates, non_targets);
-        return;*/
+                               contig, targets, candidates, non_targets);
+        return;
     }
 
     sift_by_kmer(target, fr, candidates, non_targets);
@@ -425,8 +426,8 @@ void process_unaligned_target(Variant & target,
     std::cout << stitch_fragments(fragments).seq << std::endl;
     std::cout << aa << std::endl;
 
-    const uint8_t match_score = 3, mismatch_penalty = 2;
-    const uint8_t gap_open_penalty = 3, gap_extention_penalty = 0;
+    //const uint8_t match_score = 3, mismatch_penalty = 2;
+    //const uint8_t gap_open_penalty = 3, gap_extention_penalty = 0;
     Filter filter;
     Alignment aln;
     Aligner aligner(

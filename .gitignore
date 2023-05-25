@@ -1,6 +1,11 @@
 # Prerequisites
 *.d
 
+#
+variantpost/preprocessor.cpp
+variantpost/processor_wrapper.cpp
+variantpost/variantalignment.cpp
+
 # Compiled Object files
 *.slo
 *.lo

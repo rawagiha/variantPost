@@ -900,22 +900,15 @@ void process_aligned_target(Variant & target,
                             const int kmer_size,
                             const int unspl_loc_ref_start,
                             const std::unordered_map<int, char> & indexed_local_reference,
-                            //std::string & _contig,
-                            Contig & _contig,
+                            Contig & contig,
                             Reads & targets, Reads & candidates, Reads & non_targets)
 
 {   
-    /*
-    for (auto & read : non_targets)
-    {
-        std::cout << read.read_name << " " << read.is_reverse << " " << read.may_be_complex << " " << read.non_ref_ptrn_str << " " << read.has_non_target_in_critical_region << " " << std::endl;
-    }
-    */
-    RawContig contig = set_up_contig(target.chrom, targets, low_quality_base_rate_threshold, base_quality_threshold, fr);
+    RawContig raw_contig = set_up_contig(target.chrom, targets, low_quality_base_rate_threshold, base_quality_threshold, fr);
     
-    std::set<std::string> informative_kmers = diff_kmers(contig.seq, contig.ref_seq, kmer_size);
+    std::set<std::string> informative_kmers = diff_kmers(raw_contig.seq, raw_contig.ref_seq, kmer_size);
     std::set<std::string> core_kmers = {};
-    find_core_kmers(contig, kmer_size, informative_kmers, core_kmers);
+    find_core_kmers(raw_contig, kmer_size, informative_kmers, core_kmers);
 
     // may happen for pure mapping artifacts 
     if (core_kmers.empty())
@@ -926,9 +919,9 @@ void process_aligned_target(Variant & target,
     }
 
     
-    Variant observed_target = Variant(contig.target_pos, 
-                                      contig.target_ref, 
-                                      contig.target_alt);
+    Variant observed_target = Variant(raw_contig.target_pos, 
+                                      raw_contig.target_ref, 
+                                      raw_contig.target_alt);
     std::string repeat_unit = observed_target.minimal_repeat_unit();   
     std::string rv_repeat_unit = repeat_unit;
     std::reverse(rv_repeat_unit.begin(), rv_repeat_unit.end());   
@@ -936,7 +929,7 @@ void process_aligned_target(Variant & target,
     int  n_tandem_repeats = 0;
     bool is_complete_tandem_repeat = false;
     std::pair<int, int> repeat_boundary = {}; 
-    repeat_check(observed_target, contig, repeat_unit, n_tandem_repeats, is_complete_tandem_repeat, repeat_boundary);
+    repeat_check(observed_target, raw_contig, repeat_unit, n_tandem_repeats, is_complete_tandem_repeat, repeat_boundary);
     
     //gap-less alignment
     const uint8_t _gap_open_penalty = 255, _gap_extention_penalty = 255;
@@ -950,28 +943,24 @@ void process_aligned_target(Variant & target,
     
     Reads lt_extenders, extra_targets, rt_extenders, undetermined;
     
-    classify_candidates(candidates, contig, filter, aligner, aln, informative_kmers, core_kmers,
+    classify_candidates(candidates, raw_contig, filter, aligner, aln, informative_kmers, core_kmers,
                         is_complete_tandem_repeat, n_tandem_repeats, repeat_boundary,
                         repeat_unit, rv_repeat_unit, low_quality_base_rate_threshold,
                         lt_extenders, extra_targets, rt_extenders, undetermined, non_targets);
     
     
-    SimplifiedRead extended(contig.seq, contig.base_qualities);
-    std::vector<std::pair<int, int>> ext_coord = contig.coordinates;
-    extend_contig_seq(contig, lt_extenders, rt_extenders, extended, ext_coord);
+    SimplifiedRead extended(raw_contig.seq, raw_contig.base_qualities);
+    std::vector<std::pair<int, int>> ext_coord = raw_contig.coordinates;
+    extend_contig_seq(raw_contig, lt_extenders, rt_extenders, extended, ext_coord);
     
     std::vector<RealignedGenomicSegment> realns = {};
     realn_extended_contig(target.chrom, fr, extended, ext_coord, match_score, mismatch_penalty, gap_open_penalty, gap_extention_penalty, target, unspl_loc_ref_start, indexed_local_reference, realns);
     
-    make_contig(realns, _contig);
+    make_contig(realns, contig);
     
     transfer_vector(targets, lt_extenders);
     transfer_vector(targets, extra_targets);
     transfer_vector(targets, rt_extenders); 
-    
-    std::cout << "target: " << targets.size() + lt_extenders.size() + extra_targets.size() + rt_extenders.size()<< std::endl;
-    std::cout << "non_target: " << non_targets.size() << " " << std::endl;
-    std::cout << "undetermined: " << undetermined.size() << std::endl;
 }
 
 

@@ -17,7 +17,10 @@ def phase(contig_dict, skips, target_pos):
     
     if not snvs and not indels:
         return "simple, nothing to phase" 
-    
+   
+    for k, v in contig_dict.items():
+        print(k, v[0], v[1]) 
+
 
 class NonReferenceEvent(object):
     def __init__(self, pos, ref, alt, qual):

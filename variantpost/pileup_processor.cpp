@@ -160,8 +160,9 @@ ProcessedPileup cpp_process_pileup(
     {
         process_unaligned_target(target, fr, 
                                  base_quality_threshold, low_quality_base_rate_threshold, 
+                                 match_score, mismatch_penalty, gap_open_penalty, gap_extention_penalty,
                                  kmer_size, unspl_loc_ref_start, ref_dict,
-                                 targets, candidates, non_targets);
+                                 contig, targets, candidates, non_targets);
     }
     
     
