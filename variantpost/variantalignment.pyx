@@ -1,6 +1,7 @@
 from .phaser import phase
 from .preprocessor import preprocess
 from variantpost.processor_wrapper cimport process_pileup
+from .variant import Variant
 
 import time
 
@@ -18,8 +19,19 @@ class VariantAlignment(object):
         mismatch_penalty=2,
         gap_open_penalty=3,
         gap_extention_penalty=1, 
-        kmer_size=16, 
+        kmer_size=24, 
     ):
+
+        print("analyze: {}\t{}\t{}\t{}".format(variant.chrom, variant.pos, variant.ref, variant.alt))
+        if not variant.is_normalized:
+            variant.normalize(inplace=True)
+            variant = Variant(
+                        variant.chrom, 
+                        variant.pos, 
+                        variant.ref, 
+                        variant.alt, 
+                        variant.reference
+                    )
 
         (
             chrom,

@@ -89,6 +89,29 @@ struct Overlap
 };
 
 
+
+void make_grid(const int gap_open_penalty, 
+               const int gap_extension_penalty, 
+               std::vector<std::pair<int, int>> & grid)
+{
+    std::pair<int, int> _default = {gap_open_penalty, gap_extension_penalty};
+
+    uint8_t max_gap_open = 5, min_gap_open = 3;
+    if (gap_open_penalty > max_gap_open) max_gap_open = gap_open_penalty;
+    
+    for (uint8_t i = min_gap_open; i <= max_gap_open; ++i)
+    {      
+        grid.emplace_back(i, 1);
+        grid.emplace_back(i, 0);
+    }
+    
+    if (std::find(grid.begin(), grid.end(), _default) ==  grid.end())
+    {
+        grid.push_back(_default);
+    }
+}
+
+
 struct BaseCount
 {
     size_t a = 0, c = 0, g = 0, t = 0, n = 0;

@@ -62,6 +62,11 @@ void sw_aln(
 ); 
 
 
+void make_grid(
+    const int gap_open_penalty,
+    const int gap_extension_penalty,
+    std::vector<std::pair<int, int>> & grid
+);
 
 /*
 struct MergedRead

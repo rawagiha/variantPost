@@ -16,10 +16,13 @@ def phase(contig_dict, skips, target_pos):
     contig_dict, snvs, indels = crop_contig(contig_dict, skips, snvs, indels, actual_events.pos)
     
     if not snvs and not indels:
+        print("simple, nothin to phase")
         return "simple, nothing to phase" 
-   
-    for k, v in contig_dict.items():
-        print(k, v[0], v[1]) 
+    else:
+        print("may be complex")
+        return "may be complex"
+    #for k, v in contig_dict.items():
+    #    print(k, v[0], v[1]) 
 
 
 class NonReferenceEvent(object):

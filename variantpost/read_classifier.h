@@ -72,6 +72,11 @@ struct Read
          const std::string & chrom,
          FastaReference & fr
     );
+
+    bool operator == (const Read & rhs) const
+    {
+        return (read_name == rhs.read_name && is_reverse == rhs.is_reverse);
+    }
 };
 
 void classify_reads(std::vector<Read> & targets,

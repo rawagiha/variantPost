@@ -36,7 +36,20 @@ void mock_target_seq(
     std::string lt_frag = fr.getSubSequence(target.chrom, target.pos - offset - kmer_size * k, kmer_size * k);
     
     layout.emplace_back(0, lt_frag.size());
-    std::string mid_frag = target.alt;
+    
+    std::string mid_frag = "";
+    if (target.is_complex)
+    {
+        mid_frag = target.alt;
+    }
+    else
+    {
+        if (target.is_ins)
+        {
+            mid_frag = target.alt.substr(1);
+        }
+    }
+
     layout.emplace_back(lt_frag.size(), mid_frag.size());
     std::string rt_frag = fr.getSubSequence(target.chrom,  rt_frag_start, kmer_size * k);
     layout.emplace_back(lt_frag.size() + mid_frag.size() + 1, rt_frag.size()); 
@@ -71,8 +84,10 @@ void sift_by_kmer(Variant & target, FastaReference & fr,
                   std::vector<Read> & candidates,
                   std::vector<Read> & non_targets)
 {
-    std::sort(candidates.begin(), candidates.end(),
-              [](const Read & a, const Read & b){return a.kmer_score > b.kmer_score ? true : false;});
+    //std::sort(candidates.begin(), candidates.end(),
+    //          [](const Read & a, const Read & b){return a.kmer_score > b.kmer_score ? true : false;});
+    
+    sort_by_kmer(candidates);
     
     for (std::vector<Read>::reverse_iterator i = candidates.rbegin();
             i != candidates.rend(); ++i)
@@ -107,7 +122,6 @@ int dist_to_closest(const Variant & target,
         {
             continue;
         }
-        
         
         if (variants[i].is_del)
         {
@@ -195,6 +209,7 @@ void reclassify_candidates(const Variant & target,
 void retarget(Variant & target,
               std::vector<Read> & targets,
               std::vector<Read> & candidates,
+              const double low_quality_base_rate_threshold,
               int pos_ambi_thresh,
               int seq_span_thresh,
               bool & is_retargetable)
@@ -202,18 +217,23 @@ void retarget(Variant & target,
     const int top_kmer_score = candidates[0].kmer_score;
     std::vector<Read> top_candidates;
 
-    for (auto & candidate : candidates)
+    for (const auto & candidate : candidates)
     {
-        if (candidate.kmer_score == top_kmer_score)
+        if (candidate.kmer_score == top_kmer_score
+            && candidate.dirty_base_rate < low_quality_base_rate_threshold)
         {
             top_candidates.push_back(candidate);
         }
     }
     
+    if (top_candidates.empty()) return;
+    
     std::sort(top_candidates.begin(), top_candidates.end(),
                 [](const Read & a, const Read & b){return a.centrality > b.centrality ? true : false;}); 
 
-    if (!top_candidates[0].may_be_complex || top_candidates[0].variants.empty()) return;
+    if (!top_candidates[0].may_be_complex 
+        || top_candidates[0].variants.empty()
+        || top_candidates[0].centrality < 0.2) return;
 
     int min_idx = -1;
     int dist2gap = dist_to_closest(target, min_idx, top_candidates[0].variants, true);
@@ -239,121 +259,86 @@ void retarget(Variant & target,
 }
 
 
-inline void add_to_input(
-                std::vector<SimplifiedRead> & input, 
-                const std::vector<int> & indexes, 
-                std::vector<Read> & candidates, 
-                int n)
-{
-    size_t idx_size = indexes.size();
-    
-    if (idx_size)
-    {
-    
-       
-    }  
-}
 
-/*
-//TODO spliced cases
-void prep_reads_to_merge(std::vector<SimplifiedRead> & inputs, std::vector<Read> & candidates)
+void concat_top_ten(std::vector<Read> & lt_tmp,
+                    std::vector<Read> & rt_tmp,
+                    std::vector<Read> & u_tmp,
+                    std::vector<Read> & top_tens)
 {
-    
-    int kmer_score_thresh = static_cast<int>(candidates[0].kmer_score / 2.0);
-    
-    std::vector<int> lt_clipped = {};
-    std::vector<int> rt_clipped = {};
-    std::vector<int> unclipped = {};
-    for (int i = 0; i < candidates.size(); ++i)
+    std::vector<std::vector<Read>> tmps = {lt_tmp, rt_tmp, u_tmp};
+    for (const auto & tmp : tmps)
     {
-        char clp = candidates[i].clip_ptrn;
-
-        switch (clp)
+        int  i = 0;
+        int tmp_len = std::min(10, static_cast<int>(tmp.size()));
+        while (i < tmp_len)
         {
-            case 'L':
-                lt_clipped.push_back(i);
-                break;
-            case 'R':
-                rt_clipped.push_back(i);
-                break;
-            default:
-                unclipped.push_back(i);
-                break;
-        }
-    }
-}
-*/
-
-SimplifiedRead merge_to_fragment(std::vector<Read> & candidates, char clip_ptrn)
-{
-    std::vector<Read> tmp = {};
-    for (auto & read : candidates)
-    {
-        if (read.kmer_score > 0 && read.clip_ptrn == clip_ptrn)
-        {  
-            read.used4contig = true;
-            tmp.push_back(read);
+            top_tens.emplace_back(tmp[i]);
+            ++i;
         }
     }
     
-    if (tmp.empty())
-    {
-        SimplifiedRead empty_read;
-        return empty_read;    
-    }
-    else
-    {
-        if (clip_ptrn == 'L')
-        {
-            std::sort(tmp.begin(), tmp.end(),
-                [](const Read & a, const Read & b){return a.read_start < b.read_start ? true : false;});    
-        }
-        else
-        {
-            std::sort(tmp.begin(), tmp.end(),
-                [](const Read & a, const Read & b){return a.read_start < b.read_start ? true : false;});
-        }
+    sort_by_start(top_tens);
+} 
 
-        std::vector<SimplifiedRead> inputs;
-        for (auto & read : tmp)
+
+SimplifiedRead merge_to_contig(std::vector<Read> & candidates)
+{
+    
+    std::vector<SimplifiedRead> inputs  = {};
+    if (candidates.size() > 29)
+    {
+        std::vector<Read> lt_tmp = {}, u_tmp = {}, rt_tmp = {};
+        for (const auto & read : candidates)
         {
-            std::cout << read.read_name << " " << read.is_reverse << std::endl;
+            if (read.clip_ptrn == 'L') 
+            {    
+                lt_tmp.emplace_back(read);
+            }
+            else if (read.clip_ptrn == 'R')
+            {
+                rt_tmp.emplace_back(read);
+            }
+            else
+            {
+                u_tmp.emplace_back(read);
+            }
+        }
+    
+        sort_by_kmer(lt_tmp);
+        sort_by_kmer(rt_tmp);
+        sort_by_kmer(u_tmp);
+        
+        std::vector<Read> top_tens;
+        
+        concat_top_ten(lt_tmp, rt_tmp, u_tmp, top_tens);
+    
+        for (const auto & read : top_tens)
+        {
             inputs.emplace_back(read.seq, read.base_qualities, -1);
         }
+        
+        for (auto & read : candidates)
+        {
+            if (std::find(top_tens.begin(), top_tens.end(), read) != top_tens.end())
+            {
+                read.used4contig = true;
+            }
+        }
 
-        return merge_reads(inputs);
-     }
+    }
+    else
+    {   
+        sort_by_start(candidates);
+        for (auto & read : candidates)
+        {
+            read.used4contig = true;
+            inputs.emplace_back(read.seq, read.base_qualities, -1);
+        }
+    }
+    
+    return merge_reads(inputs);
+    
 }
-
-
-SimplifiedRead stitch_fragments(std::vector<SimplifiedRead> & fragments)
-{
-    bool lt_extension = false;
-    size_t frag_size = fragments.size();
-     
-    if (frag_size == 1)
-    {
-        return fragments[0];
-    }
-    else if (frag_size == 2)
-    {
-        return pairwise_stitch(fragments, lt_extension); 
-    }
-    else if (frag_size == 3)
-    {
-        std::vector<SimplifiedRead> tmp = {fragments[0], fragments[1]};
-        SimplifiedRead _intermediate = pairwise_stitch(tmp, lt_extension);
-        return pairwise_stitch({_intermediate, fragments[2]}, lt_extension);
-    }
-            
-    SimplifiedRead empty_read;
-    return empty_read;
-}
-
-
-
-
-
 
 
 void process_unaligned_target(Variant & target, 
@@ -381,15 +366,22 @@ void process_unaligned_target(Variant & target,
                           mocked_seq, mocked_seq_layout, ref_seq,
                           kmer_size);
     
-    bool is_retargetable = false;                          
-    retarget(target, targets, candidates, 2, 10, is_retargetable);
+    std::cout << "here 1" << std::endl;
+    sift_by_kmer(target, fr, candidates, non_targets);
+    if (candidates.empty()) return;
     
+    std::cout << "here 2 " << candidates.size() << std::endl;
+    bool is_retargetable = false;                          
+    retarget(target, targets, candidates, low_quality_base_rate_threshold, 2, 10, is_retargetable);
+    std::cout << "here 3" << std::endl;
+
     if (is_retargetable)   
     {    
-        
-        std::cout << "retargeted ..." << std::endl;
-        //return;
-        
+        std::cout << "enter here" << std::endl;
+        std::cout << "retarget: " << target.pos << std::endl;
+        std::cout << target.ref << std::endl;
+        std::cout << target.alt << std::endl;
+        //std::cout << candidates[0].kmer_score << std::endl;
         process_aligned_target(target, fr, 
                                base_quality_threshold, low_quality_base_rate_threshold, 
                                match_score, mismatch_penalty, gap_open_penalty, gap_extention_penalty,
@@ -398,50 +390,28 @@ void process_unaligned_target(Variant & target,
         return;
     }
 
-    sift_by_kmer(target, fr, candidates, non_targets);
-
-    //exit if kmer_score = 0 for all candidates
-    if (candidates.empty()) return;
-    
-    std::vector<char> ptrns = {'R', 'U', 'L'};
-    std::vector<SimplifiedRead> fragments = {};
-    for (const auto & ptrn : ptrns)
+    std::cout << "here 4" << std::endl;
+    SimplifiedRead seq_contig = merge_to_contig(candidates);
+    std::vector<Read> ref_inputs = {};
+    for (auto & candidate : candidates)
     {
-        SimplifiedRead _frag = merge_to_fragment(candidates, ptrn);   
-        if (!_frag.empty())
-        {
-            fragments.push_back(_frag);
-            std::cout << ptrn << " " << _frag.seq << std::endl; 
-        }
-    }
-    
-    std::vector<Read> refinputs = {};
-    for (auto & r : candidates)
-    {
-        if (r.used4contig) refinputs.push_back(r);
+        if (candidate.used4contig) ref_inputs.push_back(candidate);
     }
     std::vector<std::pair<int, int>> coord = {};
-    std::string aa = construct_ref_contig(refinputs, target.chrom, fr, coord);
-    
-    std::cout << stitch_fragments(fragments).seq << std::endl;
-    std::cout << aa << std::endl;
+    std::string ref_contig = construct_ref_contig(ref_inputs, target.chrom, fr, coord);
+    std::cout << "here 5" << std::endl;
 
-    //const uint8_t match_score = 3, mismatch_penalty = 2;
-    //const uint8_t gap_open_penalty = 3, gap_extention_penalty = 0;
     Filter filter;
     Alignment aln;
-    Aligner aligner(
-                match_score, mismatch_penalty,
-                gap_open_penalty, gap_extention_penalty
-            );
-
-    int32_t mask_len = strlen(stitch_fragments(fragments).seq.c_str()) / 2;
-    mask_len = mask_len < 15 ? 15 : mask_len;
-    aligner.Align(stitch_fragments(fragments).seq.c_str(), 
-                  aa.c_str(),
-                  aa.size(), 
-                  filter, &aln, mask_len); 
-    std::cout << aln.cigar_string << std::endl; 
-    std::cout << aln.ref_begin << " " << aln.query_begin << std::endl;
+    std::vector<std::pair<int, int>> grid;
+    make_grid(gap_open_penalty, gap_extention_penalty, grid); 
+    for (const auto & gap_param : grid)
+    {
+        sw_aln(match_score, mismatch_penalty,
+               gap_param.first, gap_param.second, 
+               ref_contig, seq_contig.seq, filter, aln);
+        std::cout << ref_contig << " " << seq_contig.seq << " " << target.pos << std::endl;
+        std::cout << aln.cigar_string << std::endl;
+    }
 }
 

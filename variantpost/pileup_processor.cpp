@@ -108,7 +108,6 @@ ProcessedPileup cpp_process_pileup(
         mapqs
     );
     
-    
     if (target.is_substitute)
     {
         cout << "This SNV is found: " << targets.size() << " alt: " << candidates.size() << " cand: " << non_targets.size() << " non-tar" << std::endl;
@@ -150,6 +149,7 @@ ProcessedPileup cpp_process_pileup(
                                 non_targets);
        */
        //pass variables needed for equ check, 
+        
         process_aligned_target(target, fr, 
                                base_quality_threshold, low_quality_base_rate_threshold, 
                                match_score, mismatch_penalty, gap_open_penalty, gap_extention_penalty,
@@ -174,29 +174,7 @@ ProcessedPileup cpp_process_pileup(
                                                  candidates,
                                                  non_targets);
     
-    
-    std::cout << "target N: " << targets.size() << std::endl;
-    std::cout << "candidate N: " << candidates.size() << std::endl; 
-    std::cout << "non_target N: " << non_targets.size() << std::endl;  
-    /*
-    for (auto & c : non_targets)
-    {
-        std::cout << c.read_name << " " << c.cigar_string << std::endl;
-    }    
-    */
-    //output preparer
-    
-    
-    /*std::string _contig = "AATTCCGG";
-    int _pos = 123;
-    std::string _ref = "AT";
-    std::string _alt = "A";
-    std::vector<std::string> _read_names {"read1", "read2", "read3"};
-    std::vector<bool> _are_rev {true, false, false};
-    std::vector<bool> _are_target {false, false, true};
-    std::vector<bool> _are_from {false, true, false};
-    pp::ProcessedPileup prp {_contig, _pos, _ref, _alt, _read_names, _are_rev, _are_target, _are_from};
-    */
+    std::cout << "target N:" << targets.size() << " candidate N:" << candidates.size() << " non target N:" <<  non_targets.size() << std::endl;
     return prp;
 }
 

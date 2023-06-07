@@ -16,6 +16,22 @@
 #include "aligned_target.h"
 
 
+
+void sort_by_start(Reads & reads)
+{
+    std::sort(reads.begin(), reads.end(), 
+              [](const Read & a, const Read & b){return a.read_start <  b.read_start ? true : false;});
+    
+    std::sort(reads.begin(), reads.end(), 
+              [](const Read & a, const Read & b){return a.aln_start <  b.aln_start ? true : false;});
+}
+
+void sort_by_kmer(Reads & reads)
+{
+    std::sort(reads.begin(), reads.end(),
+              [](const Read & a, const Read & b){return a.kmer_score >  b.kmer_score ? true : false;}); 
+}
+
 Reads find_seed_reads(const Reads & targets, const double dirty_thresh, const size_t seed_size)
 {   
     Reads clean_targets;
@@ -52,8 +68,10 @@ Reads find_seed_reads(const Reads & targets, const double dirty_thresh, const si
         
         Reads tmp = {seeds.begin(), seeds.begin() + seed_size};
         
-        std::sort(tmp.begin(), tmp.end(), 
-                  [](const Read & a, const Read & b){return a.read_start < b.read_start ? true : false;});   
+        //std::sort(tmp.begin(), tmp.end(), 
+        //          [](const Read & a, const Read & b){return a.read_start < b.read_start ? true : false;});   
+        
+        sort_by_start(tmp);
          
         return tmp;
     }
@@ -624,9 +642,12 @@ void extend_contig_seq(const RawContig & contig,
             
             Reads lt_tmp = {lt_extenders.begin(), lt_extenders.begin() + lt_size};
 
+            /*
             std::sort(lt_tmp.begin(), lt_tmp.end(),
                   [](const Read & a, const Read & b)
                   {return a.aln_start < b.aln_start ? true : false;});
+            */
+            sort_by_start(lt_tmp);
 
             std::vector<int> aln_starts;
             std::vector<SimplifiedRead> lt_inputs;
@@ -664,9 +685,13 @@ void extend_contig_seq(const RawContig & contig,
              
             Reads rt_tmp = {rt_extenders.end() - rt_size, rt_extenders.end()};
 
+            /*
             std::sort(rt_tmp.begin(), rt_tmp.end(), 
                   [](const Read & a, const Read & b)
                   {return a.aln_start < b.aln_start ? false : true;});
+            */
+
+            sort_by_start(rt_tmp);
 
             std::vector<int> aln_ends;
             std::vector<SimplifiedRead> rt_inputs;
@@ -756,6 +781,7 @@ void align_to_contig(const std::string & chrom, FastaReference & fr,
     }
 }
 
+/*
 void make_grid(const int gap_open_penalty, const int gap_extension_penalty, std::vector<std::pair<int, int>> & grid)
 {
     std::pair<int, int> _default = {gap_open_penalty, gap_extension_penalty};
@@ -780,8 +806,9 @@ void make_grid(const int gap_open_penalty, const int gap_extension_penalty, std:
         //return grid;
     }
 }
+*/
 
-
+//re-organize as relan_contig (supply ref as string)
 void realn_extended_contig
     (const std::string & chrom, FastaReference & fr,
      SimplifiedRead & extended_contig,
@@ -911,12 +938,13 @@ void process_aligned_target(Variant & target,
     find_core_kmers(raw_contig, kmer_size, informative_kmers, core_kmers);
 
     // may happen for pure mapping artifacts 
+    /*
     if (core_kmers.empty())
     {
         transfer_vector(non_targets, targets);
         transfer_vector(non_targets, candidates);
         return;
-    }
+    }*/
 
     
     Variant observed_target = Variant(raw_contig.target_pos, 

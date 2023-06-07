@@ -114,6 +114,7 @@ struct Variant {
     std::string ref;
     std::string alt;
     std::string chrom;
+    bool is_clipped_segment;
     
     int ref_len;
     int alt_len;
@@ -125,7 +126,7 @@ struct Variant {
     bool is_complex;
     
     
-    Variant(const int pos, const std::string & ref, const std::string & alt, const std::string & chrom = "N");
+    Variant(const int pos, const std::string & ref, const std::string & alt, const std::string & chrom = "N", bool is_clipped_segment=false);
     
     //int ref_len_;
     //int alt_len_;
@@ -246,7 +247,8 @@ std::vector<Variant> find_variants(const int aln_start,
                                    const std::string & read_seq,
                                    const std::string & base_qualities,
                                    const std::vector<std::pair<char, int>> & cigar_vector,
-                                   std::string & non_ref_quals);
+                                   std::string & non_ref_quals,
+                                   bool include_clip_as_variant=false);
 
 int count_repeats(const std::string & ptrn, const std::string & seq);
 

@@ -451,7 +451,8 @@ Variant::Variant
 (    int pos, 
      const std::string &ref, 
      const std::string &alt,
-     const std::string &chrom
+     const std::string &chrom,
+     bool is_clipped_segment
 ) : pos (pos), ref (ref), alt (alt), chrom(chrom), 
     ref_len (ref.size()), alt_len (alt.size()),
     is_substitute ((alt_len == ref_len)),
@@ -764,7 +765,8 @@ std::vector<Variant> find_variants(const int aln_start,
                                    const std::string & read_seq,
                                    const std::string & base_qualities,
                                    const std::vector<std::pair<char, int>> & cigar_vector,
-                                   std::string & non_ref_quals)
+                                   std::string & non_ref_quals,
+                                   bool include_clip_as_variant)
 {
     std::vector<Variant> variants = {};
     
@@ -774,6 +776,7 @@ std::vector<Variant> find_variants(const int aln_start,
     int op_len = 0;
     int ref_idx = 0;
     int read_idx = 0;
+    int cigar_idx = 0;
     int pos = aln_start;
 
     std::string ref = "";
@@ -845,7 +848,9 @@ std::vector<Variant> find_variants(const int aln_start,
             case 'P':
                 /**/
                 break;
-        }       
+        }
+        
+        ++cigar_idx;       
     }
     return variants;
 }

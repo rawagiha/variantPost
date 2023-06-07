@@ -27,6 +27,10 @@ void process_aligned_target(const std::string & chrom,
                             Reads & non_targets);
 */
 
+void sort_by_start(Reads & reads);
+
+void sort_by_kmer(Reads & reads);
+
 std::string construct_ref_contig(const Reads & reads, const std::string & chrom, FastaReference & fr, std::vector<std::pair<int, int>> & coordinates);
 
 void process_aligned_target(Variant & target,
