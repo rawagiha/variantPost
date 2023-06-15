@@ -287,8 +287,12 @@ string FastaReference::getSequence(string seqname) {
         pend = remove(pbegin, pend, '\n');
         pend = remove(pbegin, pend, '\0');
         s = seq;
-        free(seq);
+        //free(seq); 
+        //originally here (6/13/2023)
+        // -> warning: pointer ‘seq’ used after ‘void free(void*)
+        //    s.resize((pend - pbegin)/sizeof(char));
         s.resize((pend - pbegin)/sizeof(char));
+        free(seq);
     }
     return s;
 }
@@ -338,8 +342,12 @@ string FastaReference::getSubSequence(string seqname, int start, int length) {
         pend = remove(pbegin, pend, '\n');
         pend = remove(pbegin, pend, '\0');
         s = seq;
-        free(seq);
+        //free(seq);
+        //originally here (6/13/2023)
+        //-> warning: pointer ‘seq’ used after ‘void free(void*)
+        //   s.resize((pend - pbegin)/sizeof(char));
         s.resize((pend - pbegin)/sizeof(char));
+        free(seq);
     }
     return s;
 }

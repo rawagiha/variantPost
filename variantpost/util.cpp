@@ -48,6 +48,17 @@ inline std::pair<char, int> split_cigar(const std::string & cigar)
   return std::make_pair(cigar.substr(last_idx, 1)[0], std::stoi(cigar.substr(0, last_idx)));
 }
 
+
+bool has_gaps(std::string& cigar_string)
+{   
+    return (cigar_string.find("I") != std::string::npos 
+         || cigar_string.find("D") != std::string::npos);
+}
+
+
+
+
+
 //parse cigar string: 10M4D3M2S -> {<'M', 10>, <'D', 4>, <'M', 3>, <'S', 2>}
 //-----------------------------------------------------------------------------
 std::vector<std::pair<char, int>> to_cigar_vector(const std::string & cigar_string) 
@@ -328,6 +339,7 @@ std::vector<int> expand_coordinates(const std::vector<std::pair<int, int>> & coo
 
 
 
+//obsolete june 7 2023
 void parse_splice_pattern(std::vector<std::pair<int, int>> & exons,
                           std::vector<std::pair<int, int>> & introns,
                           const std::vector<std::pair<char, int>> & cigar_vector,
@@ -367,20 +379,17 @@ void parse_splice_pattern(std::vector<std::pair<int, int>> & exons,
 }   
 
 
-// fit local referenece to read alignment
-// not considered del??
-// do we need this??
-//-----------------------------------------------------------------------------
-std::string get_unspliced_ref_seq(const int aln_start, const int aln_end,
-                                  const int unspliced_local_reference_start,
-                                  const std::string &unspliced_local_reference) 
+std::string get_unspliced_ref_seq(const int loc_ref_start, const std::string& loc_ref_seq,
+                                  const int aln_start, const int aln_end)
 {
-  int start_idx = aln_start - unspliced_local_reference_start;
+  int start_idx = aln_start - loc_ref_start;
   size_t expected_ref_len = aln_end - aln_start + 1;
    
-  if (start_idx >= 0) {
-    std::string fitted_ref = unspliced_local_reference.substr(start_idx, expected_ref_len);
-    if (fitted_ref.size() == expected_ref_len) {
+  if (start_idx >= 0) 
+  {
+    std::string fitted_ref = loc_ref_seq.substr(start_idx, expected_ref_len);
+    if (fitted_ref.size() == expected_ref_len) 
+    {
         return fitted_ref;
     }
   }
@@ -392,9 +401,9 @@ std::string get_unspliced_ref_seq(const int aln_start, const int aln_end,
 
 // get spliced reference
 // ----------------------------------------------------------------------------
-std::string get_spliced_ref_seq(const std::string & chrom, const int aln_start, 
-                                const std::vector<std::pair<char, int>> & cigar_vector,
-                                FastaReference & fr)
+std::string get_spliced_ref_seq(const std::string& chrom, FastaReference & fr,
+                                const int aln_start, 
+                                const std::vector<std::pair<char, int>> & cigar_vector)
 {
     
     int curr_pos = aln_start - 1;
@@ -406,7 +415,8 @@ std::string get_spliced_ref_seq(const std::string & chrom, const int aln_start,
         op = c.first;
         op_len = c.second;
         
-        switch (op) {
+        switch (op) 
+        {
             case 'M':
             case 'X':
             case 'D':
@@ -418,7 +428,6 @@ std::string get_spliced_ref_seq(const std::string & chrom, const int aln_start,
                 break;
             default:
                 break;
-
         }
 
     }
@@ -447,18 +456,58 @@ std::unordered_map<int, char> reference_by_position(const std::string & unsplice
   return indexed_local_reference;
 }
 
+
+
+std::unordered_map<int, char> dictize_reference(
+        const std::string& ref_seq, int ref_start, int ref_end) 
+{
+
+  std::unordered_map<int, char> ref_dict;
+
+  int i = 0, pos = ref_start;
+  while (pos <= ref_end) 
+  {
+    ref_dict[pos] = ref_seq[i];
+    ++i;
+    ++pos;
+  }
+
+  return ref_dict;
+}
+
+void LocalReference::set_up(const std::string& fastafile)
+{
+    fasta.open(fastafile);
+    
+    seq = fasta.getSubSequence(chrom, start - 1, end - start + 1);
+    dict = dictize_reference(seq, start, end);
+};
+
+
+
+inline bool contain_n(const std::string& str1, const std::string& str2)
+{ 
+    if (str1.find('N') == std::string::npos) return true;
+    if (str2.find('N') == std::string::npos) return true;
+    return false;   
+}
+
+
 Variant::Variant 
 (    int pos, 
      const std::string &ref, 
      const std::string &alt,
-     const std::string &chrom,
      bool is_clipped_segment
-) : pos (pos), ref (ref), alt (alt), chrom(chrom), 
+     //const std::string &chrom,
+) : pos (pos), ref (ref), alt (alt),
+    is_clipped_segment(is_clipped_segment),  
     ref_len (ref.size()), alt_len (alt.size()),
     is_substitute ((alt_len == ref_len)),
     is_ins ((alt_len > ref_len)),
     is_del ((alt_len < ref_len))
 {
+    has_n = contain_n(ref, alt);
+     
     if (ref_len < alt_len)
     {
         if (alt.substr(0, ref_len) == ref) is_complex = false; 
@@ -471,6 +520,7 @@ Variant::Variant
     }    
 }
 
+
 inline bool is_rotatable(const std::string & allele)
 {
     return (allele[0] == allele[allele.size() - 1]);
@@ -481,14 +531,25 @@ inline void to_left(int & pos,
                     int & variant_end_pos,
                     std::string & longer_allele,
                     std::string & shorter_allele,
+                    bool& is_failed,
                     const std::unordered_map<int, char> & indexed_local_reference)
 {
     --pos;
     --variant_end_pos;
     char prev_base = indexed_local_reference.at(pos);
+    
+    if (prev_base == 'N')
+    {
+        ++pos;
+        ++variant_end_pos;
+        is_failed = true;
+        return;
+    }
+
     longer_allele.pop_back();
     longer_allele.insert(0, 1, prev_base);
     shorter_allele = prev_base;
+    is_failed = false;
 }
 
 
@@ -501,9 +562,16 @@ void left_align(int & pos,
 {
     std::string & longer_allele = (is_ins) ? alt : ref;
     std::string & shorter_allele = (is_ins) ? ref : alt;
-
+    bool is_failed = false;
+       
     while (is_rotatable(longer_allele) && (unspliced_local_reference_start < pos)) {
-        to_left(pos, variant_end_pos, longer_allele, shorter_allele, indexed_local_reference);
+        
+        if (indexed_local_reference.find(pos - 1) == indexed_local_reference.end()) return;
+        
+        to_left(pos, variant_end_pos, longer_allele, shorter_allele, is_failed, indexed_local_reference);
+        
+        if (is_failed) return;
+
     }
 }
 
@@ -533,15 +601,44 @@ int Variant::get_leftmost_pos(const int unspliced_local_reference_start,
 }
 
 
+void Variant::set_leftmost_pos(const LocalReference& loc_ref)
+{
+    if (is_substitute || is_complex || is_clipped_segment || has_n) 
+    {    
+        lpos = pos;   
+        return;
+    }
+
+    int pos_ = pos;
+    int variant_end_pos_ = variant_end_pos;
+    std::string ref_ = ref;
+    std::string alt_ = alt;
+
+    left_align(pos_, variant_end_pos_, ref_, alt_, is_ins, 
+               loc_ref.start, loc_ref.dict);
+
+    lpos = pos_;
+}
+
+
 inline void to_right(int & variant_end_pos, 
-                     std::string & longer_allele, std::string & shorter_allele,
+                     std::string & longer_allele, 
+                     std::string & shorter_allele,
+                     bool& is_failed,
                      const std::unordered_map<int, char> & indexed_local_reference)
 {
     char next_base = indexed_local_reference.at(variant_end_pos);
+    if (next_base == 'N') 
+    {
+        is_failed = true;    
+        return;
+    }
+
     longer_allele.erase(0, 1);
     longer_allele += next_base;
     shorter_allele = next_base;
     ++variant_end_pos;
+    is_failed = false;
 }
 
 
@@ -553,17 +650,27 @@ void right_align(int & pos, int & variant_end_pos,
 {
     std::string & longer_allele = (is_ins) ? alt : ref;
     std::string & shorter_allele = (is_ins) ? ref : alt;
+    bool is_failed = false;
 
     do {
+        if (indexed_local_reference.find(pos) == indexed_local_reference.end())
+        {    
+            return;
+        }
+
         to_right(variant_end_pos, 
                  longer_allele, shorter_allele,
+                 is_failed,
                  indexed_local_reference);
+        
+        if (is_failed) return;
+        
         ++pos;
     }
     while (is_rotatable(longer_allele) && (pos < unspliced_local_reference_end));
     
     // undo the last right shift
-    to_left(pos, variant_end_pos, longer_allele, shorter_allele, indexed_local_reference);
+    to_left(pos, variant_end_pos, longer_allele, shorter_allele, is_failed, indexed_local_reference);
 }
 
 
@@ -588,7 +695,31 @@ int Variant::get_rightmost_pos(const int unspliced_local_reference_end,
 }
 
 
-bool Variant::is_shiftable(const std::unordered_map<int, char> & indexed_local_reference) const
+void Variant::set_rightmost_pos(const LocalReference& loc_ref)
+{
+    //NA: snv, mnv
+    if (is_substitute || is_complex || is_clipped_segment) 
+    {    
+        rpos = pos;
+        return;
+    }
+
+    int pos_ = pos;
+    int variant_end_pos_ = variant_end_pos;
+    std::string ref_ = ref;
+    std::string alt_ = alt;
+
+    right_align(pos_, 
+                variant_end_pos_, 
+                ref_, alt_, is_ins,
+                loc_ref.end, 
+                loc_ref.dict);
+    
+    rpos = pos_;
+}
+
+/*
+bool Variant::set_shiftable(const std::unordered_map<int, char> & indexed_local_reference) const
 {
 
     if (is_substitute || is_complex) 
@@ -626,14 +757,15 @@ bool Variant::is_shiftable(const std::unordered_map<int, char> & indexed_local_r
         }
     }
 }
+*/
 
-bool Variant::is_equivalent(const Variant & other, 
-                            const int unspliced_local_reference_start, 
-                            const std::unordered_map<int, char> & indexed_local_reference) const
+bool Variant::is_equivalent(const Variant& other, const LocalReference& loc_ref) const
 {
     std::vector<int> var_len_0{ref_len, alt_len};
     std::vector<int> var_len_1{other.ref_len, other.alt_len};
 
+    if (is_clipped_segment || other.is_clipped_segment) return false;
+    
     if (var_len_0 == var_len_1){
         int pos_ = other.pos;
         int varient_end_pos_ = other.variant_end_pos;
@@ -645,8 +777,7 @@ bool Variant::is_equivalent(const Variant & other,
         } 
         else {
             left_align(pos_, varient_end_pos_, ref_, alt_, other.is_ins, 
-                       unspliced_local_reference_start, 
-                       indexed_local_reference);
+                       loc_ref.start, loc_ref.dict);
             
             return ((pos == pos_) & (ref == ref_) & (alt == alt_));
         }               
@@ -856,6 +987,105 @@ std::vector<Variant> find_variants(const int aln_start,
 }
 
 
+
+void parse_variants(
+    const int aln_start, 
+    const std::string& ref_seq, 
+    const std::string& read_seq,
+    const std::string& base_qualities, 
+    const std::vector<std::pair<char, int>>& cigar_vector,
+    const std::unordered_map<int, char>& ref_dict,
+    std::vector<Variant>& variants, 
+    std::string& non_ref_quals,
+    bool include_clips
+)
+{
+    if (read_seq == ref_seq) return;
+
+    char op = '\0';
+    int op_len = 0, ref_idx = 0, read_idx = 0, pos = aln_start;
+
+    std::string ref = "", alt = "";
+
+    //check for ins/del at read start and skip end
+    bool is_padding_base_supported = false;
+    
+    for (const auto & cigar : cigar_vector)
+    {
+        op = cigar.first;
+        op_len = cigar.second;
+
+        switch (op)
+        {
+            case 'M':
+            case 'X':
+            case '=':
+                for (int i = 0; i < op_len; ++i)
+                {
+                    ref = ref_seq.substr(ref_idx, 1);
+                    alt = read_seq.substr(read_idx, 1);
+                    if (ref != alt)
+                    {
+                        variants.emplace_back(pos, ref, alt); 
+                        non_ref_quals += base_qualities.substr(read_idx, 1);
+                    }
+                    ++ref_idx;
+                    ++read_idx;
+                    ++pos;
+                }
+
+                is_padding_base_supported = true;
+                break;
+            case 'I':
+                if (is_padding_base_supported) ref = ref_seq.substr(ref_idx - 1, 1);
+                else
+                {   
+                    if (ref_dict.find(pos - 1) != ref_dict.end()) ref = ref_dict.at(pos - 1); 
+                    else ref = "N";        
+                } 
+                
+                variants.emplace_back(pos - 1, ref, ref + read_seq.substr(read_idx, op_len));
+                non_ref_quals += base_qualities.substr(read_idx, op_len); 
+                read_idx += op_len;
+                break; 
+            case 'D':
+                if (is_padding_base_supported) alt = ref_seq.substr(ref_idx - 1, 1);
+                else
+                {
+                    if (ref_dict.find(pos - 1) != ref_dict.end()) ref = ref_dict.at(pos - 1);
+                    else ref = "N";
+                }
+                
+                variants.emplace_back(pos - 1, alt + ref_seq.substr(ref_idx, op_len), alt);
+                ref_idx += op_len;
+                pos += op_len;
+                is_padding_base_supported = true;                 
+                break;
+            case 'N':
+                pos += op_len;
+                is_padding_base_supported = false;
+                break;
+            case 'S':
+                if (include_clips)
+                {
+                    if (ref_dict.find(pos - 1) != ref_dict.end()) ref = ref_dict.at(pos - 1);
+                    else ref = "N";
+                    variants.emplace_back(pos - 1, ref, ref + read_seq.substr(read_idx, op_len), true);
+                }
+
+                non_ref_quals += base_qualities.substr(read_idx, op_len);
+                read_idx += (op_len);
+                break;
+            case 'H':
+            case 'P':
+                /**/
+                break;
+        }
+    }
+}
+
+
+
 std::set<std::string> make_kmers(const std::string & seq, const size_t k)
 {
     size_t n = seq.size();
@@ -956,7 +1186,7 @@ double euclidean_dist(const std::string & query,
 }
 
 
-
+/*
 // for aligned case
 void make_contig(const std::vector<RealignedGenomicSegment> & realns, Contig & contig)
 {
@@ -1054,7 +1284,7 @@ void make_contig(const std::vector<RealignedGenomicSegment> & realns, Contig & c
     contig.skip_starts = skip_starts;
     contig.skip_ends = skip_ends;
 }
-
+*/
 // for unaligned case
 //void infer_contig()
 

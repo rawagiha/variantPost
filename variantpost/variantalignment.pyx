@@ -1,6 +1,6 @@
 from .phaser import phase
 from .preprocessor import preprocess
-from variantpost.processor_wrapper cimport process_pileup
+from variantpost._wrapper cimport search_target
 from .variant import Variant
 
 import time
@@ -14,12 +14,13 @@ class VariantAlignment(object):
         downsample_threshold=-1, 
         mapping_quality_threshold=-1, 
         base_quality_threshold=20, 
-        low_quality_base_rate_threshold=0.05, 
+        low_quality_base_rate_threshold=0.1, 
         match_score=3,
         mismatch_penalty=2,
         gap_open_penalty=3,
         gap_extention_penalty=1, 
         kmer_size=24, 
+        local_threshold=20
     ):
 
         print("analyze: {}\t{}\t{}\t{}".format(variant.chrom, variant.pos, variant.ref, variant.alt))
@@ -84,7 +85,7 @@ class VariantAlignment(object):
             contig_dict,
             skips,
             annotated_reads,
-        ) = process_pileup(
+        ) = search_target(
                 fastafile,
                 chrom.encode(), 
                 pos, ref.encode(), alt.encode(),
@@ -96,6 +97,7 @@ class VariantAlignment(object):
                 gap_open_penalty,
                 gap_extention_penalty,
                 kmer_size,
+                local_threshold,
                 unspliced_local_reference_start, 
                 unspliced_local_reference_end, 
                 preprocessed_pileup.read_names,

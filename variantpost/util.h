@@ -13,6 +13,9 @@
 
 #include "fasta/Fasta.h"
 
+typedef std::vector<std::pair<int, int> > Coord;
+typedef std::set<std::string> Kmers;
+
 template<typename A, typename B, typename C>
 bool is_ascending(const A & a, const B & b, const C & c)
 {
@@ -78,15 +81,14 @@ void splice_cigar(std::vector<std::pair<char, int>> & cigar_vector,
 //-----------------------------------------------------------------------
 void move_up_insertion(std::vector<std::pair<char, int>> & cigar_vector);
 
-std::string get_unspliced_ref_seq(const int aln_start, const int aln_end,
-                                  const int unspliced_local_reference_start,
-                                  const std::string & unspliced_local_reference);
+std::string get_unspliced_ref_seq(const int loc_ref_start, const std::string& loc_ref_seq,
+                                  const int aln_start, const int aln_end);
 
-//fasta file kept open???
-std::string get_spliced_ref_seq(const std::string & chrom, const int aln_start,
-                                const std::vector<std::pair<char, int>> & cigar_vector,
-                                FastaReference & fr);
+std::string get_spliced_ref_seq(const std::string& chrom, FastaReference& fr, 
+                                const int aln_start,
+                                const std::vector<std::pair<char, int>>& cigar_vector);
 
+//obsolete 
 void parse_splice_pattern(std::vector<std::pair<int, int>> & exons,
                           std::vector<std::pair<int, int>> & introns,
                           const std::vector<std::pair<char, int>> & cigar_vector,
@@ -103,60 +105,87 @@ std::unordered_map<int, char> reference_by_position( const std::string &
         unspliced_local_reference, int unspliced_local_reference_start,
         int unspliced_local_reference_end );
 
+
+
+
+
+
+bool has_gaps(std::string& cigar_string);
+
+
+//****new
+struct UserParams{ 
+    int mapq_thresh;
+    char base_q_thresh;
+    double lq_rate_thresh;
+    int match_score;
+    int mismatch_penal;
+    int gap_open_penal;
+    int gap_ext_penal;
+    int kmer_size; 
+    int local_thresh;
+}; 
+
+//****new
+struct LocalReference{ 
+    FastaReference fasta;
+    std::string chrom;
+    int start;
+    int end;
+    std::string seq;
+    std::unordered_map<int, char> dict;
+
+    void set_up(const std::string& fastafile); 
+};
+
+
+
+
+
+
 struct RefSeq {
     std::string seq;
     int start;      //1-based first base pos
     int stop;       //1-based last base pos
 };
 
-struct Variant {
+struct Variant{
     int pos;
     std::string ref;
     std::string alt;
-    std::string chrom;
+    //std::string chrom;
+    
     bool is_clipped_segment;
+    bool has_n;
     
     int ref_len;
     int alt_len;
     int variant_end_pos = pos + ref_len;
+    int lpos = -1;
+    int rpos = -1;
     
     bool is_substitute;
     bool is_ins;
     bool is_del;
     bool is_complex;
+    bool is_shiftable;
     
+    Variant(const int pos, const std::string& ref, const std::string& alt, bool is_clipped_segment = false);
     
-    Variant(const int pos, const std::string & ref, const std::string & alt, const std::string & chrom = "N", bool is_clipped_segment=false);
-    
-    //int ref_len_;
-    //int alt_len_;
-    //int variant_end_pos_ = pos_ + ref_len_;
-
-    //bool is_substitute_;
-    //bool is_ins_;
-    //bool is_del_;
-
-    /*
-    Variant( const std::string & chrom,
-             const int pos,
-             const std::string & ref,
-             const std::string & alt,
-             const int unspliced_local_reference_start,
-             const int unspliced_local_reference_end,
-             const std::map<int, char> & indexed_local_reference
-           );
-
-
-    */
     void left_aln(const int unspliced_local_reference_start, const std::unordered_map<int, char> & indexed_local_reference); 
-    bool is_shiftable(const std::unordered_map<int, char> & indexed_local_reference) const;
+    //bool is_shiftable(const std::unordered_map<int, char> & indexed_local_reference) const;
     int get_leftmost_pos(const int unspliced_local_reference_start, const std::unordered_map<int, char> & indexed_local_reference) const;
+    
+    void set_leftmost_pos(const LocalReference& loc_ref);
+    
+    
     int get_rightmost_pos(const int unspliced_local_reference_end, const std::unordered_map<int, char> & indexed_local_reference) const;
-    bool is_equivalent(const Variant & v, const int unspliced_local_reference_start, const std::unordered_map<int, char> & indexed_local_reference) const;
-    std::string minimal_repeat_unit() const;
-    //void say_hi(const Variant & j) const;
+    
+    void set_rightmost_pos(const LocalReference& loc_ref);
 
-    //bool operator == ( const Variant & rhs ) const;
+    bool is_equivalent(const Variant& v, const LocalReference& loc_ref) const;
+    
+    std::string minimal_repeat_unit() const;
     
 };
 
@@ -217,6 +246,7 @@ struct PairwiseBaseAlignmnent
         base_qual(base_qual) {}
 };
 
+/*
 struct Contig
 {
     std::vector<PairwiseBaseAlignmnent> alignment = {};
@@ -231,8 +261,9 @@ struct Contig
         const std::vector<int> & skip_ends
     ) : alignment(alignment), skip_starts(skip_starts), skip_ends(skip_ends) {}
 };
+*/
 
-void make_contig(const std::vector<RealignedGenomicSegment> & realns, Contig & contig);
+//void make_contig(const std::vector<RealignedGenomicSegment> & realns, Contig & contig);
 
 std::vector<Variant> find_mapped_variants(const int aln_start, const int aln_end, 
                                           const std::string & ref_seq, 
@@ -249,6 +280,14 @@ std::vector<Variant> find_variants(const int aln_start,
                                    const std::vector<std::pair<char, int>> & cigar_vector,
                                    std::string & non_ref_quals,
                                    bool include_clip_as_variant=false);
+
+//new 
+void parse_variants(const int aln_start, const std::string& ref_seq, const std::string& read_seq,
+                    const std::string& base_qualities, const std::vector<std::pair<char, int>>& cigar_vector,
+                    const std::unordered_map<int, char>& ref_dict,
+                    std::vector<Variant>& variants, std::string& non_ref_quals, bool include_clips=false);
+
+
 
 int count_repeats(const std::string & ptrn, const std::string & seq);
 

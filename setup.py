@@ -16,29 +16,40 @@ extensions = [
         "variantpost.variantalignment",
         ["variantpost/variantalignment.pyx"],
         language="c++",
+        extra_compile_args=['-O3'],
+        extra_link_args=['-O3']
     ),
     Extension(
         "variantpost.preprocessor", ["variantpost/preprocessor.pyx"], language="c++",
+        extra_compile_args=['-O3'],
+        extra_link_args=['-O3']
     ),
     Extension(
-        "variantpost.processor_wrapper",
+        "variantpost._wrapper",
         [
-            "variantpost/processor_wrapper.pyx",
+            "variantpost/_wrapper.pyx",
             #"variantpost/processor.cpp",
-            "variantpost/pileup_processor.cpp",
+            "variantpost/eval.cpp",
+            "variantpost/search.cpp",
             #"variantpost/pileup_parser.cpp",
-            "variantpost/read_classifier.cpp",
+            "variantpost/reads.cpp",
+            "variantpost/merge.cpp",
+            "variantpost/match.cpp",
+            #"variantpost/read_classifier.cpp",
             "variantpost/util.cpp",
+            "variantpost/contig.cpp",
             #"variantpost/swlib.cpp",
-            "variantpost/localn.cpp",
+            #"variantpost/localn.cpp",
             "variantpost/ssw/ssw.c",
             "variantpost/ssw/ssw_cpp.cpp",
             "variantpost/fasta/Fasta.cpp",
             "variantpost/fasta/split.cpp",
-            "variantpost/aligned_target.cpp",
-            "variantpost/unaligned_target.cpp",
+            #"variantpost/aligned_target.cpp",
+            #"variantpost/unaligned_target.cpp",
         ],
         language="c++",
+        extra_compile_args=['-O3'],
+        extra_link_args=['-O3']
     ),
 ]
 
