@@ -186,7 +186,11 @@ struct Variant{
     bool is_equivalent(const Variant& v, const LocalReference& loc_ref) const;
     
     std::string minimal_repeat_unit() const;
-    
+
+    bool operator == (const Variant& rhs) const
+    {
+        return (pos == rhs.pos && ref == rhs.ref && alt == rhs.alt);
+    }
 };
 
 struct RealignedGenomicSegment

@@ -365,8 +365,10 @@ void annot_clip_pattern(Read& read, const Variant& target)
     bool is_left_spliced = (read.aln_start < read.covering_start) ? true : false;
     bool is_right_spliced = (read.covering_end < read.aln_end) ? true : false;
     
-    int lt_dist = std::abs(target.lpos - read.aln_start);
-    int rt_dist = std::abs(read.aln_end - (target.rpos + target.ref_len - 1));
+    //int lt_dist = std::abs(target.lpos - read.aln_start);
+    int lt_dist = std::max(0, target.lpos - read.aln_start);
+    //int rt_dist = std::abs(read.aln_end - (target.rpos + target.ref_len - 1));
+    int rt_dist = std::max(0, read.aln_end - (target.rpos + target.ref_len - 1));
     bool is_lefty = (lt_dist < rt_dist) ? true : false;
 
     // both clipped

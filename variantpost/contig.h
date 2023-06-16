@@ -5,12 +5,17 @@
 #include "merge.h"
 #include "reads.h"
 
-struct UnalignedContig
+struct Contig
 {
     std::string seq;
     std::string quals;
     std::string ref_seq; 
     Coord coordinates;
+    
+    //contig expected from input
+    std::string mocked_seq;
+    std::string mocked_ref;
+    Coord mocked_coord;
      
     size_t len;
 
@@ -29,8 +34,8 @@ struct UnalignedContig
 };
 
 
-void make_unaln_contig(
-    UnalignedContig& u_contig,
+void make_contig(
+    Contig& contig,
     const Variant& target, 
     Reads& targets, 
     const UserParams& user_param,
@@ -39,6 +44,7 @@ void make_unaln_contig(
 
 
 void prefilter_candidates(
+    Contig& contig,
     Reads& candidates,
     Reads& non_targets,
     const Variant& target,
@@ -47,8 +53,8 @@ void prefilter_candidates(
 );
 
 
-void suggest_unaln_contig(
-    UnalignedContig& u_contig,
+void suggest_contig(
+    Contig& contig,
     Reads& candidates,
     const UserParams& user_params,
     LocalReference& loc_ref

@@ -227,29 +227,32 @@ SearchResult _search_target(
         reads, 
         target, 
         user_params, 
-        loc_ref)
-    ;  
+        loc_ref
+    );  
     
     Reads targets, candidates, non_targets;
     classify_reads(reads, targets, candidates, non_targets, user_params);
     
     // contig processing
-    UnalignedContig u_contig;
+    Contig contig;
     ShiftableSegment ss;
+    
      
-    //may only make sense to targets>0
+    //may only make sense to targets > 0 undetermined makes sense....
     Reads lt_matches, mid_matches, rt_matches, undetermined;
     if (!targets.empty())
     {
-        make_unaln_contig(
-            u_contig,
+        make_contig(
+            contig,
             target, 
             targets, 
             user_params,
             loc_ref
         );
                  
-        annot_shiftable_segment(ss, target, u_contig);   
+        annot_shiftable_segment(ss, target, contig);   
+        
+        std::cout << targets.size() << " " << candidates.size() << " " << non_targets.size() << std::endl;
         
         classify_cand_indel_reads(
             candidates,
@@ -260,14 +263,16 @@ SearchResult _search_target(
             rt_matches,
 
             undetermined,
-            u_contig,
+            contig,
             ss,
             user_params
         );
         
         //eval + aligned contig making
-        eval_by_aln(u_contig, user_params, loc_ref); 
-            
+        eval_by_aln(contig, target, user_params, loc_ref); 
+        
+        std::cout << targets.size() + lt_matches.size() + rt_matches.size() + mid_matches.size() << " " << candidates.size() << " " << non_targets.size() << std::endl;
+               
         SearchResult some_prp;
         return some_prp;    
     }
@@ -275,6 +280,7 @@ SearchResult _search_target(
     {
         
         prefilter_candidates(
+            contig,
             candidates,
             non_targets,
             target,
@@ -285,23 +291,26 @@ SearchResult _search_target(
         if (candidates.empty())
         {
             //done
+            std::cout << " no cand " << std::endl;
             SearchResult nnn_prp;
             return nnn_prp;
         }
         
-        suggest_unaln_contig(u_contig, candidates, user_params, loc_ref); 
+        suggest_contig(contig, candidates, user_params, loc_ref); 
         
-        std::cout << u_contig.seq << std::endl;
-        std::cout << u_contig.ref_seq << std::endl;        
+        std::cout << contig.seq << std::endl;
+        std::cout << contig.ref_seq << std::endl;        
         
         //eval()
-        eval_by_aln(u_contig, user_params, loc_ref);
+        eval_by_aln(contig, target, user_params, loc_ref);
         
         SearchResult _prp;
         return _prp;
     }
     else
     {
+        
+        
         //done
         SearchResult _no_prp;
         return _no_prp;

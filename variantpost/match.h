@@ -17,12 +17,10 @@ struct ShiftableSegment
     int boundary_end = -1;
 };
 
-void match_to_unaln_contig();
-
 void annot_shiftable_segment(
     ShiftableSegment& ss,
     const Variant& target, 
-    const UnalignedContig& u_contig
+    const Contig& contig
 );
 
 void classify_cand_indel_reads(
@@ -35,7 +33,7 @@ void classify_cand_indel_reads(
 
     Reads& undetermined,
    
-    const UnalignedContig& u_contig,
+    const Contig& contig,
     const ShiftableSegment& ss,
     const UserParams& user_params
 );

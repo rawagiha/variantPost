@@ -11,7 +11,7 @@
 #include "contig.h"
 
 
-void UnalignedContig::furnish(
+void Contig::furnish(
     const Seq& merged_target_reads,
     const Variant& target
 )
@@ -215,12 +215,12 @@ Seq merge_target_seeds(const Reads& seeds)
 
 
 void set_ref_info(
-    UnalignedContig& u_contig, 
+    Contig& contig, 
     const Coord& coord, 
     LocalReference& loc_ref
 )
 {
-    u_contig.coordinates = coord;
+    contig.coordinates = coord;
 
     std::string ref_seq;
     for (const auto& c : coord)
@@ -229,7 +229,7 @@ void set_ref_info(
             loc_ref.chrom, c.first - 1, (c.second -  c.first + 1)
         );
     } 
-    u_contig.ref_seq = ref_seq;
+    contig.ref_seq = ref_seq;
 }
 
 /*
@@ -259,8 +259,8 @@ std::string common_splice_ptrn(const Reads& reads)
 }
 
 
-void make_unaln_contig(
-    UnalignedContig& u_contig,
+void make_contig(
+    Contig& contig,
     const Variant& target, 
     Reads& targets, 
     const UserParams& user_params, 
@@ -269,6 +269,7 @@ void make_unaln_contig(
 {
     if (target.is_substitute)
     {
+        // do later
     }
     else
     {
@@ -280,9 +281,9 @@ void make_unaln_contig(
         
         Coord coord;
         unite_coordinates(coord, seeds);
-        set_ref_info(u_contig, coord, loc_ref);
+        set_ref_info(contig, coord, loc_ref);
 
-        u_contig.furnish(_merged, target);
+        contig.furnish(_merged, target);
     }
 }
 
@@ -290,6 +291,7 @@ void make_unaln_contig(
 void mock_target_seq(
     std::string& mocked_seq,
     std::string& mocked_ref_seq,
+    Coord& mocked_coord,
     const Variant& target,
     const UserParams& user_params,
     LocalReference& loc_ref
@@ -322,15 +324,20 @@ void mock_target_seq(
     
     mocked_seq = lt_frag + mid_frag + rt_frag;
 
+    int mock_start = target.pos - offset - user_params.kmer_size * n;
+    int mock_len = target.ref_len - 1 + offset + user_params.kmer_size * n * 2;
     mocked_ref_seq = loc_ref.fasta.getSubSequence(
         loc_ref.chrom,
-        target.pos - offset - user_params.kmer_size * n,
-        target.ref_len - 1 + offset + user_params.kmer_size * n * 2
+        mock_start,
+        mock_len
     );
+    
+    mocked_coord.emplace_back(mock_start + 1, mock_start + mock_len);
 }
 
 
 void prefilter_candidates(
+    Contig& contig,
     Reads& candidates,
     Reads& non_targets,
     const Variant& target,
@@ -338,16 +345,32 @@ void prefilter_candidates(
     LocalReference& loc_ref
 )
 {
-    std::string mocked_seq, mocked_ref_seq;
-    mock_target_seq(mocked_seq, mocked_ref_seq, target, user_params, loc_ref);
+    mock_target_seq(
+        contig.mocked_seq, 
+        contig.mocked_ref, 
+        contig.mocked_coord,
+        target, 
+        user_params, 
+        loc_ref
+    );
 
     Kmers target_kmers = diff_kmers(
-        mocked_seq, mocked_ref_seq,  user_params.kmer_size
+        contig.mocked_seq, contig.mocked_ref,  user_params.kmer_size
     );
-    
+
     for (auto& read : candidates)
     {
         read.kmer_score = count_kmer_overlap(read.seq, target_kmers);
+        
+        // kmer becomes zero for immediate variant clusters
+        if (!read.kmer_score)
+        {
+            if (!read.dist_to_non_target || !read.dist_to_clip)
+            {
+                if (read.nonref_lq_rate == 0.0) read.kmer_score = 1;    
+            }    
+        }
+              
     }
 
     sort_by_kmer(candidates);
@@ -432,8 +455,8 @@ void flag_contig_member(const Reads& used, Reads& candidates)
 }
 
 
-void suggest_unaln_contig(
-    UnalignedContig& u_contig,
+void suggest_contig(
+    Contig& contig,
     Reads& candidates,
     const UserParams& user_params,
     LocalReference& loc_ref
@@ -516,10 +539,10 @@ void suggest_unaln_contig(
     
     Seq merged_suggestions = merge_reads(suggestions);
 
-    u_contig.seq =  merged_suggestions.seq;
-    u_contig.quals = merged_suggestions.base_quals;
+    contig.seq =  merged_suggestions.seq;
+    contig.quals = merged_suggestions.base_quals;
     
-    set_ref_info(u_contig, coord, loc_ref);  
+    set_ref_info(contig, coord, loc_ref);  
 }
 
 

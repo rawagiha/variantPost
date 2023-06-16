@@ -36,13 +36,13 @@ inline bool is_shiftable(const std::string& allele)
 void annot_shiftable_segment(
     ShiftableSegment& ss,
     const Variant& target, 
-    const UnalignedContig& u_contig
+    const Contig& contig
 )
 {
-    const size_t lt_len = u_contig.lt_len;
-    const size_t rt_len = u_contig.rt_len;
-    std::string lt_seq = u_contig.seq.substr(0, lt_len);
-    std::string rt_seq = u_contig.seq.substr(u_contig.rt_start_idx);
+    const size_t lt_len = contig.lt_len;
+    const size_t rt_len = contig.rt_len;
+    std::string lt_seq = contig.seq.substr(0, lt_len);
+    std::string rt_seq = contig.seq.substr(contig.rt_start_idx);
     
     std::string allele_for_lt = "";
     std::string allele_for_rt = "";
@@ -73,10 +73,10 @@ void annot_shiftable_segment(
     --j; //undo once for rt aln
     
     ss.boundary_start = lt_len - (i + 1);
-    ss.boundary_end = u_contig.rt_start_idx + j - 1;
+    ss.boundary_end = contig.rt_start_idx + j - 1;
     
     const size_t shiftable_len = ss.boundary_end - ss.boundary_start - 1;
-    std::string shiftable = u_contig.seq.substr(
+    std::string shiftable = contig.seq.substr(
         ss.boundary_start + 1, shiftable_len
     );
     
@@ -113,36 +113,11 @@ void annot_shiftable_segment(
     ss.is_complete_tandem_repeat = is_complete_tandem_repeat;
 }
 
-/*
-void annot_kmer_score(
-    Reads& candidates,
-    const UnalignedContig& u_contig,
-    const ShiftableSegment& ss,
-    const UserParams& user_params
-)
-{
-    Kmers target_kmers = diff_kmers(
-        u_contig.seq, u_contig.ref_seq, user_params.kmer_size
-    );
-    
-    for (Read& read : candidates)
-    {         
-        if (ss.is_complete_tandem_repeat && read.incomplete_shift)
-        {
-            read.kmer_score = 0;
-        }
-        else
-        {    
-            read.kmer_score = count_kmer_overlap(read.seq, target_kmers);
-        }
-    }
-}
-*/
 
 char indel_match_pattern
 (
     const std::string& query, 
-    const UnalignedContig& u_contig,
+    const Contig& contig,
     const ShiftableSegment& ss,
     const Filter & filter,
     const Aligner & aligner, 
@@ -150,16 +125,16 @@ char indel_match_pattern
 )          
 {
     //contig layout
-    const int lt_end_idx = u_contig.lt_end_idx;
-    const int rt_start_idx = u_contig.rt_start_idx;
-    const int contig_len = u_contig.len;
-    const int mid_len = u_contig.mid_len;
+    const int lt_end_idx = contig.lt_end_idx;
+    const int rt_start_idx = contig.rt_start_idx;
+    const int contig_len = contig.len;
+    const int mid_len = contig.mid_len;
     const bool is_del = (mid_len == 0);
     
     int32_t mask_len = strlen(query.c_str()) / 2;
     mask_len = mask_len < 15 ? 15 : mask_len;
             
-    aligner.Align(query.c_str(), u_contig.seq.c_str(), contig_len, filter, &alignment, mask_len);
+    aligner.Align(query.c_str(), contig.seq.c_str(), contig_len, filter, &alignment, mask_len);
 
     const int ref_start = alignment.ref_begin;
     const int ref_end = alignment.ref_end;
@@ -248,13 +223,13 @@ void classify_cand_indel_reads(
 
     Reads& undetermined,
    
-    const UnalignedContig& u_contig,
+    const Contig& contig,
     const ShiftableSegment& ss,
     const UserParams& user_params
 )
 {
     Kmers target_kmers = diff_kmers(
-        u_contig.seq, u_contig.ref_seq, user_params.kmer_size
+        contig.seq, contig.ref_seq, user_params.kmer_size
     );
     
     bool is_complete_tandem_repeat = ss.is_complete_tandem_repeat;
@@ -283,7 +258,7 @@ void classify_cand_indel_reads(
         {
             char match_rlst = indel_match_pattern(
                 candidates[i].seq,
-                u_contig,
+                contig,
                 ss,
                 filter,
                 aligner,
@@ -315,4 +290,5 @@ void classify_cand_indel_reads(
         } 
     }
     candidates.clear();
+    candidates.shrink_to_fit();
 }

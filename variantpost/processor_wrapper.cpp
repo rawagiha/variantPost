@@ -4,7 +4,7 @@
 {
     "distutils": {
         "depends": [
-            "variantpost/pileup_processor.h"
+            "variantpost/search.h"
         ],
         "include_dirs": [
             "variantpost"
@@ -13,16 +13,11 @@
         "name": "variantpost.processor_wrapper",
         "sources": [
             "variantpost/processor_wrapper.pyx",
-            "variantpost/pileup_processor.cpp",
-            "variantpost/read_classifier.cpp",
+            "variantpost/search.cpp",
+            "variantpost/reads.cpp",
             "variantpost/util.cpp",
-            "variantpost/localn.cpp",
-            "variantpost/ssw/ssw.c",
-            "variantpost/ssw/ssw_cpp.cpp",
             "variantpost/fasta/Fasta.cpp",
-            "variantpost/fasta/split.cpp",
-            "variantpost/aligned_target.cpp",
-            "variantpost/unaligned_target.cpp"
+            "variantpost/fasta/split.cpp"
         ]
     },
     "module_name": "variantpost.processor_wrapper"
@@ -791,7 +786,7 @@ static CYTHON_INLINE float __PYX_NAN() {
 #include "stdexcept"
 #include "typeinfo"
 #include <vector>
-#include "pileup_processor.h"
+#include "search.h"
 #ifdef _OPENMP
 #include <omp.h>
 #endif /* _OPENMP */
@@ -1720,13 +1715,13 @@ static PyObject *__pyx_pf_11variantpost_17processor_wrapper_13AnnotatedRead___in
 /* "variantpost/processor_wrapper.pyx":77
  * 
  * 
- * cdef object process_pileup(             # <<<<<<<<<<<<<<
+ * cdef object search_target(             # <<<<<<<<<<<<<<
  *      string & fastafile,
  *      string & chrom,
  */
 
-static PyObject *__pyx_f_11variantpost_17processor_wrapper_process_pileup(std::string &__pyx_v_fastafile, std::string &__pyx_v_chrom, int __pyx_v_pos, std::string &__pyx_v_ref, std::string &__pyx_v_alt, int __pyx_v_mapping_quality_threshold, int __pyx_v_base_quality_threshold, float __pyx_v_low_quality_base_rate_threshold, int __pyx_v_match_score, int __pyx_v_mismatch_penalty, int __pyx_v_gap_open_penalty, int __pyx_v_gap_extention_penalty, int __pyx_v_kmer_size, int __pyx_v_unspliced_local_reference_start, int __pyx_v_unspliced_local_reference_end, std::vector<std::string>  &__pyx_v_read_names, std::vector<bool>  &__pyx_v_are_reverse, std::vector<std::string>  &__pyx_v_cigar_strings, std::vector<int>  &__pyx_v_aln_starts, std::vector<int>  &__pyx_v_aln_ends, std::vector<std::string>  &__pyx_v_read_seqs, std::vector<std::vector<int> >  &__pyx_v_quals, std::vector<int>  &__pyx_v_mapqs, std::vector<bool>  &__pyx_v_are_first_bam) {
-  ProcessedPileup __pyx_v_res;
+static PyObject *__pyx_f_11variantpost_17processor_wrapper_search_target(std::string &__pyx_v_fastafile, std::string &__pyx_v_chrom, int __pyx_v_pos, std::string &__pyx_v_ref, std::string &__pyx_v_alt, int __pyx_v_mapping_quality_threshold, int __pyx_v_base_quality_threshold, float __pyx_v_low_quality_base_rate_threshold, int __pyx_v_match_score, int __pyx_v_mismatch_penalty, int __pyx_v_gap_open_penalty, int __pyx_v_gap_extention_penalty, int __pyx_v_kmer_size, int __pyx_v_unspliced_local_reference_start, int __pyx_v_unspliced_local_reference_end, std::vector<std::string>  &__pyx_v_read_names, std::vector<bool>  &__pyx_v_are_reverse, std::vector<std::string>  &__pyx_v_cigar_strings, std::vector<int>  &__pyx_v_aln_starts, std::vector<int>  &__pyx_v_aln_ends, std::vector<std::string>  &__pyx_v_read_seqs, std::vector<std::vector<int> >  &__pyx_v_quals, std::vector<int>  &__pyx_v_mapqs, std::vector<bool>  &__pyx_v_are_first_bam) {
+  SearchResult __pyx_v_res;
   PyObject *__pyx_v_contig_dict = NULL;
   PyObject *__pyx_v_ref_base = NULL;
   PyObject *__pyx_v_alt_base = NULL;
@@ -1756,16 +1751,16 @@ static PyObject *__pyx_f_11variantpost_17processor_wrapper_process_pileup(std::s
   int __pyx_lineno = 0;
   const char *__pyx_filename = NULL;
   int __pyx_clineno = 0;
-  __Pyx_RefNannySetupContext("process_pileup", 0);
+  __Pyx_RefNannySetupContext("search_target", 0);
 
   /* "variantpost/processor_wrapper.pyx":104
  * ):
  * 
- *     res = cpp_process_pileup(             # <<<<<<<<<<<<<<
+ *     res = _search_target(             # <<<<<<<<<<<<<<
  *         fastafile,
  *         chrom,
  */
-  __pyx_v_res = cpp_process_pileup(__pyx_v_fastafile, __pyx_v_chrom, __pyx_v_pos, __pyx_v_ref, __pyx_v_alt, __pyx_v_mapping_quality_threshold, __pyx_v_base_quality_threshold, __pyx_v_low_quality_base_rate_threshold, __pyx_v_match_score, __pyx_v_mismatch_penalty, __pyx_v_gap_open_penalty, __pyx_v_gap_extention_penalty, __pyx_v_kmer_size, __pyx_v_unspliced_local_reference_start, __pyx_v_unspliced_local_reference_end, __pyx_v_read_names, __pyx_v_are_reverse, __pyx_v_cigar_strings, __pyx_v_aln_starts, __pyx_v_aln_ends, __pyx_v_read_seqs, __pyx_v_quals, __pyx_v_mapqs, __pyx_v_are_first_bam);
+  __pyx_v_res = _search_target(__pyx_v_fastafile, __pyx_v_chrom, __pyx_v_pos, __pyx_v_ref, __pyx_v_alt, __pyx_v_mapping_quality_threshold, __pyx_v_base_quality_threshold, __pyx_v_low_quality_base_rate_threshold, __pyx_v_match_score, __pyx_v_mismatch_penalty, __pyx_v_gap_open_penalty, __pyx_v_gap_extention_penalty, __pyx_v_kmer_size, __pyx_v_unspliced_local_reference_start, __pyx_v_unspliced_local_reference_end, __pyx_v_read_names, __pyx_v_are_reverse, __pyx_v_cigar_strings, __pyx_v_aln_starts, __pyx_v_aln_ends, __pyx_v_read_seqs, __pyx_v_quals, __pyx_v_mapqs, __pyx_v_are_first_bam);
 
   /* "variantpost/processor_wrapper.pyx":131
  *     )
@@ -2394,7 +2389,7 @@ static PyObject *__pyx_f_11variantpost_17processor_wrapper_process_pileup(std::s
   /* "variantpost/processor_wrapper.pyx":77
  * 
  * 
- * cdef object process_pileup(             # <<<<<<<<<<<<<<
+ * cdef object search_target(             # <<<<<<<<<<<<<<
  *      string & fastafile,
  *      string & chrom,
  */
@@ -2408,7 +2403,7 @@ static PyObject *__pyx_f_11variantpost_17processor_wrapper_process_pileup(std::s
   __Pyx_XDECREF(__pyx_t_5);
   __Pyx_XDECREF(__pyx_t_8);
   __Pyx_XDECREF(__pyx_t_9);
-  __Pyx_AddTraceback("variantpost.processor_wrapper.process_pileup", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("variantpost.processor_wrapper.search_target", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = 0;
   __pyx_L0:;
   __Pyx_XDECREF(__pyx_v_contig_dict);
@@ -3019,7 +3014,7 @@ static int __Pyx_modinit_function_export_code(void) {
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("__Pyx_modinit_function_export_code", 0);
   /*--- Function export code ---*/
-  if (__Pyx_ExportFunction("process_pileup", (void (*)(void))__pyx_f_11variantpost_17processor_wrapper_process_pileup, "PyObject *(std::string &, std::string &, int, std::string &, std::string &, int, int, float, int, int, int, int, int, int, int, std::vector<std::string>  &, std::vector<bool>  &, std::vector<std::string>  &, std::vector<int>  &, std::vector<int>  &, std::vector<std::string>  &, std::vector<std::vector<int> >  &, std::vector<int>  &, std::vector<bool>  &)") < 0) __PYX_ERR(0, 1, __pyx_L1_error)
+  if (__Pyx_ExportFunction("search_target", (void (*)(void))__pyx_f_11variantpost_17processor_wrapper_search_target, "PyObject *(std::string &, std::string &, int, std::string &, std::string &, int, int, float, int, int, int, int, int, int, int, std::vector<std::string>  &, std::vector<bool>  &, std::vector<std::string>  &, std::vector<int>  &, std::vector<int>  &, std::vector<std::string>  &, std::vector<std::vector<int> >  &, std::vector<int>  &, std::vector<bool>  &)") < 0) __PYX_ERR(0, 1, __pyx_L1_error)
   __Pyx_RefNannyFinishContext();
   return 0;
   __pyx_L1_error:;
@@ -3266,7 +3261,7 @@ if (!__Pyx_RefNanny) {
  * 
  * from collections import OrderedDict             # <<<<<<<<<<<<<<
  * 
- * cdef extern from "pileup_processor.h":
+ * cdef extern from "search.h":
  */
   __pyx_t_1 = PyList_New(1); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 5, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
