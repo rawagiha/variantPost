@@ -310,7 +310,7 @@ Seq merge_reads(const std::vector<Seq>& inputs)
 
         if (i == 0)
         {
-
+            //aligned segment only// 
             for (int j = 0; j <= (curr_end - curr_start); ++j)
             {
                 if (target_start == curr_start + j) is_target_start = 1;
@@ -325,6 +325,9 @@ Seq merge_reads(const std::vector<Seq>& inputs)
                 
                 is_target_start = 0;
             }
+
+            
+
         }
         else 
         {

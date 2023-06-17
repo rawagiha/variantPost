@@ -41,7 +41,7 @@ struct AlnResult
 
 
 void eval_by_aln(
-    const Contig& contig,
+    Contig& contig,
     const Variant& target,
     const UserParams& user_params,
     LocalReference& loc_ref

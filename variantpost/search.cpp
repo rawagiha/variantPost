@@ -298,6 +298,8 @@ SearchResult _search_target(
         
         suggest_contig(contig, candidates, user_params, loc_ref); 
         
+        //TODO do check for empty contig -> termination. 
+        
         std::cout << contig.seq << std::endl;
         std::cout << contig.ref_seq << std::endl;        
         

@@ -232,19 +232,6 @@ void set_ref_info(
     contig.ref_seq = ref_seq;
 }
 
-/*
-bool is_splice_compatible(const Read& read, const Coord&, mapped_coords)
-{
-    //prechecked for splicing (e.g. mapped_coords.size() >= 2)
-    const size_t coord_size = mapped_coords.size();
-    const first_skip_start = mapped_coords[0].second + 1;
-    const last_skip_start = mapped_coords[coord_size - 2].second + 1;
-
-    const size_t n_skips = read.skipped_segments.size();
-    for (size_t i = 0; i < n_skips; ++i)
-    {
-    }
-}*/
 
 std::string common_splice_ptrn(const Reads& reads)
 {
@@ -380,7 +367,7 @@ void prefilter_candidates(
     {
         if ((*i).kmer_score)
         {
-            break; //stop if hits candidate with kmer > 0
+            break; //stop if candidate with kmer > 0
         }
         else
         {
@@ -401,7 +388,6 @@ void prioritize_reads_for_contig_construction(
     const UserParams& user_params
 )
 {
-    
     std::string common_spl_ptrn = common_splice_ptrn(candidates);
     
     prioritized.reserve(candidates.size());
@@ -462,6 +448,8 @@ void suggest_contig(
     LocalReference& loc_ref
 )
 {
+    contig.by_kmer_suggestion = true;   
+    
     Reads prioritized;
     
     prioritize_reads_for_contig_construction(
@@ -470,7 +458,7 @@ void suggest_contig(
         user_params
     );
     
-    //UnalignedContig remains empty
+    //Contig remains empty
     if (prioritized.empty()) return;
     
     const size_t max_size = 30; // for efficiency
@@ -517,7 +505,7 @@ void suggest_contig(
     }
     else
     {   
-        // hack
+        // hack 
         Read first = prioritized[0];
         if (prioritized.size() < 4 && first.kmer_score > 3)
         {

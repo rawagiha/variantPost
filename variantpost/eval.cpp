@@ -346,10 +346,106 @@ void eval_by_variant_lst(
     }
 }
 
+void annot_alignment(
+    Contig& contig,
+    const AlnResult& rslt
+)
+{
+    int genomic_pos = rslt.genomic_start_pos; 
+
+    const std::string& seq = rslt.seq;
+    const std::string& ref_seq = rslt.ref_seq;
+    const std::string& quals = rslt.quals;
+    const std::vector<Variant>& variants = rslt.variants;
+    
+    //std::vector<int> positions, skip_starts, skip_ends;
+    //std::vector<std::string> ref_bases, alt_bases, base_quals;
+    
+    int op_len;
+    char op = '\0', prev_op = '\0';
+    size_t seq_idx = 0, ref_idx = 0, v_idx = 0;    
+    for (const auto& cigar : rslt.cigar_vec)
+    {  
+        op = cigar.first;
+        op_len = cigar.second;
+        
+        switch (op)
+        {
+            case '=':
+            case 'X':
+                for (int i = 0; i < op_len; ++i)
+                {                   
+                    contig.positions.push_back(genomic_pos);
+                    contig.ref_bases.push_back(ref_seq.substr(ref_idx, 1));
+                    contig.alt_bases.push_back(seq.substr(seq_idx, 1));
+                    contig.base_quals.push_back(quals.substr(seq_idx, 1));
+                    
+                    ++genomic_pos;
+                    ++ref_idx;
+                    ++seq_idx;
+
+                    if (op == 'X') 
+                    {    
+                        ++v_idx;
+                    }
+                }
+                break;
+            case 'I':
+                if (prev_op == '=' || prev_op == 'X')
+                {
+                    contig.alt_bases.pop_back();
+                    contig.alt_bases.push_back(seq.substr(seq_idx - 1, op_len + 1));
+                    contig.base_quals.pop_back();
+                    contig.base_quals.push_back(quals.substr(seq_idx - 1, op_len + 1));
+                }
+                else if (prev_op == 'N')
+                {
+                    // do later  
+                    std::cout << " MANUALLY CHECK THIS!!!!!!! " << std::endl;    
+                } 
+                //'I' already moved up             
+                
+                seq_idx += op_len;
+                ++v_idx;
+                break;
+            case 'D':
+                if (prev_op == '=' || prev_op == 'X')
+                {
+                    contig.ref_bases.pop_back();
+                    contig.ref_bases.push_back(variants[v_idx].ref);
+                }    
+                else if (prev_op == 'N')
+                {
+                    // do later
+                    std::cout << " MANUALLY CHECK THIS!!!!!!! " << std::endl;    
+                }
+
+                ref_idx += op_len;
+                genomic_pos += op_len;
+                ++v_idx;
+                break;
+            case 'N':
+                contig.skip_starts.push_back(genomic_pos);
+                genomic_pos += op_len;
+                contig.skip_ends.push_back(genomic_pos - 1);
+                break;
+            case 'S':
+                seq_idx += op_len;
+                break;
+        }
+
+        prev_op = op;
+    }
+}
+
+
+
+
+
 
 //to be rename...
 void eval_by_aln(
-    const Contig& contig,
+    Contig& contig,
     const Variant& target,
     const UserParams& user_params,
     LocalReference& loc_ref
@@ -394,6 +490,7 @@ void eval_by_aln(
 
         postprocess_alignment(rslt, pos_vec, contig, loc_ref, aln);
         
+        std::cout << aln.cigar_string << std::endl;
         if (target.is_complex)
         {
             eval_by_variant_lst(rslt, simples, user_params, loc_ref);
@@ -405,7 +502,15 @@ void eval_by_aln(
 
         if (rslt.terminate_search)
         {    
-            std::cout << "annot contig for alingment " << std::endl;
+            annot_alignment(contig, rslt);
+            for (size_t i = 0; i < contig.positions.size(); ++i)
+            {
+                if (contig.ref_bases[i] != contig.alt_bases[i])
+                {
+                    std::cout << contig.positions[i] << " " << contig.ref_bases[i] << " " << contig.alt_bases[i] << "; ";
+                }
+            }
+            std::cout << std::endl;
             return;   
         }
         else if (rslt.is_passed)
@@ -414,6 +519,9 @@ void eval_by_aln(
         }
 
     }
+    
+    std::cout << "suggested ?? " << contig.by_kmer_suggestion << std::endl;
+    
     // if made (target guaranteed)  -> do most stable -> check for extension -> ext -> annot align
     // if suggested -> use most stable with check has or not
     // if made => 

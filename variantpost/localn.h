@@ -31,6 +31,39 @@ struct InputRead
 };
 */
 
+
+struct Seq
+{
+    std::string seq = "";
+    std::string base_quals = "";
+    int target_start = -1;
+
+    Seq() {}
+
+    Seq(
+        const std::string & seq,
+        const std::string & base_quals,
+        int target_start = -1
+    ) : seq(seq),
+        base_quals(base_quals),
+        target_start(target_start) {}
+
+   bool empty()
+   {
+       return seq.empty();
+   }
+};
+
+
+void sw_aln(
+    const uint8_t match_score, const uint8_t mismatch_penalty,
+    const uint8_t gap_open_penalty, const uint8_t gap_extention_penalty,
+    const std::string & ref_seq, const std::string & read_seq,
+    const Filter & filter, Alignment & alignment
+); 
+
+
+
 struct SimplifiedRead
 {
     std::string seq = "";
@@ -87,9 +120,11 @@ struct MergedRead
 };
 */
 
+Seq merge_reads(const std::vector<Seq>& inputs);
 
-SimplifiedRead merge_reads(const std::vector<SimplifiedRead> & inputs);
-SimplifiedRead _merge_reads(const std::vector<SimplifiedRead> & inputs);
+
+//SimplifiedRead merge_reads(const std::vector<SimplifiedRead> & inputs);
+//SimplifiedRead _merge_reads(const std::vector<SimplifiedRead> & inputs);
 
 SimplifiedRead pairwise_stitch(const std::vector<SimplifiedRead> & inputs, bool lt_extention);
 
