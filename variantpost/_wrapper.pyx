@@ -1,8 +1,16 @@
+import time
+import cython
+import random
+import numpy as np
+
+
 from libcpp.string cimport string
 from libcpp.vector cimport vector
 from libcpp cimport bool as bool_t
 
 from collections import OrderedDict
+
+RAW_DEPTH = 0
 
 cdef extern from "search.h":
 
@@ -37,8 +45,8 @@ cdef extern from "search.h":
         vector[bool_t] are_from_first_bam
 
 
-
-    SearchResult _search_target(
+    void _search_target(
+            SearchResult &,
             string &,
             string &,
             int,
@@ -67,6 +75,87 @@ cdef extern from "search.h":
     )
 
 
+
+cdef bint is_qualified_read(read, bint exclude_duplicates):
+    
+    if exclude_duplicates:
+        if read.cigarstring and (not read.is_duplicate) and  (not read.is_secondary) and (not read.is_supplementary) and read.reference_end:
+            return True
+    else:
+        if read.cigarstring and (not read.is_secondary) and (not read.is_supplementary) and read.reference_end:
+            return True
+    
+    return False
+
+
+cdef object fetch_reads(bam, str chrom, int pos, int chrom_len, int window, bint exclude_duplicates):
+    out = []
+    reads = bam.fetch(
+        chrom, max(0, pos - window), min(pos + window, chrom_len), until_eof=False
+    )
+    
+    return [read for read in reads if is_qualified_read(read, exclude_duplicates)]
+
+
+def downsampler(chrom, pos, bam, downsample_thresh, reads):
+    """Downsample reads if depth exceeds downsample_thresh
+    """
+    depth = bam.count(chrom, pos - 1, pos)
+
+    if depth > downsample_thresh:
+        pileup_size = len(reads)
+        random.seed(123)
+        reads = random.sample(reads, int(pileup_size * (downsample_thresh / depth)))
+        sample_factor = pileup_size / len(reads)
+    else:
+        sample_factor = 1.0
+
+    return reads, sample_factor
+
+
+def make_qual_seq(qual_arr):
+    a = np.frombuffer(qual_arr, dtype=np.int8)
+    a += 33
+    return a.tobytes().decode("utf-8")
+
+
+
+
+cdef void pack_to_lists(
+    read, 
+    list read_names, 
+    list are_reverse, 
+    list cigar_strings, 
+    list aln_starts, 
+    list aln_ends, 
+    list read_seqs, 
+    list ref_seqs, 
+    list qual_seqs, 
+    list mapqs, 
+    list is_primary, 
+    bint is_secondary
+):
+    cdef bytes cigar_string = read.cigarstring.encode()
+    
+    read_names.append(read.query_name.encode())
+    are_reverse.append(read.is_reverse)
+    
+    cdef int aln_start = read.reference_start + 1
+    
+    cigar_strings.append(cigar_string)
+    aln_starts.append(aln_start)
+    aln_ends.append(read.reference_end)
+    read_seqs.append(read.query_sequence.encode())
+    
+    qual_seqs.append(read.query_qualities)
+    mapqs.append(read.mapping_quality)
+    
+    if is_secondary:
+        is_primary.append(False)
+    else:
+        is_primary.append(True)
+
+
 class AnnotatedRead(object):
     def __init__(self, read_name, is_reverse, is_first_bam, target_status):
         self.read_name = read_name
@@ -76,11 +165,17 @@ class AnnotatedRead(object):
 
 
 cdef object search_target(
-     string & fastafile,
-     string & chrom,
+     object bam,
+     object second_bam,
+     int chrom_len,
+     bint exclude_duplicates,
+     int window,
+     int downsample_threshold,
+     string  fastafile,
+     str  chrom,
      int pos,
-     string & ref,
-     string & alt,
+     string  ref,
+     string  alt,
      int mapping_quality_threshold,
      int base_quality_threshold,
      float low_quality_base_rate_threshold,
@@ -92,20 +187,63 @@ cdef object search_target(
      int local_threshold,
      int unspliced_local_reference_start,
      int unspliced_local_reference_end,
-     vector[string] & read_names,
-     vector[bool_t] & are_reverse,
-     vector[string] & cigar_strings,
-     vector[int] & aln_starts,
-     vector[int] & aln_ends,
-     vector[string] & read_seqs,
-     vector[vector[int]] & quals,
-     vector[int] & mapqs,
-     vector[bool_t] & are_first_bam,
+     #vector[string] & read_names,
+     #vector[bool_t] & are_reverse,
+     #vector[string] & cigar_strings,
+     #vector[int] & aln_starts,
+     #vector[int] & aln_ends,
+     #vector[string] & read_seqs,
+     #vector[vector[int]] & quals,
+     #vector[int] & mapqs,
+     #vector[bool_t] & are_first_bam,
 ):
 
-    res = _search_target(
+    cdef SearchResult rslt
+    
+    tt = time.time()
+    reads = fetch_reads(bam, chrom, pos, chrom_len, window, exclude_duplicates)
+    print("I/O by pysam", time.time() - tt)
+
+    tt = time.time()
+    if downsample_threshold < 0:
+        sample_factor = 1.0
+    else:
+        reads, sample_factor = downsampler(chrom, pos, bam, downsample_threshold, reads)
+
+    cdef int n = len(reads)
+    
+    read_names = []
+    are_reverse = []
+    cigar_strings = []
+    aln_starts = []
+    aln_ends = [] 
+    read_seqs = []
+    ref_seqs = []
+    qual_seqs = []
+    mapqs = []
+    are_first_bam = []
+
+    cdef int aln_start, aln_end
+
+    ttt = time.time()
+    
+    for read in reads:
+        pack_to_lists(read, read_names, are_reverse, cigar_strings,
+                     aln_starts, aln_ends, read_seqs, ref_seqs, qual_seqs, mapqs, are_first_bam, False)
+    
+    if second_bam:
+        _reads = fetch_reads(second_bam, chrom, pos, chrom_len, window, exclude_duplicates)
+       
+        for _read in _reads:
+            pack_to_lists(_read, read_names, are_reverse, cigar_strings,
+                          aln_starts, aln_ends, read_seqs, ref_seqs, qual_seqs, mapqs, are_first_bam, True)
+    
+    print("prep--", time.time() - tt)
+    
+    _search_target(
+        rslt,
         fastafile,
-        chrom,
+        chrom.encode(),
         pos,
         ref,
         alt,
@@ -126,23 +264,23 @@ cdef object search_target(
         aln_starts,
         aln_ends,
         read_seqs,
-        quals,
+        qual_seqs,
         mapqs,
         are_first_bam,
     )
     
     contig_dict = OrderedDict()
     for pos, ref_base, alt_base, base_qual in zip(
-        res.positions, res.ref_bases, res.alt_bases, res.base_quals
+        rslt.positions, rslt.ref_bases, rslt.alt_bases, rslt.base_quals
     ):
         contig_dict[pos] = (ref_base.decode("utf-8"), alt_base.decode("utf-8"), base_qual)
 
     annot_reads = []
     for read_name, is_reverse, target_status, is_first_bam in zip(
-        res.read_names, res.are_reverse, res.target_statuses, res.are_from_first_bam
+        rslt.read_names, rslt.are_reverse, rslt.target_statuses, rslt.are_from_first_bam
     ):
         annot_reads.append(AnnotatedRead(read_name, is_reverse, is_first_bam, target_status))
     
-    skips = [(start, end) for start, end in zip(res.skip_starts, res.skip_ends)]
+    skips = [(start, end) for start, end in zip(rslt.skip_starts, rslt.skip_ends)]
     
     return contig_dict, skips, annot_reads

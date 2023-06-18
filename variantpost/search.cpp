@@ -10,6 +10,29 @@
 #include "contig.h"
 
 
+
+
+void from_target_reads(
+    Contig& contig,
+    const Variant& target,
+    Reads& targets,
+    Reads& candidates,
+    Reads& non_targets,
+    const UserParams& user_param,
+    LocalReference& loc_ref
+);
+
+
+void from_candidate_reads(
+    Contig& contig,
+    const Variant& target,
+    Reads& targets,
+    Reads& candidates,
+    Reads& non_targets,
+    const UserParams& user_params,
+    LocalReference& loc_ref
+);
+
 /*
 ProcessedPileup prepare_processed_rslt(const Contig & contig,
                                        int target_pos,
@@ -138,9 +161,11 @@ void pack_read_info(
 }
 
 
-SearchResult _search_target(
+void _search_target(
     
     /* data passed from Python interface*/
+    
+    SearchResult& rslt,
     
     //reference fastafile
     const std::string& fastafile,
@@ -235,89 +260,138 @@ SearchResult _search_target(
     
     // contig processing
     Contig contig;
-    ShiftableSegment ss;
-    
-     
-    //may only make sense to targets > 0 undetermined makes sense....
-    Reads lt_matches, mid_matches, rt_matches, undetermined;
     if (!targets.empty())
     {
-        make_contig(
+        from_target_reads(
             contig,
-            target, 
-            targets, 
-            user_params,
-            loc_ref
-        );
-                 
-        annot_shiftable_segment(ss, target, contig);   
-        
-        std::cout << targets.size() << " " << candidates.size() << " " << non_targets.size() << std::endl;
-        
-        classify_cand_indel_reads(
-            candidates,
-            non_targets, 
-            
-            lt_matches,
-            mid_matches,
-            rt_matches,
-
-            undetermined,
-            contig,
-            ss,
-            user_params
-        );
-        
-        //eval + aligned contig making
-        eval_by_aln(contig, target, user_params, loc_ref); 
-        
-        std::cout << targets.size() + lt_matches.size() + rt_matches.size() + mid_matches.size() << " " << candidates.size() << " " << non_targets.size() << std::endl;
-               
-        SearchResult some_prp;
-        return some_prp;    
-    }
-    else if (!candidates.empty()) 
-    {
-        
-        prefilter_candidates(
-            contig,
+            target,
+            targets,
             candidates,
             non_targets,
-            target,
             user_params,
             loc_ref
         );
         
-        if (candidates.empty())
-        {
-            //done
-            std::cout << " no cand " << std::endl;
-            SearchResult nnn_prp;
-            return nnn_prp;
-        }
+        std::cout << targets.size() << " " << candidates.size() << " " << non_targets.size() << std::endl;
+        return;    
+    }
+    else if (!candidates.empty()) 
+    {   
+        from_candidate_reads(
+            contig,
+            target,
+            targets,
+            candidates,
+            non_targets,
+            user_params,
+            loc_ref
+        );
+
+        return;  
+    }
         
-        suggest_contig(contig, candidates, user_params, loc_ref); 
+    //no resutl 
+     
+    return;
+}   
+
+
+
+void from_target_reads(
+    Contig& contig,
+    const Variant& target,
+    Reads& targets,
+    Reads& candidates,
+    Reads& non_targets,
+    const UserParams& user_params,
+    LocalReference& loc_ref
+)
+{
+    make_contig(
+        contig,
+        target, 
+        targets, 
+        user_params,
+        loc_ref
+    );
+                 
+    char _eval = eval_by_aln(contig, target, user_params, loc_ref);
+    
+    if (_eval == 'C')
+    {
+        transfer_vector(non_targets, targets);
+        transfer_vector(non_targets, candidates); 
+        return;      
+    }
+
+    ShiftableSegment ss;
+    annot_shiftable_segment(ss, target, contig);   
+     
+    Reads lt_matches, mid_matches, rt_matches, undetermined;    
+    classify_cand_indel_reads(
+        candidates,
+        non_targets, 
+            
+        lt_matches,
+        mid_matches,
+        rt_matches,
+
+        undetermined,
+        contig,
+        ss,
+        user_params
+    );
         
-        //TODO do check for empty contig -> termination. 
+    if (_eval == 'B')
+    {
+        //ext
+    }    
+    
+    transfer_vector(targets, lt_matches);
+    transfer_vector(targets, mid_matches);
+    transfer_vector(targets, rt_matches);
+}
+
+
+void from_candidate_reads(
+    Contig& contig,
+    const Variant& target,
+    Reads& targets,
+    Reads& candidates,
+    Reads& non_targets,
+    const UserParams& user_params,
+    LocalReference& loc_ref
+)
+{
+    prefilter_candidates(
+        contig,
+        candidates,
+        non_targets,
+        target,
+        user_params,
+        loc_ref
+    );
         
-        std::cout << contig.seq << std::endl;
-        std::cout << contig.ref_seq << std::endl;        
+    if (candidates.empty()) return;
         
-        //eval()
-        eval_by_aln(contig, target, user_params, loc_ref);
+    if (target.is_complex)
+    {
+        //cplx input -> reduce to from_target_reads
+    }
+    
+    suggest_contig(contig, candidates, user_params, loc_ref); 
+       
+    //may happen if all candidates are of low-qual bases
+    if (contig.seq.empty()) return;
         
-        SearchResult _prp;
-        return _prp;
+    char _eval = eval_by_aln(contig, target, user_params, loc_ref);
+        
+    if (_eval == 'A')
+    {
+        //-> do count again?
     }
     else
     {
-        
-        
-        //done
-        SearchResult _no_prp;
-        return _no_prp;
+        //exact match only? 
     }
-    
-    SearchResult prp;
-    return prp;   
-}    
+}   

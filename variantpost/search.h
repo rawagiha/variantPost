@@ -38,7 +38,7 @@ struct SearchResult
         std::vector<bool> & are_from_first_bam);
 };
 
-    SearchResult  _search_target(
+void _search_target(SearchResult &,
                         const std::string &,
                         const std::string &,
                         const int,

@@ -379,6 +379,8 @@ void prefilter_candidates(
             candidates.pop_back();  
         }
     }
+
+    candidates.shrink_to_fit();
 }
 
 

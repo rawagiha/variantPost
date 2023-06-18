@@ -292,3 +292,19 @@ void classify_cand_indel_reads(
     candidates.clear();
     candidates.shrink_to_fit();
 }
+
+void reclassify_candidates(Reads& candidates, Reads& targets)
+{
+    std::cout << candidates.size() << " " << candidates.capacity() << std::endl;
+    Reads tmp;
+    for (size_t i = 0; i < candidates.size(); ++i)
+    {
+        if (candidates[i].is_contig_member) transfer_elem(targets, candidates, i);
+        else transfer_elem(tmp, candidates, i);
+    }
+    
+    std::swap(candidates, tmp);
+    
+    std::cout << candidates.size() << " " << candidates.capacity() << std::endl;    
+}
+

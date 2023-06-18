@@ -35,6 +35,7 @@ void transfer_vector(std::vector<A> & dest, std::vector<A> & src)
        );
 
     src.clear();
+    src.shrink_to_fit();
 }
 
 //transfer i-th elem to destination vector

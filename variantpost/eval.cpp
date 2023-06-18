@@ -265,6 +265,18 @@ void annot_nearest_variant(
     }
 }
 
+inline bool pass_gap_check(AlnResult& rslt, const UserParams& user_params)
+{
+    if (rslt.variants.empty()) return false;
+    
+    annot_end_mappping(rslt, user_params);
+    if (rslt.is_well_ref_mapped && !has_gaps(rslt.cigar_str))
+    {
+        return false;
+    }
+    
+    return true;
+}
 
 void eval_by_variant(
     AlnResult& rslt,
@@ -273,10 +285,8 @@ void eval_by_variant(
     LocalReference& loc_ref
 )
 {
-    if (rslt.variants.empty()) return;
-
-    annot_end_mappping(rslt, user_params);
-
+    if (!pass_gap_check(rslt, user_params)) return;
+    
     annot_nearest_variant(
         target.lpos,
         target.pos,
@@ -314,9 +324,7 @@ void eval_by_variant_lst(
     LocalReference& loc_ref
 )
 {
-    if (rslt.variants.empty()) return;
-
-    annot_end_mappping(rslt, user_params);
+    if (!pass_gap_check(rslt, user_params)) return;
 
     size_t total_match = 0, indel_match = 0;
     for (const auto& simple : simples)
@@ -346,10 +354,8 @@ void eval_by_variant_lst(
     }
 }
 
-void annot_alignment(
-    Contig& contig,
-    const AlnResult& rslt
-)
+
+void annot_alignment(Contig& contig, const AlnResult& rslt)
 {
     int genomic_pos = rslt.genomic_start_pos; 
 
@@ -357,9 +363,6 @@ void annot_alignment(
     const std::string& ref_seq = rslt.ref_seq;
     const std::string& quals = rslt.quals;
     const std::vector<Variant>& variants = rslt.variants;
-    
-    //std::vector<int> positions, skip_starts, skip_ends;
-    //std::vector<std::string> ref_bases, alt_bases, base_quals;
     
     int op_len;
     char op = '\0', prev_op = '\0';
@@ -439,12 +442,8 @@ void annot_alignment(
 }
 
 
-
-
-
-
 //to be rename...
-void eval_by_aln(
+char eval_by_aln(
     Contig& contig,
     const Variant& target,
     const UserParams& user_params,
@@ -490,7 +489,6 @@ void eval_by_aln(
 
         postprocess_alignment(rslt, pos_vec, contig, loc_ref, aln);
         
-        std::cout << aln.cigar_string << std::endl;
         if (target.is_complex)
         {
             eval_by_variant_lst(rslt, simples, user_params, loc_ref);
@@ -511,7 +509,7 @@ void eval_by_aln(
                 }
             }
             std::cout << std::endl;
-            return;   
+            return 'A';   
         }
         else if (rslt.is_passed)
         {
@@ -520,10 +518,11 @@ void eval_by_aln(
 
     }
     
-    std::cout << "suggested ?? " << contig.by_kmer_suggestion << std::endl;
+    std::cout << rslts.size() << "  <-size "  << "suggested ?? " << contig.by_kmer_suggestion << std::endl;
     
     // if made (target guaranteed)  -> do most stable -> check for extension -> ext -> annot align
     // if suggested -> use most stable with check has or not
     // if made => 
     
+    return 'B';
 } 

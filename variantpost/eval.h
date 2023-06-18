@@ -40,7 +40,7 @@ struct AlnResult
 
 
 
-void eval_by_aln(
+char eval_by_aln(
     Contig& contig,
     const Variant& target,
     const UserParams& user_params,

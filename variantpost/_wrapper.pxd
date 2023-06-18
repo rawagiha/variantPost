@@ -3,11 +3,17 @@ from libcpp.vector cimport vector
 from libcpp cimport bool as bool_t
 
 cdef object  search_target(
-                string &,
-                string &,
+                object, 
+                object,
+                int, #chrom_len
+                bint, #exclude dups
+                int, #window
+                int, #downsample
+                string,
+                str,
                 int,
-                string &,
-                string &,
+                string,
+                string,
                 int, #map qual
                 int, #base qual 
                 float, #low qual rate
@@ -20,15 +26,15 @@ cdef object  search_target(
                 int, 
                 int,
                 #string &, 
-                vector[string] &,
-                vector[bool_t] &, 
-                vector[string] &,
-                vector[int] &, 
-                vector[int] &,
-                vector[string] &,
+                #vector[string] &,
+                #vector[bool_t] &, 
+                #vector[string] &,
+                #vector[int] &, 
+                #vector[int] &,
+                #vector[string] &,
                 #vector[string] &,           
-                vector[vector[int]] &, 
-                vector[int] &,
-                vector[bool_t] &
+                #vector[vector[int]] &, 
+                #vector[int] &,
+                #vector[bool_t] &
 )
 

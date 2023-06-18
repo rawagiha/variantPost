@@ -63,19 +63,19 @@ class VariantAlignment(object):
         #########
         
        #processed reads for c++ wrapper
-        preprocessed_pileup = preprocess(
-            chrom,
-            pos,
-            chrom_len,
-            bam,
-            second_bam,
-            unspliced_local_reference,
-            unspliced_local_reference_start,
-            reference,
-            exclude_duplicates,
-            window,
-            downsample_threshold,
-        )
+        #preprocessed_pileup = preprocess(
+        #    chrom,
+        #    pos,
+        #    chrom_len,
+        #    bam,
+        #    second_bam,
+        #    unspliced_local_reference,
+        #    unspliced_local_reference_start,
+        #    reference,
+        #    exclude_duplicates,
+        #    window,
+        #    downsample_threshold,
+        #)
        
         tt = time.time()
         print(tt -t, "preprosess")
@@ -86,8 +86,14 @@ class VariantAlignment(object):
             skips,
             annotated_reads,
         ) = search_target(
+                bam,
+                second_bam,
+                chrom_len,
+                exclude_duplicates,
+                window,
+                downsample_threshold,
                 fastafile,
-                chrom.encode(), 
+                chrom, 
                 pos, ref.encode(), alt.encode(),
                 mapping_quality_threshold,
                 base_quality_threshold, 
@@ -100,15 +106,15 @@ class VariantAlignment(object):
                 local_threshold,
                 unspliced_local_reference_start, 
                 unspliced_local_reference_end, 
-                preprocessed_pileup.read_names,
-                preprocessed_pileup.are_reverse,
-                preprocessed_pileup.cigar_strings,
-                preprocessed_pileup.aln_starts,
-                preprocessed_pileup.aln_ends,
-                preprocessed_pileup.read_seqs,
-                preprocessed_pileup.qual_seqs,
-                preprocessed_pileup.mapqs,
-                preprocessed_pileup.are_first_bam
+                #preprocessed_pileup.read_names,
+                #preprocessed_pileup.are_reverse,
+                #preprocessed_pileup.cigar_strings,
+                #preprocessed_pileup.aln_starts,
+                #preprocessed_pileup.aln_ends,
+                #preprocessed_pileup.read_seqs,
+                #preprocessed_pileup.qual_seqs,
+                #preprocessed_pileup.mapqs,
+                #preprocessed_pileup.are_first_bam
         )
 
         #for a in annotated_reads:
