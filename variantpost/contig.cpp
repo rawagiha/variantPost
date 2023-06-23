@@ -1,13 +1,15 @@
 #include <random>
+#include <string>
+#include <climits>
 #include <utility>
 #include <iostream>
 #include <iterator>
 #include <algorithm>
+#include <string_view>
 
 #include "util.h"
 #include "merge.h"
 #include "reads.h"
-#include "match.h"
 #include "contig.h"
 
 
@@ -71,10 +73,24 @@ void unite_coordinates(Coord& coord, const Reads& reads)
 }
 
 
-void find_seed_substitute_reads()
+//experimental
+bool is_easy_case(const Reads& reads, Reads& seeds)
 {
-//later
+    if (reads.size() < 3) return false;   
+    
+    size_t mid_idx = reads.size() / 2;
+    
+    if (reads[mid_idx].dist_to_non_target == INT_MAX 
+        && reads[mid_idx].dist_to_clip == INT_MAX
+        && reads[mid_idx].central_score > 0.4) 
+    {
+        seeds.push_back(reads[mid_idx]);
+        return true;
+    } 
+    
+    return false;                   
 }
+
 
 void find_seed_indel_reads(
     Reads& seeds, 
@@ -88,7 +104,7 @@ void find_seed_indel_reads(
     for (const auto& read : targets)
     {
         if (read.nonref_lq_rate < user_param.lq_rate_thresh
-            && read.seq.find("N") == std::string::npos)
+            && read.seq.find('N') == std::string_view::npos)
         {
             clean_targets.push_back(read);
         }
@@ -113,31 +129,34 @@ void find_seed_indel_reads(
         return;
     }
     
-    std::vector<std::string> non_ref_sigs;
+    std::vector<std::string_view> non_ref_sigs;
     non_ref_sigs.reserve(clean_targets.size());
     for (const auto& read : clean_targets)
     {
         non_ref_sigs.push_back(read.non_ref_signature);
     }
    
-    std::string common_sig = find_commonest_str(non_ref_sigs);
+    std::string_view common_sig = find_commonest_str(non_ref_sigs);
 
     Reads tmp;
     tmp.reserve(clean_targets.size());
     for (const auto& read: clean_targets)
     {
-        if (read.non_ref_signature == common_sig)
+        if (static_cast<std::string_view>(read.non_ref_signature) == common_sig)
         {
             tmp.push_back(read);
         }
     }
-
+    
     sort_by_start(tmp);
     
+    //if (is_easy_case(tmp, seeds)) return;
+    
+    std::mt19937 engine(123); 
     if (tmp.size() > seed_size) // seed_size>2
     {     
         std::shuffle(
-            tmp.begin() + 1, tmp.end() - 1, std::default_random_engine(123)
+            tmp.begin() + 1, tmp.end() - 1, engine
         );
         
         seeds.push_back(tmp[0]);
@@ -204,8 +223,8 @@ Seq merge_target_seeds(const Reads& seeds)
     for (const auto& seed : seeds)
     {
         inputs.emplace_back(
-            seed.seq,
-            seed.base_quals,
+            std::string(seed.seq),
+            std::string(seed.base_quals),
             find_target_start(seed)
         );
     }
@@ -233,9 +252,9 @@ void set_ref_info(
 }
 
 
-std::string common_splice_ptrn(const Reads& reads)
+std::string_view common_splice_ptrn(const Reads& reads)
 {
-    std::vector<std::string> common_spls;
+    std::vector<std::string_view> common_spls;
     common_spls.reserve(reads.size());
     for (const auto& read : reads)
     {
@@ -254,31 +273,24 @@ void make_contig(
     LocalReference& loc_ref
 )
 {
-    if (target.is_substitute)
-    {
-        // do later
-    }
-    else
-    {
-        Reads seeds;
-        size_t seed_size = 5;
-        find_seed_indel_reads(seeds, targets, user_params, seed_size);
+   Reads seeds;
+   size_t seed_size = 5;
+   find_seed_indel_reads(seeds, targets, user_params, seed_size);
 
-        Seq _merged = merge_target_seeds(seeds);
+   Seq _merged = merge_target_seeds(seeds);
         
-        Coord coord;
-        unite_coordinates(coord, seeds);
-        set_ref_info(contig, coord, loc_ref);
+   Coord coord;
+   unite_coordinates(coord, seeds);
+   set_ref_info(contig, coord, loc_ref);
 
-        contig.furnish(_merged, target);
-    }
+   contig.furnish(_merged, target);
 }
 
-
 void mock_target_seq(
-    std::string& mocked_seq,
-    std::string& mocked_ref_seq,
-    Coord& mocked_coord,
+    Contig& contig,
+    //std::string& mocked_seq,
+    //std::string& mocked_ref_seq,
+    //Coord& mocked_coord,
     const Variant& target,
     const UserParams& user_params,
     LocalReference& loc_ref
@@ -293,6 +305,9 @@ void mock_target_seq(
         user_params.kmer_size * n
     );
 
+    contig.mock_lt_len = lt_frag.size();
+    contig.mock_lt_end_idx = contig.mock_lt_len - 1; 
+    
     std::string mid_frag = "";
     if (target.is_complex)
     {
@@ -303,23 +318,29 @@ void mock_target_seq(
         mid_frag = target.is_ins ? target.alt.substr(1) : "";
     }
 
+    contig.mock_mid_len = mid_frag.size();
+    contig.mock_rt_start_idx = contig.mock_lt_end_idx + contig.mock_mid_len;
+
     std::string rt_frag = loc_ref.fasta.getSubSequence(
         loc_ref.chrom, 
         target.variant_end_pos - 1, 
         user_params.kmer_size * n
     );
     
-    mocked_seq = lt_frag + mid_frag + rt_frag;
-
+    contig.mocked_seq = lt_frag + mid_frag + rt_frag;
+    contig.mock_len = contig.mocked_seq.size();
+    contig.mock_rt_len = contig.mocked_seq.size() - contig.mock_rt_start_idx;
+    
+    
     int mock_start = target.pos - offset - user_params.kmer_size * n;
-    int mock_len = target.ref_len - 1 + offset + user_params.kmer_size * n * 2;
-    mocked_ref_seq = loc_ref.fasta.getSubSequence(
+    //int mock_len = target.ref_len - 1 + offset + user_params.kmer_size * n * 2;
+    contig.mocked_ref = loc_ref.fasta.getSubSequence(
         loc_ref.chrom,
         mock_start,
-        mock_len
+        contig.mock_len
     );
     
-    mocked_coord.emplace_back(mock_start + 1, mock_start + mock_len);
+    contig.mocked_coord.emplace_back(mock_start + 1, mock_start + contig.mock_len);
 }
 
 
@@ -333,16 +354,18 @@ void prefilter_candidates(
 )
 {
     mock_target_seq(
-        contig.mocked_seq, 
-        contig.mocked_ref, 
-        contig.mocked_coord,
+        contig,
+        //contig.mocked_seq, 
+        //contig.mocked_ref, 
+        //contig.mocked_coord,
         target, 
         user_params, 
         loc_ref
     );
 
-    Kmers target_kmers = diff_kmers(
-        contig.mocked_seq, contig.mocked_ref,  user_params.kmer_size
+    Kmers target_kmers;
+    diff_kmers(
+        contig.mocked_seq, contig.mocked_ref,  user_params.kmer_size, target_kmers
     );
 
     for (auto& read : candidates)
@@ -390,12 +413,12 @@ void prioritize_reads_for_contig_construction(
     const UserParams& user_params
 )
 {
-    std::string common_spl_ptrn = common_splice_ptrn(candidates);
+    std::string_view common_spl_ptrn = common_splice_ptrn(candidates);
     
     prioritized.reserve(candidates.size());
     for (const auto& read : candidates)
     {
-        if (read.splice_signature == common_spl_ptrn)
+        if (static_cast<std::string_view>(read.splice_signature)== common_spl_ptrn)
         {
             if (read.nonref_lq_rate < user_params.lq_rate_thresh)
             {
@@ -430,7 +453,8 @@ void concat_top_tens(
      sort_by_start(top_tens);
 }
 
-
+//obsolete?
+/*
 void flag_contig_member(const Reads& used, Reads& candidates)
 {
     for (auto& read : candidates)
@@ -440,7 +464,7 @@ void flag_contig_member(const Reads& used, Reads& candidates)
             read.is_contig_member = true;
         }
     }
-}
+}*/
 
 
 void suggest_contig(
@@ -499,10 +523,14 @@ void suggest_contig(
         for (const auto& read : top_tens)
         {
             
-            suggestions.emplace_back(read.seq, read.base_quals, -1);
+            suggestions.emplace_back(
+                std::string(read.seq), 
+                std::string(read.base_quals), 
+                -1
+            );
         }
         
-        flag_contig_member(top_tens, candidates);  
+        //flag_contig_member(top_tens, candidates);  
         unite_coordinates(coord, top_tens);
     }
     else
@@ -518,10 +546,14 @@ void suggest_contig(
         
         for (const auto& read : prioritized)
         {
-            suggestions.emplace_back(read.seq, read.base_quals, -1);
+            suggestions.emplace_back(
+                std::string(read.seq), 
+                std::string(read.base_quals), 
+                -1
+            );
         }
 
-        flag_contig_member(prioritized, candidates);
+        //flag_contig_member(prioritized, candidates);
         unite_coordinates(coord, prioritized);
     }
     
@@ -534,5 +566,4 @@ void suggest_contig(
     
     set_ref_info(contig, coord, loc_ref);  
 }
-
 

@@ -10,6 +10,8 @@
 #include "contig.h"
 
 
+SearchResult::SearchResult() {}
+
 
 
 void from_target_reads(
@@ -33,102 +35,64 @@ void from_candidate_reads(
     LocalReference& loc_ref
 );
 
-/*
-ProcessedPileup prepare_processed_rslt(const Contig & contig,
-                                       int target_pos,
-                                       std::string & target_ref,
-                                       std::string & target_alt,
-                                       const std::vector<Read> & targets,
-                                       const std::vector<Read> & candidates,
-                                       const std::vector<Read> & non_targets);
-*/
 
-SearchResult::SearchResult() {}
-
-/*
-ProcessedPileup::ProcessedPileup
-(
-    const std::vector<int> & positions,
-    const std::vector<std::string> & ref_bases,
-    const std::vector<std::string> & alt_bases,
-    const std::vector<std::string> & base_quals,
-    const std::vector<int> & skip_starts,
-    const std::vector<int> & skip_ends,
-    const int target_pos,
-    const std::string ref,
-    const std::string alt,
-    std::vector<std::string> & read_names,
-    std::vector<bool> & are_reverse,
-    std::vector<int> & target_statuses,
-    std::vector<bool> & are_from_first_bam
-) : positions(positions), ref_bases(ref_bases), alt_bases(alt_bases), base_quals(base_quals),
-    skip_starts(skip_starts), skip_ends(skip_ends),
-    target_pos(target_pos), ref(ref), alt(alt), 
-    read_names(read_names), are_reverse(are_reverse),
-    target_statuses(target_statuses), 
-    are_from_first_bam(are_from_first_bam)                
-{}
-*/
-
-void pack_user_params(
-    UserParams& user_params,
-
-    const int mapq_thresh,
-    const int base_q_thresh,
-    const double low_q_base_rate_thresh,
-    const int match_score,
-    const int mismatch_penal,
-    const int gap_open_penal,
-    const int gap_ext_penal,
-    const int kmer_size,
-    const int local_thresh
-)
+void SearchResult::fill_read_info(const Reads& reads, const int target_status)
 {
-    user_params.mapq_thresh = mapq_thresh;
-    user_params.base_q_thresh = static_cast<char>(base_q_thresh + 33);
-    user_params.lq_rate_thresh = low_q_base_rate_thresh;
-    user_params.match_score = match_score;
-    user_params.mismatch_penal = mismatch_penal;
-    user_params.gap_open_penal = gap_open_penal;
-    user_params.gap_ext_penal = gap_ext_penal;
-    user_params.kmer_size = kmer_size;
-    user_params.local_thresh = local_thresh;
+    for (const auto& read : reads)
+    {
+        read_names.push_back(std::string(read.name));
+        are_reverse.push_back(read.is_reverse);
+        target_statuses.push_back(target_status);
+        are_from_first_bam.push_back(read.is_from_first_bam);          
+    }
 }
-      
 
-void pack_reference_info(
-    LocalReference& loc_ref,
-
-    const std::string& fastafile,
-    const std::string& chrom,
-    const int ref_start,
-    const int ref_end
+void SearchResult::report(
+    const Contig& contig,
+    const Reads& targets,
+    const Reads& non_targets
+    //const Reads& undetermined
 )
 {
-    loc_ref.chrom = chrom;
-    loc_ref.start = ref_start;
-    loc_ref.end = ref_end;
-    loc_ref.set_up(fastafile);  
+    //size_t buff_size = targets.size() + non_targets.size() + undetermined.size();
+    size_t buff_size = targets.size() + non_targets.size();
+    
+    read_names.reserve(buff_size);
+    are_reverse.reserve(buff_size);
+    target_statuses.reserve(buff_size);
+    are_from_first_bam.reserve(buff_size);
+    
+    fill_read_info(targets, 1);
+    fill_read_info(non_targets, 0);
+    //fill_read_info(undetermined, -1);
+    
+    positions = contig.positions;
+    ref_bases = contig.ref_bases;
+    alt_bases = contig.alt_bases;
+    skip_starts = contig.skip_starts;
+    skip_ends = contig.skip_ends;
 }
 
 
-Variant pack_target_info(
+
+
+Variant prep_target(
     const int pos, 
     const std::string& ref, 
     const std::string& alt,
     LocalReference& loc_ref
 )
 {   
-    Variant target = Variant(pos, ref, alt);
+    Variant target(pos, ref, alt);
     target.set_leftmost_pos(loc_ref);
     target.set_rightmost_pos(loc_ref); 
-    target.is_shiftable = (target.lpos != target.rpos) ? true : false;
+    target.is_shiftable = target.lpos != target.rpos ? true : false;
     
     return target;    
 }
 
 
-void pack_read_info(
+void prep_reads(
     Reads& reads,
     const std::vector<std::string>& read_names,
     const std::vector<bool>& are_reverse,
@@ -142,22 +106,21 @@ void pack_read_info(
 )
 {
     size_t n_reads = read_names.size();
-    
     reads.reserve(n_reads);
     for (size_t i = 0; i < n_reads; ++i)
     {
         reads.emplace_back(
-            read_names[i], 
-            are_reverse[i], 
-            cigar_strs[i], 
-            aln_starts[i], 
-            aln_ends[i], 
-            read_seqs[i], 
-            quals[i], 
-            mapqs[i], 
+            read_names[i],
+            are_reverse[i],
+            cigar_strs[i],
+            aln_starts[i],
+            aln_ends[i],
+            read_seqs[i],
+            quals[i],
+            mapqs[i],
             are_from_first_bam[i]
-        ); 
-    }             
+        );
+    }
 }
 
 
@@ -179,7 +142,7 @@ void _search_target(
     //user defined 
     const int mapq_thresh,
     const int base_q_thresh,
-    const double low_q_base_rate_thresh,
+    const double lq_base_rate_thresh,
     const int match_score,
     const int mismatch_penal,
     const int gap_open_penal,
@@ -192,7 +155,7 @@ void _search_target(
     //reads mapped to the region of interest 
     const std::vector<std::string>& read_names,
     const std::vector<bool>& are_reverse,
-    const std::vector<std::string> & cigar_strs,
+    const std::vector<std::string>& cigar_strs,
     const std::vector<int>& aln_starts,
     const std::vector<int>& aln_ends,
     const std::vector<std::string>& read_seqs,
@@ -207,12 +170,11 @@ void _search_target(
     // 3) ref_start/ref_end must be non-N region
     
     // packing data from Python 
-    UserParams user_params;
-    pack_user_params(
-        user_params, 
+    
+    UserParams user_params(
         mapq_thresh, 
         base_q_thresh, 
-        low_q_base_rate_thresh,
+        lq_base_rate_thresh,
         match_score, 
         mismatch_penal, 
         gap_open_penal, 
@@ -221,31 +183,23 @@ void _search_target(
         local_thresh 
     );
 
-    LocalReference loc_ref;   
-    pack_reference_info(
-        loc_ref,
-        fastafile, 
-        chrom, 
-        ref_start, 
-        ref_end
-    );
+    LocalReference loc_ref(fastafile, chrom, ref_start, ref_end);   
 
-    Variant target = pack_target_info(pos, ref, alt, loc_ref);
+    Variant target = prep_target(pos, ref, alt, loc_ref);
     
-    Reads reads = {};
-    pack_read_info(
+    Reads reads;
+    prep_reads(
         reads, 
         read_names, 
-        are_reverse, 
-        cigar_strs, 
-        aln_starts, 
-        aln_ends, 
-        read_seqs, 
-        quals, 
-        mapqs, 
+        are_reverse,
+        cigar_strs,
+        aln_starts,
+        aln_ends,
+        read_seqs,
+        quals,
+        mapqs,
         are_from_first_bam
     );
-       
     
     // read processing
     annotate_reads(
@@ -257,7 +211,7 @@ void _search_target(
     
     Reads targets, candidates, non_targets;
     classify_reads(reads, targets, candidates, non_targets, user_params);
-    
+       
     // contig processing
     Contig contig;
     if (!targets.empty())
@@ -271,9 +225,6 @@ void _search_target(
             user_params,
             loc_ref
         );
-        
-        std::cout << targets.size() << " " << candidates.size() << " " << non_targets.size() << std::endl;
-        return;    
     }
     else if (!candidates.empty()) 
     {   
@@ -286,15 +237,13 @@ void _search_target(
             user_params,
             loc_ref
         );
-
-        return;  
     }
-        
-    //no resutl 
-     
+    
+    std::cout << targets.size() << " " << non_targets.size() << std::endl;    
+    
+    rslt.report(contig, targets, non_targets); 
     return;
 }   
-
 
 
 void from_target_reads(
@@ -316,7 +265,8 @@ void from_target_reads(
     );
                  
     char _eval = eval_by_aln(contig, target, user_params, loc_ref);
-    
+    std::cout << _eval << " " << std::endl;
+     
     if (_eval == 'C')
     {
         transfer_vector(non_targets, targets);
@@ -347,11 +297,27 @@ void from_target_reads(
         //ext
     }    
     
+    // 'A'
     transfer_vector(targets, lt_matches);
     transfer_vector(targets, mid_matches);
     transfer_vector(targets, rt_matches);
 }
 
+
+
+void swith_to_mock_layout(Contig& contig)
+{
+    contig.seq = contig.mocked_seq;
+    contig.ref_seq = contig.mocked_ref;
+    contig.coordinates = contig.mocked_coord;
+    contig.len = contig.mock_len;
+    contig.lt_end_idx = contig.mock_lt_end_idx;
+    contig.lt_len = contig.mock_lt_len;
+    contig.mid_len = contig.mock_mid_len;
+    contig.rt_len = contig.mock_rt_len;
+    contig.rt_start_idx = contig.mock_rt_start_idx;
+       
+}
 
 void from_candidate_reads(
     Contig& contig,
@@ -386,12 +352,19 @@ void from_candidate_reads(
         
     char _eval = eval_by_aln(contig, target, user_params, loc_ref);
         
-    if (_eval == 'A')
+    Reads undetermined;
+    if (_eval != 'A')
     {
-        //-> do count again?
-    }
-    else
-    {
-        //exact match only? 
-    }
+        swith_to_mock_layout(contig);
+    }    
+        
+    classify_cand_indel_read_2(
+        targets,
+        candidates,
+        non_targets,
+        undetermined,
+        target,
+        contig,
+        user_params
+    );
 }   

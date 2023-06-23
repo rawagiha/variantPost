@@ -16,18 +16,18 @@ extensions = [
         "variantpost.variantalignment",
         ["variantpost/variantalignment.pyx"],
         language="c++",
-        extra_compile_args=['-O3'],
-        extra_link_args=['-O3']
+        extra_compile_args=["-O3", "-std=c++17"],
+        extra_link_args=["-O3", "-std=c++17"],
     ),
     Extension(
         "variantpost.preprocessor", ["variantpost/preprocessor.pyx"], language="c++",
-        extra_compile_args=['-O3'],
-        extra_link_args=['-O3']
+        extra_compile_args=["-O3", "-std=c++17"],
+        extra_link_args=["-O3", "-std=c++17"],
     ),
     Extension(
-        "variantpost._wrapper",
+        "variantpost.cy_search",
         [
-            "variantpost/_wrapper.pyx",
+            "variantpost/cy_search.pyx",
             #"variantpost/processor.cpp",
             "variantpost/eval.cpp",
             "variantpost/search.cpp",
@@ -48,9 +48,9 @@ extensions = [
             #"variantpost/unaligned_target.cpp",
         ],
         language="c++",
-        extra_compile_args=['-O3'],
-        extra_link_args=['-O3']
+        extra_compile_args=["-O3", "-std=c++17"],
+        extra_link_args=["-O3", "-std=c++17"],
     ),
 ]
 
-setup(cmdclass={"build_ext": BuildExt}, ext_modules=cythonize(extensions, annotate=False))
+setup(cmdclass={"build_ext": BuildExt}, ext_modules=cythonize(extensions, annotate=False, language_level="3"),)

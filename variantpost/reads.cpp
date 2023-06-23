@@ -1,42 +1,56 @@
-#include <string>
 #include <vector>
-#include <climits>
-#include <iostream>
-#include <algorithm>
+#include <string>
+#include <string_view>
 
-#include "util.h"
 #include "reads.h"
+#include "util.h"
 
-Read::Read() {}
+
+inline char offset_qual(int q) 
+{
+    return static_cast<char>(q + 33);
+}
+
+
+std::string to_qual_str (const std::vector<int>& qual_vec) 
+{
+    std::vector<char> res (qual_vec.size());
+    std::transform (qual_vec.begin(), qual_vec.end(), res.begin(), offset_qual);
+    std::string q_str (res.begin(), res.end());
+    return q_str;
+}
+
 
 Read::Read(
-    const std::string& name, 
+    std::string_view name, 
     const bool is_reverse,
-    const std::string& cigar_str,
-    const int aln_start, 
+    std::string_view cigar_str,
+    const int aln_start,
     const int aln_end,
-    const std::string seq, 
+    std::string_view seq,
     const std::vector<int>& quals,
-    const int mapq, 
+    const int mapq,
     const bool is_from_first_bam
-) : name(name), 
+) : name(name),
     is_reverse(is_reverse), 
     is_from_first_bam(is_from_first_bam),
     mapq(mapq), 
     aln_start(aln_start), 
     aln_end(aln_end), 
     seq(seq),
-    cigar_str(cigar_str)
+    cigar_str(cigar_str) 
 {
+    base_quals = to_qual_str(quals);
+    
     cigar_vector = to_cigar_vector(cigar_str);
-    base_quals = to_fastq_qual(quals);
-    
-    start_offset = (cigar_vector[0].first == 'S') ? cigar_vector[0].second : 0;
-    end_offset = (cigar_vector.back().first == 'S') ? cigar_vector.back().second : 0;
-    
+    start_offset 
+        = cigar_vector.front().first == 'S' ? cigar_vector.front().second : 0;
+    end_offset 
+        = cigar_vector.back().first == 'S' ? cigar_vector.back().second : 0;
+
     read_start = aln_start - start_offset;
     read_end = aln_end + end_offset;
-}   
+}
 
 
 void sort_by_start(Reads& reads)
@@ -68,11 +82,74 @@ void sort_by_kmer(Reads& reads)
 }
 
 
+std::string_view get_unspliced_ref_seq(
+    const int loc_ref_start, 
+    std::string_view loc_ref_seq,
+    const int aln_start, 
+    const int aln_end
+)
+{
+  int start_idx = aln_start - loc_ref_start;
+  size_t expected_ref_len = aln_end - aln_start + 1;
+   
+  if (start_idx >= 0) 
+  {
+    std::string_view fitted_ref = loc_ref_seq.substr(start_idx, expected_ref_len);
+    if (fitted_ref.size() == expected_ref_len) //may be short near rt end
+    {
+        return fitted_ref;
+    }
+  }
+
+  // failed to fit
+  return "";
+}
+
+
+std::string_view get_spliced_ref_seq(
+    std::string& ref_seq,
+    const std::string& chrom, 
+    FastaReference & fr,
+    const int aln_start, 
+    const std::vector<std::pair<char, int>> & cigar_vector
+)
+{
+    
+    int curr_pos = aln_start - 1;
+    
+    char op;
+    int op_len;
+    for (const auto & c : cigar_vector) {
+        op = c.first;
+        op_len = c.second;
+        
+        switch (op) 
+        {
+            case 'M':
+            case 'X':
+            case 'D':
+                ref_seq += fr.getSubSequence(chrom, curr_pos, op_len);
+                curr_pos += op_len;
+                break;
+            case 'N':
+                curr_pos += op_len;
+                break;
+            default:
+                break;
+        }
+
+    }
+    
+    return static_cast<std::string_view>(ref_seq);     
+}
+
+
 void annot_ref_seq(Read& read, LocalReference& loc_ref)
 { 
     if (read.cigar_str.find('N') != std::string::npos)
     {
         read.ref_seq = get_spliced_ref_seq(
+            read.spliced_ref_seq,
             loc_ref.chrom, 
             loc_ref.fasta, 
             read.aln_start, 
@@ -101,12 +178,13 @@ void annot_splice_pattern(Read& read)
     char op;
     int op_len;
     int curr_pos = read.read_start;
-    for (const auto & c : read.cigar_vector) 
+    for (const auto& c : read.cigar_vector) 
     {
         op = c.first;
         op_len = c.second;
         
-        switch (op) {
+        switch (op) 
+        {
             case 'M':
             case 'S': //read_start used
             case 'D':
@@ -126,14 +204,21 @@ void annot_splice_pattern(Read& read)
     }
 
     curr_pos = read.read_start;
-    for (const auto& segment : read.skipped_segments) {
+    for (const auto& segment : read.skipped_segments) 
+    {
         read.aligned_segments.emplace_back(curr_pos, segment.first - 1);
         curr_pos = segment.second + 1;
     }
     read.aligned_segments.emplace_back(curr_pos, read.read_end);
 }   
-                                                                            
 
+
+inline bool is_ascending(const int a, const int b, const int c)
+{
+    return (a <= b && b <= c);
+}
+
+                                                                    
 void covering_patterns(Read& read, const Variant& target)   
 {
     if (!read.skipped_segments.empty()) 
@@ -267,6 +352,7 @@ void annot_covering_ptrn(
         if (read.aln_start <= target.pos 
             && target.pos <= read.aln_end) read.is_tight_covering = true;
         
+        // experimental central score 
         if (target.pos - read.covering_start > read.covering_end - target.pos)
         {
             read.central_score = (read.covering_end - target.pos) 
@@ -578,14 +664,6 @@ void annot_local_ptrn(
 
 void eval_read_quality(Read& read, const UserParams& user_params)
 {
-    double overall_cnt = 0.0;
-    for (const char q : read.base_quals)
-    {
-        if (q <= user_params.base_q_thresh) overall_cnt += 1.0;
-    }
-    read.overall_lq_rate = overall_cnt / read.base_quals.length();
-    
-    
     if (!read.non_ref_quals.empty())
     {
         double non_ref_cnt = 0.0;
@@ -593,6 +671,7 @@ void eval_read_quality(Read& read, const UserParams& user_params)
         {
             if (q <= user_params.base_q_thresh) non_ref_cnt += 1.0;
         }
+        
         read.nonref_lq_rate = non_ref_cnt / read.non_ref_quals.length();
     }
 }
@@ -605,7 +684,7 @@ void annotate_reads(
     LocalReference& loc_ref
 )
 {
-    for (auto & read : reads)
+    for (auto& read : reads)
     {
         annot_ref_seq(read, loc_ref);       
         annot_splice_pattern(read);

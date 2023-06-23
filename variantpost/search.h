@@ -4,6 +4,8 @@
 #include <string>
 #include <vector>
 
+#include "contig.h"
+
 struct SearchResult 
 {
     std::vector<int> positions;
@@ -22,20 +24,14 @@ struct SearchResult
 
     SearchResult();
                                                 
-    SearchResult(
-        const std::vector<int> & positions,
-        const std::vector<std::string> & ref_bases,
-        const std::vector<std::string> & alt_bases,
-        const std::vector<std::string> & base_quals,
-        const std::vector<int> & skip_starts,
-        const std::vector<int> & skip_ends,
-        const int target_pos,
-        const std::string ref,
-        const std::string alt,
-        std::vector<std::string> & read_names,
-        std::vector<bool> & are_reverse,
-        std::vector<int> & target_statuses,
-        std::vector<bool> & are_from_first_bam);
+    void fill_read_info(const Reads& reads, const int target_status);
+    
+    void report(
+        const Contig& contig,
+        const Reads& targets,
+        const Reads& non_targets
+        //const Reads& undetermined
+    );
 };
 
 void _search_target(SearchResult &,

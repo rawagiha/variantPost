@@ -38,6 +38,18 @@ void classify_cand_indel_reads(
     const UserParams& user_params
 );
 
+
+void classify_cand_indel_read_2(
+    Reads& targets,
+    Reads& candidates,
+    Reads& non_targets,
+    Reads& undetermined,
+    const Variant& target,
+    const Contig& contig,
+    const UserParams& user_params
+);
+
+
 void reclassify_candidates(Reads& candidates, Reads& targets);
 
 #endif

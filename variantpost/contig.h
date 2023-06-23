@@ -14,11 +14,20 @@ struct Contig
     
     bool by_kmer_suggestion = false;
     
-    //contig expected from input
+    //mocked from input
     std::string mocked_seq;
     std::string mocked_ref;
     Coord mocked_coord;
+    
+    size_t mock_len;
+    size_t mock_lt_end_idx;
+    size_t mock_lt_len;
+    size_t mock_mid_len;
+    size_t mock_rt_start_idx;
+    size_t mock_rt_len;
      
+    
+    //contig lyaout
     size_t len;
 
     size_t lt_end_idx;
@@ -52,7 +61,6 @@ void make_contig(
     LocalReference& loc_ref
 );
 
-
 void prefilter_candidates(
     Contig& contig,
     Reads& candidates,
@@ -69,6 +77,5 @@ void suggest_contig(
     const UserParams& user_params,
     LocalReference& loc_ref
 );
-
 
 #endif

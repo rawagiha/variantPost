@@ -3,6 +3,7 @@
 #include <vector>
 #include <string.h>
 #include <algorithm>
+#include <string_view>
 
 #include "util.h"
 #include "merge.h"
@@ -27,9 +28,9 @@ inline void to_right(std::string& allele, std::string& rt_seq)
 }
 
 
-inline bool is_shiftable(const std::string& allele)
+inline bool is_shiftable(std::string_view allele)
 {
-    return (*allele.begin() == *(allele.end() - 1));
+    return (allele.front() == allele.back());
 }
 
 
@@ -228,12 +229,12 @@ void classify_cand_indel_reads(
     const UserParams& user_params
 )
 {
-    Kmers target_kmers = diff_kmers(
-        contig.seq, contig.ref_seq, user_params.kmer_size
+    Kmers target_kmers;
+    diff_kmers(
+        contig.seq, contig.ref_seq, user_params.kmer_size, target_kmers
     );
     
     bool is_complete_tandem_repeat = ss.is_complete_tandem_repeat;
-
     
     Filter filter;
     Alignment aln;
@@ -253,11 +254,11 @@ void classify_cand_indel_reads(
         }
 
         candidates[i].kmer_score = count_kmer_overlap(candidates[i].seq, target_kmers);
-
+        
         if (candidates[i].kmer_score)
         {
             char match_rlst = indel_match_pattern(
-                candidates[i].seq,
+                std::string(candidates[i].seq),
                 contig,
                 ss,
                 filter,
@@ -293,6 +294,41 @@ void classify_cand_indel_reads(
     candidates.shrink_to_fit();
 }
 
+void classify_cand_indel_read_2(
+    Reads& targets,
+    Reads& candidates,
+    Reads& non_targets,
+    Reads& undetermined,
+    const Variant& target,
+    const Contig& contig,
+    const UserParams& user_params
+)
+{
+    ShiftableSegment ss;
+    annot_shiftable_segment(ss, target, contig);
+
+    Reads lt_matches, mid_matches, rt_matches;
+
+    classify_cand_indel_reads(
+        candidates,
+        non_targets, 
+            
+        lt_matches,
+        mid_matches,
+        rt_matches,
+
+        undetermined,
+        contig,
+        ss,
+        user_params
+    );
+        
+    transfer_vector(targets, lt_matches);
+    transfer_vector(targets, mid_matches);
+    transfer_vector(targets, rt_matches);
+}
+
+/*
 void reclassify_candidates(Reads& candidates, Reads& targets)
 {
     std::cout << candidates.size() << " " << candidates.capacity() << std::endl;
@@ -306,5 +342,5 @@ void reclassify_candidates(Reads& candidates, Reads& targets)
     std::swap(candidates, tmp);
     
     std::cout << candidates.size() << " " << candidates.capacity() << std::endl;    
-}
+}*/
 
