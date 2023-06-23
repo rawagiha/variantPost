@@ -288,9 +288,6 @@ void make_contig(
 
 void mock_target_seq(
     Contig& contig,
-    //std::string& mocked_seq,
-    //std::string& mocked_ref_seq,
-    //Coord& mocked_coord,
     const Variant& target,
     const UserParams& user_params,
     LocalReference& loc_ref
@@ -333,7 +330,6 @@ void mock_target_seq(
     
     
     int mock_start = target.pos - offset - user_params.kmer_size * n;
-    //int mock_len = target.ref_len - 1 + offset + user_params.kmer_size * n * 2;
     contig.mocked_ref = loc_ref.fasta.getSubSequence(
         loc_ref.chrom,
         mock_start,
@@ -355,9 +351,6 @@ void prefilter_candidates(
 {
     mock_target_seq(
         contig,
-        //contig.mocked_seq, 
-        //contig.mocked_ref, 
-        //contig.mocked_coord,
         target, 
         user_params, 
         loc_ref
@@ -565,5 +558,130 @@ void suggest_contig(
     contig.quals = merged_suggestions.base_quals;
     
     set_ref_info(contig, coord, loc_ref);  
+}
+
+
+void extend_contig(
+    Contig& contig,
+    const char eval,
+    Reads& lt_matches,
+    Reads& rt_matches,
+    LocalReference& loc_ref
+)
+{
+    if (eval == 'A') return;
+    
+    size_t i = 0, n = 3;
+    int ext_coord_start = contig.coordinates.front().first;
+    int ext_coord_end = contig.coordinates.back().second;
+    Coord ext_coord;
+    std::vector<Seq> inputs;
+    switch (eval)
+    { 
+        case 'L':
+        {    
+            if (lt_matches.empty()) return;
+        
+            sort_by_start(lt_matches);
+            //size_t i = 0;
+            size_t lim = std::min(n, lt_matches.size());
+            while (i < lim)
+            { 
+                if (i == 0)
+                {
+                    //twice
+                    inputs.emplace_back(
+                        std::string(lt_matches[i].seq), lt_matches[i].base_quals, -1);
+                    inputs.emplace_back(
+                        std::string(lt_matches[i].seq), lt_matches[i].base_quals, -1);
+                    ext_coord_start = lt_matches[i].aln_start;
+                }
+                else
+                {
+                    inputs.emplace_back(
+                        std::string(lt_matches[i].seq), lt_matches[i].base_quals, -1);
+                }
+
+                ++i;
+            }
+            
+            inputs.emplace_back(contig.seq, contig.quals, -1);
+            
+            ext_coord.emplace_back(ext_coord_start, ext_coord_end);
+            break; 
+        }
+        case 'R':
+        {
+            if (rt_matches.empty()) return;
+            
+            //twice
+            inputs.emplace_back(contig.seq, contig.quals, -1);
+            inputs.emplace_back(contig.seq, contig.quals, -1);
+            
+            sort_by_start(rt_matches); 
+            size_t n = 3;
+            size_t j = 0;
+            size_t last_idx = rt_matches.size() - 1;
+            while (j <= n)
+            { 
+                if (last_idx >= n - j)
+                {    
+                    inputs.emplace_back(
+                        std::string(rt_matches[last_idx - n + j].seq),
+                        rt_matches[last_idx - n + j].base_quals,
+                        -1
+                    );
+
+                    if (j == n)
+                        ext_coord_end = rt_matches[last_idx - n + j].aln_end;    
+                }
+                ++j;
+            } 
+            ext_coord.emplace_back(ext_coord_start, ext_coord_end);
+            break;
+       }
+       case 'E': 
+       {
+            if (lt_matches.empty())
+            {
+                //twice
+                inputs.emplace_back(contig.seq, contig.quals, -1);
+                inputs.emplace_back(contig.seq, contig.quals, -1);
+            }
+            else
+            {    
+                sort_by_start(lt_matches);
+
+                //twice
+                inputs.emplace_back(
+                    std::string(lt_matches[0].seq), lt_matches[0].base_quals, -1);
+                inputs.emplace_back(
+                    std::string(lt_matches[0].seq), lt_matches[0].base_quals, -1);
+                ext_coord_start = lt_matches[0].aln_start; 
+                
+                inputs.emplace_back(contig.seq, contig.quals, -1);      
+            }
+            
+            if (!rt_matches.empty())
+            {
+                inputs.emplace_back(
+                    std::string(rt_matches.back().seq), 
+                    rt_matches.back().base_quals, 
+                -1);
+
+                ext_coord_end = rt_matches.back().aln_end;
+            }
+            ext_coord.emplace_back(ext_coord_start, ext_coord_end);
+            break;
+        }      
+    }
+
+    Seq exteded = merge_reads(inputs);
+    
+    contig.seq = exteded.seq;
+    contig.quals = exteded.base_quals;
+    contig.coordinates = ext_coord;
+
+    set_ref_info(contig, ext_coord, loc_ref);
 }
 

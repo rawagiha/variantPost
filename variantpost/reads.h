@@ -42,8 +42,8 @@ struct Read
     std::vector<std::pair<char, int>> cigar_vector;
     
     //maps/skips(splice)
-    Coord aligned_segments;
-    Coord skipped_segments;
+    Coord aligned_segments = {};
+    Coord skipped_segments= {};
 
     //non reference event info
     std::vector<Variant> variants;
@@ -60,9 +60,9 @@ struct Read
     bool may_be_complex = false; 
     
     //annotated patterns    
-    char covering_ptrn;
-    char clip_ptrn;
-    char local_ptrn;   
+    char covering_ptrn = '\0';
+    char clip_ptrn = '\0';
+    char local_ptrn = '\0';   
     
     //metrics   
     double central_score = -1.0;

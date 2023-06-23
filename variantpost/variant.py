@@ -18,11 +18,11 @@ class Variant(object):
         self.unspliced_local_reference_start = max(0, pos - self.window) + 1
         self.unspliced_local_reference_end = min(pos + self.window, self.reference_len)
 
-        self.unspliced_local_reference = reference.fetch(
-            chrom,
-            self.unspliced_local_reference_start - 1,
-            self.unspliced_local_reference_end,
-        )
+        #self.unspliced_local_reference = reference.fetch(
+        #    chrom,
+        #    self.unspliced_local_reference_start - 1,
+        #    self.unspliced_local_reference_end,
+        #)
 
     @property
     def is_leftaligned(self):

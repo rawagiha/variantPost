@@ -301,11 +301,6 @@ void eval_by_variant(
         if (rslt.is_well_ref_mapped) rslt.terminate_search = true;
     }
 
-    //possible cases reach here
-    // 1) simple long indels with partial contig
-    //    -> do partial contig?
-    // 2) simple indels in readends -> realigned differently
-    //    -> retarget
 } 
 
 
@@ -362,15 +357,10 @@ void annot_alignment(Contig& contig, const AlnResult& rslt)
 {
     int genomic_pos = rslt.genomic_start_pos; 
 
-    //const std::string& seq = rslt.seq;
     contig.seq = rslt.seq;
     contig.len = contig.seq.size();
-    //const std::string& ref_seq = rslt.ref_seq;
     contig.ref_seq = rslt.ref_seq;
-    //const std::string& quals = rslt.quals;
     contig.quals = rslt.quals;
-    //const std::vector<Variant>& variants = rslt.variants;
-    //contig.variants = rslt.variants;
     
     int op_len;
     char op = '\0', prev_op = '\0';
@@ -450,13 +440,15 @@ void annot_alignment(Contig& contig, const AlnResult& rslt)
 }
 
 
-void reset_contig_layout(Contig& contig, const int pos)
+void update_contig_layout(Contig& contig, const int pos)
 {
     auto it = std::find(
         contig.positions.begin(), 
         contig.positions.end(), 
         pos
     );
+    
+    //keep this block for furtehr cheking
     if (it == contig.positions.end()) 
     {
         size_t o = contig.positions.size();
@@ -488,9 +480,6 @@ void reset_contig_layout(Contig& contig, const int pos)
     contig.lt_end_idx = contig.lt_len - 1;
     contig.rt_start_idx = contig.lt_end_idx + contig.mid_len;
     contig.rt_len = contig.len - contig.rt_start_idx; 
-
-    std::cout << contig.seq.substr(0, contig.lt_len) << std::endl;
-    std::cout << contig.seq.substr(contig.rt_start_idx) << std::endl;
 }
 
 
@@ -551,7 +540,7 @@ char eval_by_aln(
         if (rslt.terminate_search)
         {    
             annot_alignment(contig, rslt);
-            reset_contig_layout(contig, alternative_pos);
+            update_contig_layout(contig, alternative_pos);
             return 'A';   
         }
         else if (rslt.is_passed)
@@ -579,14 +568,58 @@ char eval_by_aln(
         if (rslt.has_target) 
         {
             annot_alignment(contig, rslt);
-            reset_contig_layout(contig, target.pos);
+            update_contig_layout(contig, target.pos);
             return 'A';
         }
         //count check by mocked seq
         return 'B';   
     }
      
+    //spliced -> no extension
+    for (const auto& c : rslt.cigar_vec)
+    {
+        if (c.first == 'N') return 'A';
+    }
+    
     //do extension
+    if (!rslt.lt_well_ref_mapped && rslt.rt_well_ref_mapped)
+    {
+        return 'L';
+    }
+    else if (rslt.lt_well_ref_mapped && !rslt.rt_well_ref_mapped)
+    {
+        return 'R';
+    }
+    else return 'E';
+}
 
-    return 'B';
-} 
+void aln_extended_contig( 
+    Contig& contig,
+    const Variant& target,
+    const UserParams& user_params,
+    LocalReference& loc_ref
+)
+{
+
+   std::vector<int> pos_vec = expand_coordinates(contig.coordinates);
+    
+   Filter filter;
+   Alignment aln;
+   AlnResult rslt; 
+    
+   local_alignment(
+       user_params.match_score,
+       user_params.mismatch_penal,
+       user_params.gap_open_penal,
+       user_params.gap_ext_penal,
+       contig.seq,
+       contig.ref_seq, 
+       filter,
+       aln
+   );
+
+   postprocess_alignment(rslt, pos_vec, contig, loc_ref, aln);
+        
+   annot_alignment(contig, rslt);
+   update_contig_layout(contig, target.pos);
+}

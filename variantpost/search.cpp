@@ -265,7 +265,6 @@ void from_target_reads(
     );
                  
     char _eval = eval_by_aln(contig, target, user_params, loc_ref);
-    std::cout << _eval << " " << std::endl;
      
     if (_eval == 'C')
     {
@@ -291,13 +290,10 @@ void from_target_reads(
         ss,
         user_params
     );
-        
-    if (_eval == 'B')
-    {
-        //ext
-    }    
     
-    // 'A'
+    extend_contig(contig, _eval, lt_matches, rt_matches, loc_ref);
+    aln_extended_contig(contig, target, user_params, loc_ref);
+    
     transfer_vector(targets, lt_matches);
     transfer_vector(targets, mid_matches);
     transfer_vector(targets, rt_matches);
@@ -316,8 +312,11 @@ void swith_to_mock_layout(Contig& contig)
     contig.mid_len = contig.mock_mid_len;
     contig.rt_len = contig.mock_rt_len;
     contig.rt_start_idx = contig.mock_rt_start_idx;
+
+    contig.is_mocked = true;
        
 }
+
 
 void from_candidate_reads(
     Contig& contig,

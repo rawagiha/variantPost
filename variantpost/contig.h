@@ -15,6 +15,7 @@ struct Contig
     bool by_kmer_suggestion = false;
     
     //mocked from input
+    bool is_mocked = false;
     std::string mocked_seq;
     std::string mocked_ref;
     Coord mocked_coord;
@@ -77,5 +78,15 @@ void suggest_contig(
     const UserParams& user_params,
     LocalReference& loc_ref
 );
+
+
+void extend_contig(
+    Contig& contig,
+    const char eval,
+    Reads& lt_matches,
+    Reads& rt_matches,
+    LocalReference& loc_ref
+);
+
 
 #endif

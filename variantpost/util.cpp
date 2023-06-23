@@ -251,8 +251,8 @@ void right_align(
     bool is_failed = false;
 
     do {
-        if (ref_dict.find(pos) == ref_dict.end()) return;
-        
+        if (ref_dict.find(variant_end_pos) == ref_dict.end()) return;
+
         to_right(
             variant_end_pos, 
             longer_allele, 

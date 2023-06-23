@@ -26,7 +26,6 @@ struct AlnResult
     bool is_well_ref_mapped = false;
 
     bool has_target = false;
-    int confidence_level = 0;
     
     int idx_to_closest = 0;
     int dist_to_closest = INT_MAX;
@@ -39,12 +38,20 @@ struct AlnResult
 };   
 
 
-
 char eval_by_aln(
     Contig& contig,
     const Variant& target,
     const UserParams& user_params,
     LocalReference& loc_ref
 );
+
+
+void aln_extended_contig( 
+    Contig& contig,
+    const Variant& targer,
+    const UserParams& user_params,
+    LocalReference& loc_ref
+);
+
 
 #endif

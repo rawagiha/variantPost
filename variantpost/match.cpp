@@ -115,6 +115,58 @@ void annot_shiftable_segment(
 }
 
 
+inline bool has_mismatches(string_view cigar_str)
+{
+    return (cigar_str.find('X') != std::string_view::npos);
+}
+
+bool has_critical_mismatches(
+    string_view cigar_str,
+    const int ref_start,
+    const int lt_end_idx, 
+    const int rt_start_idx,
+    const int margin = 5
+)
+{   
+    //critical region
+    const int lt_bound = lt_end_idx - margin;   
+    const int rt_bound = rt_start_idx + margin;
+    std::vector<std::pair<char, int>> cigar_vec{to_cigar_vector(cigar_str)};
+    char op;
+    int op_len = 0, i = ref_start;  
+    for (const auto& c : cigar_vec) 
+    {
+         op = c.first;
+         op_len = c.second;    
+         switch (op) 
+         {
+            case '=':
+                i += op_len;
+                break;
+            case 'X':
+                for (int j = 0; j < op_len; ++j)
+                {
+                    if (lt_bound <= i && i <= rt_bound)
+                    {
+                        return true;
+                    }
+                    ++i;
+                }
+                break;
+            case 'S':
+                if (lt_bound <= i && i <= rt_bound)
+                {
+                    return true;
+                }
+                break;
+            default:
+                break;
+         }        
+    }
+    return false;
+}    
+
+
 char indel_match_pattern
 (
     const std::string& query, 
@@ -136,7 +188,7 @@ char indel_match_pattern
     mask_len = mask_len < 15 ? 15 : mask_len;
             
     aligner.Align(query.c_str(), contig.seq.c_str(), contig_len, filter, &alignment, mask_len);
-
+     
     const int ref_start = alignment.ref_begin;
     const int ref_end = alignment.ref_end;
     
@@ -192,10 +244,22 @@ char indel_match_pattern
         if (ss.n_tandem_repeats != (lt_rep + mid_rep + rt_rep)) return 'F';  
     } 
     
+    if (contig.is_mocked)
+    {   
+        bool disqualified = has_critical_mismatches(
+            alignment.cigar_string,
+            ref_start,
+            lt_end_idx, 
+            rt_start_idx
+        );
+
+        if (disqualified) return 'F';
+    }   
+    
     // annotate match pattern 
-    if ((ref_start < lt_end_idx && rt_start_idx < ref_end) 
-        &&
-        (alignment.cigar_string.find('X') == std::string::npos)) 
+    if (ref_start < lt_end_idx 
+        && rt_start_idx < ref_end 
+        && !has_mismatches(alignment.cigar_string)) 
     {
         if (ref_start == 0) 
         {
