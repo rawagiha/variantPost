@@ -210,7 +210,6 @@ void find_overlaps(std::vector<Overlap>& overlaps, const std::vector<Seq>& input
 }
 
 
-
 void merge_to_right(
     const int prev_start, 
     const int curr_start,
@@ -428,10 +427,3 @@ Seq merge_reads(const std::vector<Seq>& inputs)
     
     return __merged; 
 } 
-
-
-
-
-
-
-

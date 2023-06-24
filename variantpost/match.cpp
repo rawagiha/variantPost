@@ -39,7 +39,6 @@ inline bool is_shiftable(std::string_view allele)
     return (allele.front() == allele.back());
 }
 
-
 void annot_shiftable_segment(
     ShiftableSegment& ss,
     const Variant& target, 

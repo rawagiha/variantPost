@@ -82,8 +82,8 @@ void suggest_contig(
 
 
 void extend_contig(
-    Contig& contig,
     const char eval,
+    Contig& contig,
     Reads& lt_matches,
     Reads& rt_matches,
     LocalReference& loc_ref

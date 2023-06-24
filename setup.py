@@ -2,7 +2,7 @@ from Cython.Build import cythonize
 from Cython.Distutils import build_ext
 from setuptools import setup
 from setuptools.extension import Extension
-
+#from pysam import get_include as pysam_get_include
 
 class BuildExt(build_ext):
     def build_extensions(self):
@@ -16,14 +16,15 @@ extensions = [
         "variantpost.variantalignment",
         ["variantpost/variantalignment.pyx"],
         language="c++",
+        #include_dirs=pysam_get_include(),
         extra_compile_args=["-O3", "-std=c++17"],
         extra_link_args=["-O3", "-std=c++17"],
     ),
-    Extension(
-        "variantpost.preprocessor", ["variantpost/preprocessor.pyx"], language="c++",
-        extra_compile_args=["-O3", "-std=c++17"],
-        extra_link_args=["-O3", "-std=c++17"],
-    ),
+    #Extension(
+    #    "variantpost.preprocessor", ["variantpost/preprocessor.pyx"], language="c++",
+    #    extra_compile_args=["-O3", "-std=c++17"],
+    #    extra_link_args=["-O3", "-std=c++17"],
+    #),
     Extension(
         "variantpost.cy_search",
         [
@@ -48,6 +49,7 @@ extensions = [
             #"variantpost/unaligned_target.cpp",
         ],
         language="c++",
+        #include_dirs=pysam_get_include(),
         extra_compile_args=["-O3", "-std=c++17"],
         extra_link_args=["-O3", "-std=c++17"],
     ),

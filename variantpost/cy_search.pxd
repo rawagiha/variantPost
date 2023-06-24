@@ -2,6 +2,7 @@ from libcpp.string cimport string
 from libcpp.vector cimport vector
 from libcpp cimport bool as bool_t
 
+#from pysam.libcalignmentfile cimport AlignmentFile
 cdef object  search_target(
                 object, 
                 object,

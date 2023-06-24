@@ -561,15 +561,13 @@ void suggest_contig(
 
 
 void extend_contig(
-    Contig& contig,
     const char eval,
+    Contig& contig,
     Reads& lt_matches,
     Reads& rt_matches,
     LocalReference& loc_ref
 )
-{
-    if (eval == 'A') return;
-    
+{   
     size_t i = 0, n = 3;
     int ext_coord_start = contig.coordinates.front().first;
     int ext_coord_end = contig.coordinates.back().second;

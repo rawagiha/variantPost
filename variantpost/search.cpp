@@ -13,7 +13,6 @@
 SearchResult::SearchResult() {}
 
 
-
 void from_target_reads(
     Contig& contig,
     const Variant& target,
@@ -164,6 +163,8 @@ void _search_target(
     const std::vector<bool>& are_from_first_bam)
 {  
     
+    //auto t1 = std::chrono::high_resolution_clock::now();
+        
     // do input validation at python ends
     // 1) no fetched reads, 
     // 2) undefined variants...
@@ -240,6 +241,12 @@ void _search_target(
     }
     
     rslt.report(contig, targets, non_targets); 
+    
+    //auto t2 = std::chrono::high_resolution_clock::now();
+    //auto ms_int = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
+    //std::chrono::duration<double, std::milli> ms_double = t2 - t1;
+    //std::cout << ms_int.count() << "ms\n";
+    //std::cout << ms_double.count() << "ms\n";
     return;
 }   
 
@@ -289,14 +296,16 @@ void from_target_reads(
         user_params
     );
     
-    extend_contig(contig, _eval, lt_matches, rt_matches, loc_ref);
-    aln_extended_contig(contig, target, user_params, loc_ref);
-    
+    if (_eval != 'A')
+    {
+        extend_contig(_eval, contig, lt_matches, rt_matches, loc_ref);
+        aln_extended_contig(contig, target, user_params, loc_ref);
+    }
+     
     transfer_vector(targets, lt_matches);
     transfer_vector(targets, mid_matches);
     transfer_vector(targets, rt_matches);
 }
-
 
 
 void swith_to_mock_layout(Contig& contig)

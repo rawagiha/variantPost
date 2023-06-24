@@ -3,7 +3,7 @@ from .preprocessor import preprocess
 from variantpost.cy_search cimport search_target
 from .variant import Variant
 
-import time
+#import time
 
 class VariantAlignment(object):
     def __init__(
@@ -23,7 +23,6 @@ class VariantAlignment(object):
         local_threshold=20
     ):
 
-        print("analyze: {}\t{}\t{}\t{}".format(variant.chrom, variant.pos, variant.ref, variant.alt))
         if not variant.is_normalized:
             variant.normalize(inplace=True)
             variant = Variant(
@@ -54,21 +53,17 @@ class VariantAlignment(object):
             variant.reference,
         )
         
-        t = time.time()
+        #t = time.time()
 
         ##########
         fastafile = variant.reference.filename
         #########
         
-        tt = time.time()
-        print(tt -t, "preprosess")
+        ##tt = time.time()
+        #print(tt -t, "preprosess")
 
         # interact with c++ code
-        (
-            contig_dict,
-            skips,
-            annotated_reads,
-        ) = search_target(
+        self.contig_dict, self.skips, self.annotated_reads = search_target(
                 bam,
                 second_bam,
                 chrom_len,
@@ -91,11 +86,22 @@ class VariantAlignment(object):
                 unspliced_local_reference_end, 
         )
 
-        print(time.time() - tt, "c++ time")
+        
+    def count_alleles(self):
+            sup, non_sup, fwrv, fs = [], [], [], []
+            for i in self.annotated_reads:
+                if i.target_status == 1:
+                    sup.append(i.read_name)
+                elif i.target_status == 0:
+                    non_sup.append(i.read_name)
+                    
+            return (len(sup), len(non_sup))    
+        
+        #print(time.time() - tt, "c++ time")
         
         #print(annotated_reads)
-        phase(contig_dict, skips,  pos)
+        #phase(contig_dict, skips,  pos)
         
-        print(time.time() - t, "total varaln --- {}".format("aho"))
+        #print(time.time() - t, "total varaln --- {}".format("aho"))
 
 

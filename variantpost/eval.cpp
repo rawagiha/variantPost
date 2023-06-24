@@ -107,6 +107,7 @@ void postprocess_alignment(
         pos_vec, 
         contig.coordinates
     );
+
     move_up_insertion(rslt.cigar_vec);
 
     int query_begin = alignment.query_begin;
@@ -369,7 +370,7 @@ void annot_alignment(Contig& contig, const AlnResult& rslt)
     {  
         op = cigar.first;
         op_len = cigar.second;
-        
+       
         switch (op)
         {
             case '=':
