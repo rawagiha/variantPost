@@ -686,7 +686,7 @@ void annotate_reads(
 {
     for (auto& read : reads)
     {
-        annot_ref_seq(read, loc_ref);       
+        annot_ref_seq(read, loc_ref); 
         annot_splice_pattern(read);
         annot_covering_ptrn(read, target, loc_ref);
         annot_target_info(read, target, loc_ref);

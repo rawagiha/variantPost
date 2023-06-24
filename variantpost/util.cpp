@@ -135,7 +135,6 @@ inline void to_left(
     --pos;
     --variant_end_pos;
     char prev_base = std::string{ref_dict.at(pos)}[0];
-    
     if (prev_base == 'N')
     {
         ++pos;
@@ -260,7 +259,7 @@ void right_align(
             is_failed,
             ref_dict
         );
-        
+
         if (is_failed) return;
         
         ++pos;
@@ -268,13 +267,16 @@ void right_align(
     while (is_rotatable(longer_allele) && pos < ref_end);
     
     // undo the last right shift
-    to_left(
-        pos, 
-        variant_end_pos, 
-        longer_allele, 
-        shorter_allele, 
-        is_failed, ref_dict
-    );
+    if (ref_dict.find(pos - 1) != ref_dict.end())
+    {
+        to_left(
+            pos, 
+            variant_end_pos, 
+            longer_allele, 
+            shorter_allele, 
+            is_failed, ref_dict
+        );
+    }
 }
 
 

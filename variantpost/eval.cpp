@@ -557,7 +557,6 @@ char eval_by_aln(
         aln_ptrns.push_back(rslt.cigar_str);
     }
     
-    
     //most stable alignment
     std::string_view common_ptrn = find_commonest_str(aln_ptrns);
     auto it = std::find(aln_ptrns.begin(), aln_ptrns.end(), common_ptrn);
@@ -593,6 +592,7 @@ char eval_by_aln(
     else return 'E';
 }
 
+
 void aln_extended_contig( 
     Contig& contig,
     const Variant& target,
@@ -600,7 +600,6 @@ void aln_extended_contig(
     LocalReference& loc_ref
 )
 {
-
    std::vector<int> pos_vec = expand_coordinates(contig.coordinates);
     
    Filter filter;

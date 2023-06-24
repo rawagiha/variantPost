@@ -62,6 +62,7 @@ void make_contig(
     LocalReference& loc_ref
 );
 
+
 void prefilter_candidates(
     Contig& contig,
     Reads& candidates,

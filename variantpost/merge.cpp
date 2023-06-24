@@ -155,10 +155,8 @@ struct BaseCount
 };
 
 
-std::vector<Overlap> find_overlaps(const std::vector<Seq>& inputs)
+void find_overlaps(std::vector<Overlap>& overlaps, const std::vector<Seq>& inputs)
 {
-    std::vector<Overlap> overlaps;   
-    
     const uint8_t match_score = 2, mismatch_penalty = 2;
     const uint8_t gap_open_penalty = 255, gap_extention_penalty = 255;
 
@@ -172,6 +170,7 @@ std::vector<Overlap> find_overlaps(const std::vector<Seq>& inputs)
     );
     
     int32_t mask_len = 0;
+    int32_t prev_start = 0, prev_end = inputs[0].seq.size();
     size_t j = 0, n = inputs.size();
     for (size_t i = 0; i < n - 1;)
     {
@@ -191,7 +190,9 @@ std::vector<Overlap> find_overlaps(const std::vector<Seq>& inputs)
             mask_len
         );
             
-        if (has_gaps(aln.cigar_string)) break;
+        
+        if (has_gaps(aln.cigar_string)) return;
+        if (aln.ref_begin >=  prev_end || prev_start >= aln.ref_end) return; 
         
         overlaps.emplace_back(
             i, 
@@ -203,10 +204,9 @@ std::vector<Overlap> find_overlaps(const std::vector<Seq>& inputs)
         );
         
         i = j;
-            
+        prev_start = aln.query_begin;
+        prev_end = aln.query_end;
     }
-
-    return overlaps;
 }
 
 
@@ -289,8 +289,20 @@ Seq merge_reads(const std::vector<Seq>& inputs)
     }
     
     std::deque<BaseCount> base_cnts;
-    std::vector<Overlap> overlaps = find_overlaps(inputs);
+    std::vector<Overlap> overlaps; 
+    find_overlaps(overlaps, inputs);
     
+    if (overlaps.empty())
+    {
+        Seq _merged(
+            inputs[0].seq, 
+            inputs[0].base_quals, 
+            inputs[0].target_start
+        );
+        
+        return _merged;
+    }
+
     int merge_start = 0, merge_end = 0;
     int curr_start = 0, curr_end = 0;
     int prev_start = 0, prev_end = 0;
@@ -325,9 +337,6 @@ Seq merge_reads(const std::vector<Seq>& inputs)
                 
                 is_target_start = 0;
             }
-
-            
-
         }
         else 
         {

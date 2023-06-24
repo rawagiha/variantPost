@@ -375,7 +375,7 @@ void prefilter_candidates(
         }
               
     }
-
+    
     sort_by_kmer(candidates);
 
     for (Reads::reverse_iterator i = candidates.rbegin(); 
@@ -395,7 +395,7 @@ void prefilter_candidates(
             candidates.pop_back();  
         }
     }
-
+    
     candidates.shrink_to_fit();
 }
 
@@ -470,13 +470,12 @@ void suggest_contig(
     contig.by_kmer_suggestion = true;   
     
     Reads prioritized;
-    
     prioritize_reads_for_contig_construction(
         prioritized, 
         candidates, 
         user_params
     );
-    
+
     //Contig remains empty
     if (prioritized.empty()) return;
     
@@ -512,7 +511,7 @@ void suggest_contig(
                
         Reads top_tens;       
         concat_top_tens(lt_tmp, rt_tmp, u_tmp, top_tens);
-
+        
         for (const auto& read : top_tens)
         {
             
@@ -553,7 +552,7 @@ void suggest_contig(
     suggestions.shrink_to_fit();
     
     Seq merged_suggestions = merge_reads(suggestions);
-
+    
     contig.seq =  merged_suggestions.seq;
     contig.quals = merged_suggestions.base_quals;
     

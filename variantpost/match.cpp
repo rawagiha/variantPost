@@ -16,14 +16,20 @@ inline void to_left(std::string& allele, std::string& lt_seq)
 {
     allele.pop_back();
     lt_seq.pop_back();
-    allele = lt_seq.substr(lt_seq.size() - 1, 1) + allele;    
+    if (lt_seq.size())
+    {
+        allele = lt_seq.substr(lt_seq.size() - 1, 1) + allele;
+    }    
 }
 
 
 inline void to_right(std::string& allele, std::string& rt_seq)
 {
     allele.erase(0, 1);
-    allele += rt_seq.substr(0, 1);
+    if (rt_seq.size())
+    {
+        allele += rt_seq.substr(0, 1);
+    }
     rt_seq.erase(0, 1);
 }
 
@@ -109,7 +115,7 @@ void annot_shiftable_segment(
         size_t remainder = shiftable_len % ss.unit_len;
         if (remainder) is_complete_tandem_repeat = false;
     }
-    
+
     ss.n_tandem_repeats = n_tandem_repeats;
     ss.is_complete_tandem_repeat = is_complete_tandem_repeat;
 }
@@ -370,7 +376,7 @@ void classify_cand_indel_read_2(
 {
     ShiftableSegment ss;
     annot_shiftable_segment(ss, target, contig);
-
+    
     Reads lt_matches, mid_matches, rt_matches;
 
     classify_cand_indel_reads(
@@ -386,7 +392,7 @@ void classify_cand_indel_read_2(
         ss,
         user_params
     );
-        
+    
     transfer_vector(targets, lt_matches);
     transfer_vector(targets, mid_matches);
     transfer_vector(targets, rt_matches);

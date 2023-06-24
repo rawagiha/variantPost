@@ -239,8 +239,6 @@ void _search_target(
         );
     }
     
-    std::cout << targets.size() << " " << non_targets.size() << std::endl;    
-    
     rslt.report(contig, targets, non_targets); 
     return;
 }   
@@ -314,7 +312,6 @@ void swith_to_mock_layout(Contig& contig)
     contig.rt_start_idx = contig.mock_rt_start_idx;
 
     contig.is_mocked = true;
-       
 }
 
 
@@ -339,24 +336,18 @@ void from_candidate_reads(
         
     if (candidates.empty()) return;
         
-    if (target.is_complex)
-    {
-        //cplx input -> reduce to from_target_reads
-    }
-    
-    suggest_contig(contig, candidates, user_params, loc_ref); 
-       
+    suggest_contig(contig, candidates, user_params, loc_ref);       
     //may happen if all candidates are of low-qual bases
     if (contig.seq.empty()) return;
-        
+    
     char _eval = eval_by_aln(contig, target, user_params, loc_ref);
-        
+    
     Reads undetermined;
     if (_eval != 'A')
     {
         swith_to_mock_layout(contig);
     }    
-        
+    
     classify_cand_indel_read_2(
         targets,
         candidates,
