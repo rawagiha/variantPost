@@ -449,19 +449,26 @@ void update_contig_layout(Contig& contig, const int pos)
         pos
     );
     
+    size_t idx;
     //keep this block for furtehr cheking
     if (it == contig.positions.end()) 
     {
-        size_t o = contig.positions.size();
-        for (size_t i = 0; i < o; ++i)
+        int diff = INT_MAX;
+        size_t tmp_idx = 0;
+        for (size_t i = 0; i < contig.positions.size(); ++i)
         {
-            std::cout <<  contig.positions[i] << " " << contig.ref_bases[i] << " " << contig.alt_bases[i] << std::endl;
+            if (contig.ref_bases[i].size() != contig.alt_bases[i].size()
+                && diff > std::abs(contig.positions[i] - pos))
+            { 
+                diff = std::abs(contig.positions[i] - pos);
+                tmp_idx = i;
+            } 
         }
         
-        std::cout << "okori enai " << std::endl;
+        idx = tmp_idx;    
     }    
     
-    size_t idx = std::distance(contig.positions.begin(), it);
+    idx = std::distance(contig.positions.begin(), it);
 
     contig.lt_len = 0;
     contig.mid_len =0;
@@ -479,7 +486,7 @@ void update_contig_layout(Contig& contig, const int pos)
         }
     }
     contig.lt_end_idx = contig.lt_len - 1;
-    contig.rt_start_idx = contig.lt_end_idx + contig.mid_len;
+    contig.rt_start_idx = contig.lt_len + contig.mid_len;
     contig.rt_len = contig.len - contig.rt_start_idx; 
 }
 
@@ -568,6 +575,7 @@ char eval_by_aln(
         if (rslt.has_target) 
         {
             annot_alignment(contig, rslt);
+            std::cout << target.pos << std::endl;
             update_contig_layout(contig, target.pos);
             return 'A';
         }

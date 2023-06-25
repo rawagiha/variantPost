@@ -212,7 +212,7 @@ void _search_target(
     
     Reads targets, candidates, non_targets;
     classify_reads(reads, targets, candidates, non_targets, user_params);
-       
+    
     // contig processing
     Contig contig;
     if (!targets.empty())
@@ -270,7 +270,7 @@ void from_target_reads(
     );
                  
     char _eval = eval_by_aln(contig, target, user_params, loc_ref);
-     
+    
     if (_eval == 'C')
     {
         transfer_vector(non_targets, targets);

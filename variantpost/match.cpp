@@ -87,6 +87,7 @@ void annot_shiftable_segment(
     );
     
     ss.fw_repeat_unit = target.minimal_repeat_unit();
+    
     ss.unit_len = ss.fw_repeat_unit.size();
     
     std::string rv_repeat_unit = ss.fw_repeat_unit;
@@ -237,7 +238,7 @@ char indel_match_pattern
             );
             
             // -1 offset for own sequence
-            mid_rep = count_repeats(ss.fw_repeat_unit, mid_fragment) - 1;    
+            mid_rep = count_repeats(ss.fw_repeat_unit, mid_fragment) - 1;   
         }
 
         std::string rt_fragment = query.substr(
