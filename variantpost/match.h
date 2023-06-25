@@ -49,7 +49,4 @@ void classify_cand_indel_read_2(
     const UserParams& user_params
 );
 
-
-void reclassify_candidates(Reads& candidates, Reads& targets);
-
 #endif

@@ -240,7 +240,7 @@ void set_ref_info(
 )
 {
     contig.coordinates = coord;
-
+    
     std::string ref_seq;
     for (const auto& c : coord)
     {
@@ -296,10 +296,16 @@ void mock_target_seq(
     size_t n = 2;
     int offset = target.is_complex ?  1 : 0;
     
+    
+    int _start = (target.pos <= int(offset + user_params.kmer_size * n)) 
+               ? 0 : target.pos - offset - user_params.kmer_size * n;
+    int _len = (target.pos - _start < int(user_params.kmer_size * n)) 
+               ? target.pos - _start  : user_params.kmer_size * n;
+    
     std::string lt_frag = loc_ref.fasta.getSubSequence(
         loc_ref.chrom,
-        target.pos - offset - user_params.kmer_size * n, 
-        user_params.kmer_size * n
+        _start,
+        _len
     );
 
     contig.mock_lt_len = lt_frag.size();
@@ -533,7 +539,7 @@ void suggest_contig(
         {
             prioritized.push_back(first);
         }
-         
+        
         sort_by_start(prioritized);
         
         for (const auto& read : prioritized)
@@ -556,7 +562,7 @@ void suggest_contig(
     contig.seq =  merged_suggestions.seq;
     contig.quals = merged_suggestions.base_quals;
     
-    set_ref_info(contig, coord, loc_ref);  
+    set_ref_info(contig, coord, loc_ref); 
 }
 
 

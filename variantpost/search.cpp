@@ -201,7 +201,7 @@ void _search_target(
         mapqs,
         are_from_first_bam
     );
-    
+
     // read processing
     annotate_reads(
         reads, 
@@ -308,7 +308,7 @@ void from_target_reads(
 }
 
 
-void swith_to_mock_layout(Contig& contig)
+inline void switch_to_mock_layout(Contig& contig)
 {
     contig.seq = contig.mocked_seq;
     contig.ref_seq = contig.mocked_ref;
@@ -350,11 +350,11 @@ void from_candidate_reads(
     if (contig.seq.empty()) return;
     
     char _eval = eval_by_aln(contig, target, user_params, loc_ref);
-    
+
     Reads undetermined;
     if (_eval != 'A')
     {
-        swith_to_mock_layout(contig);
+        switch_to_mock_layout(contig);
     }    
     
     classify_cand_indel_read_2(

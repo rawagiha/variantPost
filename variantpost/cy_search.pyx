@@ -177,8 +177,7 @@ cdef object search_target(
     cdef SearchResult rslt
     #cdeobject AlignedSegment read
     #tt = time.time()
-    
-    
+        
     cdef int buff_size = 0;
     first_reads = fetch_reads(bam, chrom, pos, chrom_len, window, exclude_duplicates)
     buff_size += len(first_reads)

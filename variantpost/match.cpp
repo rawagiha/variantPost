@@ -69,7 +69,7 @@ void annot_shiftable_segment(
         to_left(allele_for_lt, lt_seq);
         ++i;
     }
-
+    
     size_t j = 0;
     do
     {
@@ -376,7 +376,7 @@ void classify_cand_indel_read_2(
 {
     ShiftableSegment ss;
     annot_shiftable_segment(ss, target, contig);
-    
+
     Reads lt_matches, mid_matches, rt_matches;
 
     classify_cand_indel_reads(
@@ -397,20 +397,3 @@ void classify_cand_indel_read_2(
     transfer_vector(targets, mid_matches);
     transfer_vector(targets, rt_matches);
 }
-
-/*
-void reclassify_candidates(Reads& candidates, Reads& targets)
-{
-    std::cout << candidates.size() << " " << candidates.capacity() << std::endl;
-    Reads tmp;
-    for (size_t i = 0; i < candidates.size(); ++i)
-    {
-        if (candidates[i].is_contig_member) transfer_elem(targets, candidates, i);
-        else transfer_elem(tmp, candidates, i);
-    }
-    
-    std::swap(candidates, tmp);
-    
-    std::cout << candidates.size() << " " << candidates.capacity() << std::endl;    
-}*/
-

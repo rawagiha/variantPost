@@ -1,5 +1,4 @@
 from .phaser import phase
-from .preprocessor import preprocess
 from variantpost.cy_search cimport search_target
 from .variant import Variant
 
@@ -22,7 +21,6 @@ class VariantAlignment(object):
         kmer_size=24, 
         local_threshold=20
     ):
-
         if not variant.is_normalized:
             variant.normalize(inplace=True)
             variant = Variant(

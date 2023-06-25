@@ -1,6 +1,6 @@
 from Cython.Build import cythonize
 from Cython.Distutils import build_ext
-from setuptools import setup
+from setuptools import setup, find_packages
 from setuptools.extension import Extension
 #from pysam import get_include as pysam_get_include
 
@@ -55,4 +55,4 @@ extensions = [
     ),
 ]
 
-setup(cmdclass={"build_ext": BuildExt}, ext_modules=cythonize(extensions, annotate=False, language_level="3"),)
+setup(name="variantpost",  packages=find_packages(exclude=["tests"]), cmdclass={"build_ext": BuildExt}, ext_modules=cythonize(extensions, annotate=False, language_level="3"),)

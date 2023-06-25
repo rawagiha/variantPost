@@ -427,6 +427,12 @@ void annot_alignment(Contig& contig, const AlnResult& rslt)
                 ++v_idx;
                 break;
             case 'N':
+                
+                if (prev_op == 'I' || prev_op == 'D')
+                {
+                    std::cout << "PPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPP" << std::endl;
+                }      
+                  
                 contig.skip_starts.push_back(genomic_pos);
                 genomic_pos += op_len;
                 contig.skip_ends.push_back(genomic_pos - 1);
@@ -513,7 +519,7 @@ char eval_by_aln(
     );
 
     std::vector<int> pos_vec = expand_coordinates(contig.coordinates);
-    
+
     Filter filter;
     Alignment aln;
     std::vector<AlnResult> rslts;
@@ -532,7 +538,7 @@ char eval_by_aln(
             filter,
             aln
         );
-
+        
         postprocess_alignment(rslt, pos_vec, contig, loc_ref, aln);
         
         int alternative_pos = target.pos;
@@ -542,7 +548,7 @@ char eval_by_aln(
         }
         else
         { 
-            eval_by_variant(rslt, target, user_params, loc_ref); 
+            eval_by_variant(rslt, target, user_params, loc_ref);
         }
 
         if (rslt.terminate_search)
@@ -575,7 +581,6 @@ char eval_by_aln(
         if (rslt.has_target) 
         {
             annot_alignment(contig, rslt);
-            std::cout << target.pos << std::endl;
             update_contig_layout(contig, target.pos);
             return 'A';
         }
