@@ -5,6 +5,8 @@
 variantpost/cy_search.cpp
 variantpost/variantalignment.cpp
 
+*/__pycache__/
+
 # Compiled Object files
 *.slo
 *.lo
