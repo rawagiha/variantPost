@@ -321,6 +321,27 @@ Seq merge_reads(const std::vector<Seq>& inputs)
 
         if (i == 0)
         {
+            
+            // investigate this version
+            // may be able to avoid "twice" approach
+            for (int j = 0; j <= int(seq.size()); ++j)
+            {
+                if (target_start == j) is_target_start = 1;
+                
+                BaseCount bc;
+                bc.add(
+                    seq[j],
+                    seq_qual[j],
+                    is_target_start
+                );
+                base_cnts.push_back(bc);
+
+                is_target_start = 0;
+            }
+            
+            merge_start = curr_start;
+            
+            /*
             //aligned segment only// 
             for (int j = 0; j <= (curr_end - curr_start); ++j)
             {
@@ -335,7 +356,7 @@ Seq merge_reads(const std::vector<Seq>& inputs)
                 base_cnts.push_back(bc);
                 
                 is_target_start = 0;
-            }
+            }*/
         }
         else 
         {

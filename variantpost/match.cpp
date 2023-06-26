@@ -45,6 +45,8 @@ void annot_shiftable_segment(
     const Contig& contig
 )
 {
+    //std::cout << "contig prep" << std::endl;
+    //std::cout << contig.seq << " " << contig.seq.size() << " " << contig.rt_start_idx << std::endl;
     const size_t lt_len = contig.lt_len;
     const size_t rt_len = contig.rt_len;
     std::string lt_seq = contig.seq.substr(0, lt_len);
@@ -63,6 +65,7 @@ void annot_shiftable_segment(
         allele_for_rt = target.ref;
     }
     
+    //std::cout << "do lt" << std::endl;
     size_t i = 0;
     while(i < lt_len && is_shiftable(allele_for_lt)) 
     {
@@ -70,6 +73,7 @@ void annot_shiftable_segment(
         ++i;
     }
     
+    //std::cout << "do rt" << std::endl;
     size_t j = 0;
     do
     {
@@ -81,11 +85,13 @@ void annot_shiftable_segment(
     ss.boundary_start = lt_len - (i + 1);
     ss.boundary_end = contig.rt_start_idx + j - 1;
     
+    //std::cout << ss.boundary_end << " " << ss.boundary_start  << std::endl;
     const size_t shiftable_len = ss.boundary_end - ss.boundary_start - 1;
     std::string shiftable = contig.seq.substr(
         ss.boundary_start + 1, shiftable_len
     );
     
+    //std::cout << shiftable << std::endl;
     ss.fw_repeat_unit = target.minimal_repeat_unit();
     
     ss.unit_len = ss.fw_repeat_unit.size();
@@ -94,6 +100,7 @@ void annot_shiftable_segment(
     std::reverse(rv_repeat_unit.begin(), rv_repeat_unit.end());   
     ss.rv_repeat_unit = rv_repeat_unit;   
     
+    //std::cout << " repeat "  << std::endl;
     int n_tandem_repeats = 0;
     bool is_complete_tandem_repeat = false;
     if (shiftable_len >= ss.unit_len)

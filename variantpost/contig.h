@@ -47,6 +47,10 @@ struct Contig
     std::vector<std::string> alt_bases;
     std::vector<std::string> base_quals; 
     
+    Contig();
+
+    Contig(const Variant& target);
+
     void furnish(
         const Seq& merged_target_reads,
         const Variant& target

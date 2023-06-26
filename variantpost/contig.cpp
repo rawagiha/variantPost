@@ -13,6 +13,17 @@
 #include "contig.h"
 
 
+Contig::Contig() {}
+
+
+Contig::Contig(const Variant& target)
+{
+    positions = {target.pos};
+    ref_bases = {target.ref};
+    alt_bases = {target.alt};
+}
+
+
 void Contig::furnish(
     const Seq& merged_target_reads,
     const Variant& target
@@ -220,6 +231,19 @@ int find_target_start(const Read& read)
 Seq merge_target_seeds(const Reads& seeds) 
 {
     std::vector<Seq> inputs;
+    
+    //use the first read twice to extend to the left
+    //-> ineffient
+    /*
+    if (inputs.size() > 1)
+    {
+        inputs.emplace_back(
+            std::string(seeds[0].seq),
+            std::string(seeds[0].base_quals),
+            find_target_start(seeds[0])
+        );
+    }*/
+     
     for (const auto& seed : seeds)
     {
         inputs.emplace_back(
@@ -534,11 +558,11 @@ void suggest_contig(
     else
     {   
         // hack 
-        Read first = prioritized[0];
-        if (prioritized.size() < 4 && first.kmer_score > 3)
-        {
-            prioritized.push_back(first);
-        }
+        //Read first = prioritized[0];
+        //if (prioritized.size() < 4 && first.kmer_score > 3)
+        //{
+        //    prioritized.push_back(first);
+        //}
         
         sort_by_start(prioritized);
         
@@ -566,6 +590,22 @@ void suggest_contig(
 }
 
 
+bool is_successful_extension(
+    const int orig_start,
+    const int ext_start,
+    const int orig_end,
+    const int ext_end,
+    std::string_view orig_seq,
+    std::string_view ext_seq
+)
+{
+    if (orig_seq.size() >= ext_seq.size()) return false;
+    if (ext_seq.find(orig_seq) == std::string_view::npos) return false;
+    if (orig_end - orig_start >= ext_end - ext_start) return false;
+    
+    return true; 
+}
+
 void extend_contig(
     const char eval,
     Contig& contig,
@@ -577,6 +617,7 @@ void extend_contig(
     size_t i = 0, n = 3;
     int ext_coord_start = contig.coordinates.front().first;
     int ext_coord_end = contig.coordinates.back().second;
+    
     Coord ext_coord;
     std::vector<Seq> inputs;
     switch (eval)
@@ -593,8 +634,8 @@ void extend_contig(
                 if (i == 0)
                 {
                     //twice
-                    inputs.emplace_back(
-                        std::string(lt_matches[i].seq), lt_matches[i].base_quals, -1);
+                    //inputs.emplace_back(
+                    //    std::string(lt_matches[i].seq), lt_matches[i].base_quals, -1);
                     inputs.emplace_back(
                         std::string(lt_matches[i].seq), lt_matches[i].base_quals, -1);
                     ext_coord_start = lt_matches[i].aln_start;
@@ -618,7 +659,7 @@ void extend_contig(
             if (rt_matches.empty()) return;
             
             //twice
-            inputs.emplace_back(contig.seq, contig.quals, -1);
+            //inputs.emplace_back(contig.seq, contig.quals, -1);
             inputs.emplace_back(contig.seq, contig.quals, -1);
             
             sort_by_start(rt_matches); 
@@ -648,31 +689,36 @@ void extend_contig(
             if (lt_matches.empty())
             {
                 //twice
-                inputs.emplace_back(contig.seq, contig.quals, -1);
+                //inputs.emplace_back(contig.seq, contig.quals, -1);
                 inputs.emplace_back(contig.seq, contig.quals, -1);
             }
             else
             {    
                 sort_by_start(lt_matches);
 
-                //twice
-                inputs.emplace_back(
-                    std::string(lt_matches[0].seq), lt_matches[0].base_quals, -1);
-                inputs.emplace_back(
-                    std::string(lt_matches[0].seq), lt_matches[0].base_quals, -1);
-                ext_coord_start = lt_matches[0].aln_start; 
+                if (lt_matches[0].aln_start < ext_coord_start)
+                { 
+                    //twice
+                    //inputs.emplace_back(
+                    //    std::string(lt_matches[0].seq), lt_matches[0].base_quals, -1);
+                    inputs.emplace_back(
+                        std::string(lt_matches[0].seq), lt_matches[0].base_quals, -1);
+                    
+                    ext_coord_start = lt_matches[0].aln_start;
+                }
                 
-                inputs.emplace_back(contig.seq, contig.quals, -1);      
+                inputs.emplace_back(contig.seq, contig.quals, -1);
             }
             
             if (!rt_matches.empty())
             {
-                inputs.emplace_back(
-                    std::string(rt_matches.back().seq), 
-                    rt_matches.back().base_quals, 
-                -1);
-
-                ext_coord_end = rt_matches.back().aln_end;
+                if (ext_coord_end < rt_matches.back().aln_end)
+                {
+                    inputs.emplace_back(
+                        std::string(rt_matches.back().seq), 
+                        rt_matches.back().base_quals, 
+                    -1);
+                }
             }
             ext_coord.emplace_back(ext_coord_start, ext_coord_end);
             break;
@@ -681,10 +727,22 @@ void extend_contig(
 
     Seq exteded = merge_reads(inputs);
     
-    contig.seq = exteded.seq;
-    contig.quals = exteded.base_quals;
-    contig.coordinates = ext_coord;
+    bool is_ok = is_successful_extension(
+        contig.coordinates.front().first,
+        ext_coord_start,
+        contig.coordinates.back().second,
+        ext_coord_end,
+        contig.seq,
+        exteded.seq
+    );
+     
+    if (is_ok)
+    {    
+        contig.seq = exteded.seq;
+        contig.quals = exteded.base_quals;
+        contig.coordinates = ext_coord;
 
-    set_ref_info(contig, ext_coord, loc_ref);
+        set_ref_info(contig, ext_coord, loc_ref);
+    }
 }
 

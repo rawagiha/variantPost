@@ -468,7 +468,7 @@ void move_up_insertion(std::vector<std::pair<char, int>>& cigar_vector)
 }
 
 
-
+// experimental
 // swap N and simple ins
 // {<'=', 2>, <'N', 6>, <'I', '4'>, <'=', 2>} -> {<'=', 2>, <'I', '4'>,  <'N', 6>,  <'=', 2>}
 //------------------------------------------------------------------------------------------
@@ -494,7 +494,10 @@ void make_skip_after_ins(std::vector<std::pair<char, int>>& cigar_vector)
 
 }
 
-
+inline bool is_gap(const char op)
+{
+    return (op == 'I' || op == 'D');
+}
 
 // include skips (N) to cigar
 // {<'=', 5>, <'I', 1>, <'=', 5> + {{100, 104}, {108, 109}, {112, 114}}
@@ -518,6 +521,7 @@ void splice_cigar(
     
     char op;
     int op_len = 0;
+    bool was_skip = false;
     int consumable_op_len = 0;
     int curr_idx = 0;
     int last_idx = coordinates.size() - 1;
@@ -576,6 +580,11 @@ void splice_cigar(
             tmp.emplace_back(op, op_len);   
         }
 
+        if (is_gap(op) && was_skip)
+        {   
+            std::iter_swap(tmp.end() - 2 , tmp.end() - 1); 
+        } 
+        
         if (curr_op_end == curr_segment_end && curr_idx < last_idx)
         {
             ++curr_idx;
@@ -584,10 +593,16 @@ void splice_cigar(
             tmp.emplace_back('N', (curr_segment_start - (curr_op_end + 1)));
             curr_pos = curr_segment_start - 1;
             curr_op_end = curr_pos;
+
+            was_skip = true;
+        }
+        else
+        {
+            was_skip = false; 
         }
    }
    
-   make_skip_after_ins(tmp);
+   //make_skip_after_ins(tmp);
    std::swap(tmp, cigar_vector); 
 }
 
@@ -610,7 +625,7 @@ void parse_variants(
 
     std::string_view ref, alt;
     bool is_padding_base_supported = false;
-    
+     
     for (const auto & cigar : cigar_vector)
     {
         op = cigar.first;
@@ -708,7 +723,6 @@ void parse_variants(
 }
 
 
-
 // expand segment start/end: {{123, 125}, {502, 504}} -> {123, 124, 125, 502, 503, 504}
 //-------------------------------------------------------------------------------------
 std::vector<int> expand_coordinates(const Coord& coordinates)
@@ -775,7 +789,6 @@ int count_repeats(std::string_view ptrn, std::string_view seq)
 }
 
 
-
 void make_kmers(std::string_view seq, const size_t k, Kmers& kmers)
 {
     size_t n = seq.size();
@@ -807,7 +820,6 @@ void diff_kmers(
                         sbj_kmers.begin(), sbj_kmers.end(),
                         std::inserter(diff, diff.end()));
 }
-
 
 
 int count_kmer_overlap(std::string_view seq, const Kmers& kmer_set)

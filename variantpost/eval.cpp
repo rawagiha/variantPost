@@ -107,15 +107,15 @@ void postprocess_alignment(
         pos_vec, 
         contig.coordinates
     );
-
+    
     move_up_insertion(rslt.cigar_vec);
-
+   
     int query_begin = alignment.query_begin;
     if (rslt.cigar_vec[0].first == 'S')
     {      
         query_begin -= rslt.cigar_vec[0].second;
     }
-
+    
     rslt.genomic_start_pos = pos_vec[alignment.ref_begin];
     rslt.seq = contig.seq.substr(query_begin);
     rslt.ref_seq = contig.ref_seq.substr(alignment.ref_begin);
@@ -257,6 +257,7 @@ void annot_nearest_variant(
     }
 }
 
+
 inline bool pass_gap_check(AlnResult& rslt, const UserParams& user_params)
 {
     if (rslt.variants.empty()) return false;
@@ -364,7 +365,7 @@ void annot_alignment(Contig& contig, const AlnResult& rslt)
     contig.quals = rslt.quals;
     
     int op_len;
-    char op = '\0', prev_op = '\0';
+    char op = '\0';
     size_t seq_idx = 0, ref_idx = 0, v_idx = 0;    
     for (const auto& cigar : rslt.cigar_vec)
     {  
@@ -393,46 +394,23 @@ void annot_alignment(Contig& contig, const AlnResult& rslt)
                 }
                 break;
             case 'I':
-                if (prev_op == '=' || prev_op == 'X')
-                {
-                    contig.alt_bases.pop_back();
-                    contig.alt_bases.push_back(contig.seq.substr(seq_idx - 1, op_len + 1));
-                    contig.base_quals.pop_back();
-                    contig.base_quals.push_back(contig.quals.substr(seq_idx - 1, op_len + 1));
-                }
-                else if (prev_op == 'N')
-                {
-                    // do later  
-                    std::cout << " MANUALLY CHECK THIS!!!!!!! " << std::endl;    
-                } 
-                //'I' already moved up             
+                contig.alt_bases.pop_back();
+                contig.alt_bases.push_back(contig.seq.substr(seq_idx - 1, op_len + 1));
+                contig.base_quals.pop_back();
+                contig.base_quals.push_back(contig.quals.substr(seq_idx - 1, op_len + 1));
                 
                 seq_idx += op_len;
                 ++v_idx;
                 break;
             case 'D':
-                if (prev_op == '=' || prev_op == 'X')
-                {
-                    contig.ref_bases.pop_back();
-                    contig.ref_bases.push_back(rslt.variants[v_idx].ref);
-                }    
-                else if (prev_op == 'N')
-                {
-                    // do later
-                    std::cout << " MANUALLY CHECK THIS!!!!!!! " << std::endl;    
-                }
+                contig.ref_bases.pop_back();
+                contig.ref_bases.push_back(rslt.variants[v_idx].ref);
 
                 ref_idx += op_len;
                 genomic_pos += op_len;
                 ++v_idx;
                 break;
             case 'N':
-                
-                if (prev_op == 'I' || prev_op == 'D')
-                {
-                    std::cout << "PPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPP" << std::endl;
-                }      
-                  
                 contig.skip_starts.push_back(genomic_pos);
                 genomic_pos += op_len;
                 contig.skip_ends.push_back(genomic_pos - 1);
@@ -441,8 +419,6 @@ void annot_alignment(Contig& contig, const AlnResult& rslt)
                 seq_idx += op_len;
                 break;
         }
-
-        prev_op = op;
     }
 }
 
@@ -632,7 +608,6 @@ void aln_extended_contig(
    );
 
    postprocess_alignment(rslt, pos_vec, contig, loc_ref, aln);
-        
    annot_alignment(contig, rslt);
    update_contig_layout(contig, target.pos);
 }

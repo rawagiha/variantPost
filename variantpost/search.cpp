@@ -13,28 +13,6 @@
 SearchResult::SearchResult() {}
 
 
-void from_target_reads(
-    Contig& contig,
-    const Variant& target,
-    Reads& targets,
-    Reads& candidates,
-    Reads& non_targets,
-    const UserParams& user_param,
-    LocalReference& loc_ref
-);
-
-
-void from_candidate_reads(
-    Contig& contig,
-    const Variant& target,
-    Reads& targets,
-    Reads& candidates,
-    Reads& non_targets,
-    const UserParams& user_params,
-    LocalReference& loc_ref
-);
-
-
 void SearchResult::fill_read_info(const Reads& reads, const int target_status)
 {
     for (const auto& read : reads)
@@ -45,6 +23,7 @@ void SearchResult::fill_read_info(const Reads& reads, const int target_status)
         are_from_first_bam.push_back(read.is_from_first_bam);          
     }
 }
+
 
 void SearchResult::report(
     const Contig& contig,
@@ -71,8 +50,6 @@ void SearchResult::report(
     skip_starts = contig.skip_starts;
     skip_ends = contig.skip_ends;
 }
-
-
 
 
 Variant prep_target(
@@ -123,134 +100,6 @@ void prep_reads(
 }
 
 
-void _search_target(
-    
-    /* data passed from Python interface*/
-    
-    SearchResult& rslt,
-    
-    //reference fastafile
-    const std::string& fastafile,
-    
-    //target variant info
-    const std::string& chrom,
-    const int pos, 
-    const std::string& ref,
-    const std::string& alt,
-    
-    //user defined 
-    const int mapq_thresh,
-    const int base_q_thresh,
-    const double lq_base_rate_thresh,
-    const int match_score,
-    const int mismatch_penal,
-    const int gap_open_penal,
-    const int gap_ext_penal,
-    const int kmer_size,
-    const int local_thresh,
-    const int ref_start, //local ref start/end
-    const int ref_end,   //defined by user's window choice
-    
-    //reads mapped to the region of interest 
-    const std::vector<std::string>& read_names,
-    const std::vector<bool>& are_reverse,
-    const std::vector<std::string>& cigar_strs,
-    const std::vector<int>& aln_starts,
-    const std::vector<int>& aln_ends,
-    const std::vector<std::string>& read_seqs,
-    const std::vector<std::vector<int>>& quals,
-    const std::vector<int>& mapqs,
-    const std::vector<bool>& are_from_first_bam)
-{  
-    
-    //auto t1 = std::chrono::high_resolution_clock::now();
-        
-    // do input validation at python ends
-    // 1) no fetched reads, 
-    // 2) undefined variants...
-    // 3) ref_start/ref_end must be non-N region
-    
-    // packing data from Python 
-    
-    UserParams user_params(
-        mapq_thresh, 
-        base_q_thresh, 
-        lq_base_rate_thresh,
-        match_score, 
-        mismatch_penal, 
-        gap_open_penal, 
-        gap_ext_penal, 
-        kmer_size, 
-        local_thresh 
-    );
-
-    LocalReference loc_ref(fastafile, chrom, ref_start, ref_end);   
-
-    Variant target = prep_target(pos, ref, alt, loc_ref);
-    
-    Reads reads;
-    prep_reads(
-        reads, 
-        read_names, 
-        are_reverse,
-        cigar_strs,
-        aln_starts,
-        aln_ends,
-        read_seqs,
-        quals,
-        mapqs,
-        are_from_first_bam
-    );
-
-    // read processing
-    annotate_reads(
-        reads, 
-        target, 
-        user_params, 
-        loc_ref
-    );  
-    
-    Reads targets, candidates, non_targets;
-    classify_reads(reads, targets, candidates, non_targets, user_params);
-    
-    // contig processing
-    Contig contig;
-    if (!targets.empty())
-    {
-        from_target_reads(
-            contig,
-            target,
-            targets,
-            candidates,
-            non_targets,
-            user_params,
-            loc_ref
-        );
-    }
-    else if (!candidates.empty()) 
-    {   
-        from_candidate_reads(
-            contig,
-            target,
-            targets,
-            candidates,
-            non_targets,
-            user_params,
-            loc_ref
-        );
-    }
-    
-    rslt.report(contig, targets, non_targets); 
-    
-    //auto t2 = std::chrono::high_resolution_clock::now();
-    //auto ms_int = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
-    //std::chrono::duration<double, std::milli> ms_double = t2 - t1;
-    //std::cout << ms_int.count() << "ms\n";
-    //std::cout << ms_double.count() << "ms\n";
-    return;
-}   
-
-
 void from_target_reads(
     Contig& contig,
     const Variant& target,
@@ -261,6 +110,7 @@ void from_target_reads(
     LocalReference& loc_ref
 )
 {
+    //std::cout << "making" << std::endl;
     make_contig(
         contig,
         target, 
@@ -268,9 +118,12 @@ void from_target_reads(
         user_params,
         loc_ref
     );
-                 
-    char _eval = eval_by_aln(contig, target, user_params, loc_ref);
     
+    //std::cout << contig.seq << " " << contig.seq.size() << std::endl;
+    //std::cout << "eval" << std::endl;             
+    char _eval = eval_by_aln(contig, target, user_params, loc_ref);
+    //std::cout << "eval reult " << _eval  << std::endl;
+
     if (_eval == 'C')
     {
         transfer_vector(non_targets, targets);
@@ -278,9 +131,11 @@ void from_target_reads(
         return;      
     }
 
+    //std::cout << "repeat" << std::endl;
     ShiftableSegment ss;
     annot_shiftable_segment(ss, target, contig);   
-     
+    
+    //std::cout << "cand classify" << std::endl; 
     Reads lt_matches, mid_matches, rt_matches, undetermined;    
     classify_cand_indel_reads(
         candidates,
@@ -366,4 +221,143 @@ void from_candidate_reads(
         contig,
         user_params
     );
+}   
+
+
+void _search_target(
+    
+    /* data passed from Python interface*/
+    
+    SearchResult& rslt,
+    
+    //reference fastafile
+    const std::string& fastafile,
+    
+    //target variant info
+    const std::string& chrom,
+    const int pos, 
+    const std::string& ref,
+    const std::string& alt,
+    
+    //user defined 
+    const int mapq_thresh,
+    const int base_q_thresh,
+    const double lq_base_rate_thresh,
+    const int match_score,
+    const int mismatch_penal,
+    const int gap_open_penal,
+    const int gap_ext_penal,
+    const int kmer_size,
+    const int local_thresh,
+    const int ref_start, //local ref start/end
+    const int ref_end,   //defined by user's window choice
+    
+    //reads mapped to the region of interest 
+    const std::vector<std::string>& read_names,
+    const std::vector<bool>& are_reverse,
+    const std::vector<std::string>& cigar_strs,
+    const std::vector<int>& aln_starts,
+    const std::vector<int>& aln_ends,
+    const std::vector<std::string>& read_seqs,
+    const std::vector<std::vector<int>>& quals,
+    const std::vector<int>& mapqs,
+    const std::vector<bool>& are_from_first_bam)
+{  
+    
+    //auto t1 = std::chrono::high_resolution_clock::now();
+        
+    // do input validation at python ends
+    // 1) no fetched reads, 
+    // 2) undefined variants...
+    // 3) ref_start/ref_end must be non-N region
+    
+    // packing data from Python 
+    
+    UserParams user_params(
+        mapq_thresh, 
+        base_q_thresh, 
+        lq_base_rate_thresh,
+        match_score, 
+        mismatch_penal, 
+        gap_open_penal, 
+        gap_ext_penal, 
+        kmer_size, 
+        local_thresh 
+    );
+
+    LocalReference loc_ref(fastafile, chrom, ref_start, ref_end);   
+
+    Variant target = prep_target(pos, ref, alt, loc_ref);
+    
+    //std::cout << "read prep " <<std::endl;
+    Reads reads;
+    prep_reads(
+        reads, 
+        read_names, 
+        are_reverse,
+        cigar_strs,
+        aln_starts,
+        aln_ends,
+        read_seqs,
+        quals,
+        mapqs,
+        are_from_first_bam
+    );
+    
+    //std::cout << "read anot " <<std::endl;
+    // read processing
+    annotate_reads(
+        reads, 
+        target, 
+        user_params, 
+        loc_ref
+    );  
+    
+    Reads targets, candidates, non_targets;
+    classify_reads(reads, targets, candidates, non_targets, user_params);
+    
+    // contig processing
+    Contig contig(target);
+    if (!targets.empty())
+    {
+        //std::cout << "conting from target " <<std::endl;
+        from_target_reads(
+            contig,
+            target,
+            targets,
+            candidates,
+            non_targets,
+            user_params,
+            loc_ref
+        );
+    }
+    else if (!candidates.empty()) 
+    {   
+        //std::cout << "conting from kmer " <<std::endl;
+        from_candidate_reads(
+            contig,
+            target,
+            targets,
+            candidates,
+            non_targets,
+            user_params,
+            loc_ref
+        );
+    }
+    
+    rslt.report(contig, targets, non_targets); 
+    
+    //auto t2 = std::chrono::high_resolution_clock::now();
+    //auto ms_int = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
+    //std::chrono::duration<double, std::milli> ms_double = t2 - t1;
+    //std::cout << ms_int.count() << "ms\n";
+    //std::cout << ms_double.count() << "ms\n";
+    
+    size_t r = contig.positions.size();
+    for (size_t i = 0; i < r; ++i)
+    {
+        std::cout << contig.positions[i] << " " << contig.ref_bases[i] << " " << contig.alt_bases[i]<< std::endl; 
+    }
+    
+    return;
 }   
