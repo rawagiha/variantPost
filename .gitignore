@@ -2,7 +2,7 @@
 *.d
 
 #
-variantpost/preprocessor.cpp
+variantpost/cy_search.cpp
 variantpost/processor_wrapper.cpp
 variantpost/variantalignment.cpp
 
