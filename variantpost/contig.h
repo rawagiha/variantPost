@@ -40,12 +40,12 @@ struct Contig
     size_t rt_len;
     
     //alignments
-    std::vector<int> positions;
-    std::vector<int> skip_starts;
-    std::vector<int> skip_ends;
-    std::vector<std::string> ref_bases;
-    std::vector<std::string> alt_bases;
-    std::vector<std::string> base_quals; 
+    std::vector<int> positions{};
+    std::vector<int> skip_starts{};
+    std::vector<int> skip_ends{};
+    std::vector<std::string> ref_bases{};
+    std::vector<std::string> alt_bases{};
+    std::vector<std::string> base_quals{}; 
     
     Contig();
 
@@ -74,6 +74,17 @@ void prefilter_candidates(
     const Variant& target,
     const UserParams& user_params,
     LocalReference& loc_ref
+);
+
+
+void prefilter_cplx_candidates(
+    Contig& contig,
+    Reads& candidates,
+    Reads& non_targets,
+    const Variant& target,
+    const UserParams& user_params,
+    LocalReference& loc_ref,
+    std::vector<Variant>& decomposed
 );
 
 

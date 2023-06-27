@@ -377,6 +377,22 @@ std::string Variant::minimal_repeat_unit() const
 }
 
 
+void find_shared_variants(
+    std::vector<Variant>& shared,
+    std::vector<Variant>& var_vec1,
+    const std::vector<Variant>& var_vec2 //pre sorted
+)
+{
+    std::sort(var_vec1.begin(), var_vec1.end());
+    
+    std::set_intersection(
+        var_vec1.begin(),var_vec1.end(),
+        var_vec2.begin(),var_vec2.end(),
+        back_inserter(shared)
+    );
+}
+
+
 inline std::pair<char, int> split_cigar(const std::string& cigar) 
 {
   size_t last_idx = cigar.size() - 1;
@@ -493,6 +509,7 @@ void make_skip_after_ins(std::vector<std::pair<char, int>>& cigar_vector)
     }
 
 }
+
 
 inline bool is_gap(const char op)
 {
@@ -835,3 +852,50 @@ int count_kmer_overlap(std::string_view seq, const Kmers& kmer_set)
 
     return kmer_cnt; 
 }
+
+
+//split at cplx variant start index
+int find_split_idx(
+    const int read_start, 
+    const int target_pos,
+    const std::vector<std::pair<char, int>>& cigar_vector
+)
+{
+    char op = '\0';
+    int i = 0, op_len = 0, curr_pos = read_start - 1;
+    for (const auto& c: cigar_vector)
+    {
+        op = c.first;
+        op_len = c.second;
+        switch (op)
+        {
+            case 'M':
+            case 'X':
+            case 'S':
+                if (curr_pos + op_len < target_pos)
+                {    
+                    curr_pos += op_len;
+                    i += op_len;    
+                }
+                else if (curr_pos < target_pos && target_pos <= curr_pos + op_len)
+                {
+                    i += target_pos - curr_pos;
+                    return i;
+                }
+                break;
+            case 'I':
+                i += op_len;
+                curr_pos += 1;
+                break;
+            case 'D':
+            case 'N':
+                curr_pos += op_len;
+                break;
+            default:
+                break;      
+        }      
+    }
+    
+    return -1; //invalid case
+}
+

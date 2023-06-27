@@ -2,7 +2,7 @@ from .phaser import phase
 from variantpost.cy_search cimport search_target
 from .variant import Variant
 
-#import time
+from collections import namedtuple
 
 class VariantAlignment(object):
     def __init__(
@@ -18,59 +18,27 @@ class VariantAlignment(object):
         mismatch_penalty=2,
         gap_open_penalty=3,
         gap_extention_penalty=1, 
-        kmer_size=24, 
+        kmer_size=32, 
         local_threshold=20
-    ):
+    ):     
         if not variant.is_normalized:
             variant.normalize(inplace=True)
-            variant = Variant(
-                        variant.chrom, 
-                        variant.pos, 
-                        variant.ref, 
-                        variant.alt, 
-                        variant.reference
-                    )
-
-        (
-            chrom,
-            pos,
-            ref,
-            alt,
-            chrom_len,
-            unspliced_local_reference_start,
-            unspliced_local_reference_end,
-            reference,
-        ) = (
-            variant.chrom,
-            variant.pos,
-            variant.ref,
-            variant.alt,
-            variant.reference_len,
-            variant.unspliced_local_reference_start,
-            variant.unspliced_local_reference_end,            
-            variant.reference,
-        )
-        
-        #t = time.time()
-
-        ##########
-        fastafile = variant.reference.filename
-        #########
-        
-        ##tt = time.time()
-        #print(tt -t, "preprosess")
+         
+        self.has_second = second_bam
 
         # interact with c++ code
-        self.contig_dict, self.skips, self.annotated_reads = search_target(
+        self.contig_dict, self.skips, self.read_names, self.are_reverse, self.target_status, self.are_from_first_bam  = search_target(
                 bam,
                 second_bam,
-                chrom_len,
+                variant.reference_len,
                 exclude_duplicates,
                 window,
                 downsample_threshold,
-                fastafile,
-                chrom, 
-                pos, ref.encode(), alt.encode(),
+                variant.reference.filename,
+                variant.chrom, 
+                variant.pos, 
+                variant.ref.encode(), 
+                variant.alt.encode(),
                 mapping_quality_threshold,
                 base_quality_threshold, 
                 low_quality_base_rate_threshold,
@@ -80,26 +48,83 @@ class VariantAlignment(object):
                 gap_extention_penalty,
                 kmer_size,
                 local_threshold,
-                unspliced_local_reference_start, 
-                unspliced_local_reference_end, 
+                variant.unspliced_local_reference_start, 
+                variant.unspliced_local_reference_end, 
         )
 
-        
+    
     def count_alleles(self):
-            sup, non_sup, fwrv, fs = [], [], [], []
-            for i in self.annotated_reads:
-                if i.target_status == 1:
-                    sup.append(i.read_name)
-                elif i.target_status == 0:
-                    non_sup.append(i.read_name)
-                    
-            return (len(sup), len(non_sup))    
-        
-        #print(time.time() - tt, "c++ time")
-        
-        #print(annotated_reads)
-        #phase(contig_dict, skips,  pos)
-        
-        #print(time.time() - t, "total varaln --- {}".format("aho"))
+        if self.has_second:
+            return self._paired_count()
+        else:
+            return self._unpaired_count()
+   
+    
+    def _unpaired_count(self):
+        sf, sr, nf, nr, uf, ur = ([] for i in range(6))
 
+        for read_name, status, is_rv in zip(self.read_names, self.target_status, self.are_reverse):
+            
+            flags = (status, is_rv)
+            
+            if flags == (1, True):
+                sr.append(read_name)
+            elif flags == (1, False):
+                sf.append(read_name)
+            elif flags == (0, True):
+                nr.append(read_name)
+            elif flags == (0, False):
+                nf.append(read_name)
+            elif flags == (-1, True):
+                ur.append(read_name)
+            elif flags == (-1, False):
+                uf.append(read_name)
+        
+        return fill_cnt_data(sf, sr, nf, nr, uf, ur)         
+    
+    
+    def _paired_count(self):
+        
+        sf1, sf2, sr1, sr2, nf1, nf2, nr1, nr2, uf1, uf2, ur1, ur2 = ([] for i in range(12))     
+        for read_name, status, is_rv, is_first in zip(self.read_names, self.target_status, self.are_reverse, self.are_from_first_bam):  
+            
+            flags = (status, is_rv, is_first)
+            
+            if flags == (1, True, True):
+                sr1.append(read_name)
+            elif flags == (1, True, False):
+                sr2.append(read_name)
+            elif flags == (1, False, True):
+                sf1.append(read_name)
+            elif flags == (1, False, False):
+                sf2.append(read_name)
+            elif flags == (0, True, True):
+                nr1.append(read_name)
+            elif flags == (0, True, False):
+                nr2.append(read_name)
+            elif flags == (0, False, True):
+                nf1.append(read_name)
+            elif flags == (0, False, False):
+                nf2.append(read_name)
+            elif flags == (-1, True, True):
+                ur1.append(read_name)
+            elif flags == (-1, True, False):
+                ur2.append(read_name)
+            elif flags == (-1, False, True):
+                uf1.append(read_name)
+            elif flags == (-1, False, False):
+                uf2.append(read_name)
+        
+        PairedAlleleCount = namedtuple("PairedAlleleCount", ["first", "second"])
+        
+        pac = PairedAlleleCount(fill_cnt_data(sf1, sr1, nf1, nr1, uf1, ur1), fill_cnt_data(sf2, sr2, nf2, nr2, uf2, ur2))
+        
+        return pac  
+
+
+def fill_cnt_data(sf, sr, nf, nr, uf, ur):
+    AlleleCount = namedtuple("AlleleCount", ["s", "s_fw", "s_rv", "n", "n_fw", "n_rv", "u", "u_fw", "u_rv"])
+    ac = AlleleCount(len(set(sf + sr)), len(sf), len(sr), len(set(nf + nr)), len(nf), len(nr), len(set(uf + ur)), len(uf), len(ur))
+    
+    return ac
 

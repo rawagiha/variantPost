@@ -42,7 +42,8 @@ char eval_by_aln(
     Contig& contig,
     const Variant& target,
     const UserParams& user_params,
-    LocalReference& loc_ref
+    LocalReference& loc_ref,
+    const std::vector<Variant>* p_decomposed = NULL 
 );
 
 
@@ -53,5 +54,13 @@ void aln_extended_contig(
     LocalReference& loc_ref
 );
 
+
+//define in eval becaseu of "local_alignment" (defined in eval)...
+void to_simple_variants(
+    const UserParams& user_params,
+    const Contig& contig,
+    LocalReference& loc_ref,
+    std::vector<Variant>& simples
+);
 
 #endif

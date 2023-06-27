@@ -29,37 +29,40 @@ struct SearchResult
     void report(
         const Contig& contig,
         const Reads& targets,
-        const Reads& non_targets
-        //const Reads& undetermined
+        const Reads& non_targets,
+        const Reads& undetermined
     );
 };
 
-void _search_target(SearchResult &,
-                        const std::string &,
-                        const std::string &,
-                        const int,
-                        const std::string &,
-                        const std::string &,
-                        const int,
-                        const int, 
-                        const double,
-                        const int,
-                        const int,
-                        const int,
-                        const int,
-                        const int,
-                        const int,
-                        const int,
-                        const int,
-                        const std::vector<std::string> &,
-                        const std::vector<bool> &, 
-                        const std::vector<std::string> &,
-                        const std::vector<int> &, 
-                        const std::vector<int> &,
-                        const std::vector<std::string> &, 
-                        const std::vector<std::vector<int> > &, 
-                        const std::vector<int> &,
-                        const std::vector<bool> &
-    );
+
+//interface with python
+void _search_target(
+    SearchResult&,
+    const std::string&,
+    const std::string&,
+    const int,
+    const std::string&,
+    const std::string&,
+    const int,
+    const int, 
+    const double,
+    const int,
+    const int,
+    const int,
+    const int,
+    const int,
+    const int,
+    const int,
+    const int,
+    const std::vector<std::string>&,
+    const std::vector<bool>&, 
+    const std::vector<std::string>&,
+    const std::vector<int>&, 
+    const std::vector<int>&,
+    const std::vector<std::string>&, 
+    const std::vector<std::vector<int>>&, 
+    const std::vector<int>&,
+    const std::vector<bool>&
+);
 
 #endif

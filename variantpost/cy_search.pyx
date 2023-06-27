@@ -272,5 +272,5 @@ cdef object search_target(
         annot_reads.append(AnnotatedRead(read_name.decode("utf-8"), is_reverse, is_first_bam, target_status))
     
     skips = [(start, end) for start, end in zip(rslt.skip_starts, rslt.skip_ends)]
-    
-    return contig_dict, skips, annot_reads
+    return contig_dict, skips, rslt.read_names,  rslt.are_reverse, rslt.target_statuses, rslt.are_from_first_bam
+    #return contig_dict, skips, annot_reads

@@ -91,8 +91,8 @@ std::string_view get_unspliced_ref_seq(
 {
   int start_idx = aln_start - loc_ref_start;
   size_t expected_ref_len = aln_end - aln_start + 1;
-   
-  if (start_idx >= 0) 
+  
+  if (0 <= start_idx && start_idx <= int(loc_ref_seq.size())) 
   {
     std::string_view fitted_ref = loc_ref_seq.substr(start_idx, expected_ref_len);
     if (fitted_ref.size() == expected_ref_len) //may be short near rt end
@@ -352,6 +352,7 @@ void annot_covering_ptrn(
         if (read.aln_start <= target.pos 
             && target.pos <= read.aln_end) read.is_tight_covering = true;
         
+        /*
         // experimental central score 
         if (target.pos - read.covering_start > read.covering_end - target.pos)
         {
@@ -362,7 +363,7 @@ void annot_covering_ptrn(
         {
             read.central_score = (target.pos - read.covering_start)
                 / static_cast<double>(read.covering_end - read.covering_start);
-        }
+        }*/
     }     
 }
 
@@ -382,11 +383,12 @@ void annot_target_info(
 
     int idx = 0;
     std::vector<int> dist;
+    
     for (auto& variant : read.variants) 
     {
         if (is_already_found) is_target = false;
         else is_target = target.is_equivalent(variant, loc_ref);
-
+        
         if (is_target) 
         {
             read.has_target = true;   
@@ -568,7 +570,13 @@ void annot_local_ptrn(
         read.local_ptrn = 'N';
         return;
     }
-    
+     
+    if (read.has_target)
+    {     
+        read.local_ptrn = 'A';
+        return;
+    }
+      
     switch (read.covering_ptrn)
     {
         case 'X':
@@ -601,12 +609,6 @@ void annot_local_ptrn(
         read.may_be_complex = true;
     }
                    
-    if (read.has_target) 
-    {    
-        //'A': targed aligned
-        read.local_ptrn = 'A';   
-        return;
-    }
     
     //partial match to target for cplx or multiallelic
     if (!read.dist_to_non_target) 
@@ -666,13 +668,19 @@ void eval_read_quality(Read& read, const UserParams& user_params)
 {
     if (!read.non_ref_quals.empty())
     {
-        double non_ref_cnt = 0.0;
+        double non_ref_cnt = 0.0, overall_cnt = 0.0;
         for (const char q : read.non_ref_quals)
         {
             if (q <= user_params.base_q_thresh) non_ref_cnt += 1.0;
         }
         
+        for (const char q : read.base_quals)
+        {
+            if (q <= user_params.base_q_thresh) overall_cnt += 1.0;
+        }
+
         read.nonref_lq_rate = non_ref_cnt / read.non_ref_quals.length();
+        read.overall_lq_rate = overall_cnt / read.seq.length();
     }
 }
 
@@ -686,13 +694,21 @@ void annotate_reads(
 {
     for (auto& read : reads)
     {
-        annot_ref_seq(read, loc_ref); 
+        //std::cout << "annot ref" << std::endl;
+        annot_ref_seq(read, loc_ref);
+        //std::cout << "annot spl" << std::endl; 
         annot_splice_pattern(read);
+        //std::cout << "annot covering" << std::endl;
         annot_covering_ptrn(read, target, loc_ref);
+        //std::cout << "annot target" << std::endl;
         annot_target_info(read, target, loc_ref);
+        //std::cout << "annot clip" << std::endl;
         annot_clip_pattern(read, target);
-        annot_non_ref_signature(read);   
+        //std::cout << "annot nonref" << std::endl;
+        annot_non_ref_signature(read);  
+        //std::cout << "annot local" << std::endl; 
         annot_local_ptrn(read, target, user_params, loc_ref);
+        //std::cout << "annot qual" << std::endl;
         eval_read_quality(read, user_params);
     }    
 }
@@ -710,16 +726,18 @@ void classify_reads(
     targets.reserve(max_size);
     candidates.reserve(max_size);
     non_targets.reserve(max_size);    
-    
+     
     for (size_t i = 0; i < max_size; ++i)
     {
+        
         if (reads[i].local_ptrn == 'A') 
         {
             transfer_elem(targets, reads, i);
         }
         else
         {
-            if (reads[i].mapq >= user_params.mapq_thresh)
+            if (reads[i].mapq >= user_params.mapq_thresh
+               && reads[i].overall_lq_rate < user_params.lq_rate_thresh)
             {
                 if (reads[i].local_ptrn == 'B') 
                 {    

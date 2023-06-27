@@ -88,10 +88,9 @@ void annot_shiftable_segment(
     //std::cout << ss.boundary_end << " " << ss.boundary_start  << std::endl;
     const size_t shiftable_len = ss.boundary_end - ss.boundary_start - 1;
     std::string shiftable = contig.seq.substr(
-        ss.boundary_start + 1, shiftable_len
+        ss.boundary_start, shiftable_len
     );
     
-    //std::cout << shiftable << std::endl;
     ss.fw_repeat_unit = target.minimal_repeat_unit();
     
     ss.unit_len = ss.fw_repeat_unit.size();
@@ -122,7 +121,7 @@ void annot_shiftable_segment(
         size_t remainder = shiftable_len % ss.unit_len;
         if (remainder) is_complete_tandem_repeat = false;
     }
-
+    
     ss.n_tandem_repeats = n_tandem_repeats;
     ss.is_complete_tandem_repeat = is_complete_tandem_repeat;
 }
@@ -132,6 +131,7 @@ inline bool has_mismatches(string_view cigar_str)
 {
     return (cigar_str.find('X') != std::string_view::npos);
 }
+
 
 bool has_critical_mismatches(
     string_view cigar_str,
@@ -185,9 +185,9 @@ char indel_match_pattern
     const std::string& query, 
     const Contig& contig,
     const ShiftableSegment& ss,
-    const Filter & filter,
-    const Aligner & aligner, 
-    Alignment & alignment
+    const Filter& filter,
+    const Aligner& aligner, 
+    Alignment& alignment
 )          
 {
     //contig layout
@@ -222,7 +222,7 @@ char indel_match_pattern
     
     // checks for complete tandem repeat  
     int lt_rep = 0, mid_rep = 0, rt_rep = 0;
-    if (ss.is_complete_tandem_repeat) 
+    if (ss.is_complete_tandem_repeat && ss.unit_len < 4) 
     { 
         //const int boundary_start = ss.boundary_start;
         const int read_start = alignment.query_begin;
@@ -265,7 +265,7 @@ char indel_match_pattern
             lt_end_idx, 
             rt_start_idx
         );
-
+        
         if (disqualified) return 'F';
     }   
     
@@ -306,11 +306,6 @@ void classify_cand_indel_reads(
     const UserParams& user_params
 )
 {
-    Kmers target_kmers;
-    diff_kmers(
-        contig.seq, contig.ref_seq, user_params.kmer_size, target_kmers
-    );
-    
     bool is_complete_tandem_repeat = ss.is_complete_tandem_repeat;
     
     Filter filter;
@@ -330,46 +325,99 @@ void classify_cand_indel_reads(
             continue;   
         }
 
-        candidates[i].kmer_score = count_kmer_overlap(candidates[i].seq, target_kmers);
-        
-        if (candidates[i].kmer_score)
-        {
-            char match_rlst = indel_match_pattern(
-                std::string(candidates[i].seq),
-                contig,
-                ss,
-                filter,
-                aligner,
-                aln
-            );
+        char match_rlst = indel_match_pattern(
+            std::string(candidates[i].seq),
+            contig,
+            ss,
+            filter,
+            aligner,
+            aln
+        );
 
-            switch (match_rlst)
-            {
-                case 'L':
-                    transfer_elem(lt_matches, candidates, i);
-                    break;
-                case 'M':
-                    transfer_elem(mid_matches, candidates, i);
-                    break;
-                case 'R':
-                    transfer_elem(rt_matches, candidates, i);
-                    break;
-                case 'F':
-                    transfer_elem(non_targets, candidates, i);
-                    break;
-                case 'U':
-                    transfer_elem(undetermined, candidates, i);
-                    break;
-            }                
-        }
-        else
+        switch (match_rlst)
         {
-            transfer_elem(non_targets, candidates, i);
-        } 
+            case 'L':
+                transfer_elem(lt_matches, candidates, i);
+                break;
+            case 'M':
+                transfer_elem(mid_matches, candidates, i);
+                break;
+            case 'R':
+                transfer_elem(rt_matches, candidates, i);
+                break;
+            case 'F':
+                transfer_elem(non_targets, candidates, i);
+                break;
+            case 'U':
+                transfer_elem(undetermined, candidates, i);
+                break;
+        }                
     }
     candidates.clear();
     candidates.shrink_to_fit();
 }
+
+
+void classify_cand_indel_reads_2(
+    Reads& candidates,
+    
+    Reads& targets,
+    Reads& non_targets,
+    Reads& undetermined,
+   
+    const Contig& contig,
+    const ShiftableSegment& ss,
+    const UserParams& user_params
+)
+{
+    bool is_complete_tandem_repeat = ss.is_complete_tandem_repeat;
+    
+    Filter filter;
+    Alignment aln;
+    Aligner aligner(
+        user_params.match_score, 
+        user_params.mismatch_penal,
+        255, //gap_open_penalty
+        255 // gap_extention_penalty
+    );
+
+    for (size_t i = 0; i < candidates.size(); ++i)
+    {         
+        if (is_complete_tandem_repeat && candidates[i].incomplete_shift)
+        {
+            transfer_elem(non_targets, candidates, i);
+            continue;   
+        }
+
+        char match_rlst = indel_match_pattern(
+            std::string(candidates[i].seq),
+            contig,
+            ss,
+            filter,
+            aligner,
+            aln
+        );
+
+        switch (match_rlst)
+        {
+            case 'L':
+            case 'M':
+            case 'R':
+                transfer_elem(targets, candidates, i);
+                break;
+            case 'F':
+                transfer_elem(non_targets, candidates, i);
+                break;
+            case 'U':
+                transfer_elem(undetermined, candidates, i);
+                break;
+        }                
+    } 
+    
+    candidates.clear();
+    candidates.shrink_to_fit();
+}
+
 
 void classify_cand_indel_read_2(
     Reads& targets,
@@ -381,26 +429,23 @@ void classify_cand_indel_read_2(
     const UserParams& user_params
 )
 {
+    //std::cout << "shift annot" << std::endl;
     ShiftableSegment ss;
-    annot_shiftable_segment(ss, target, contig);
-
-    Reads lt_matches, mid_matches, rt_matches;
-
-    classify_cand_indel_reads(
+    if (!target.is_complex)
+    {
+        annot_shiftable_segment(ss, target, contig);
+    }
+       
+    //std::cout << "do clsfy " << std::endl;
+    classify_cand_indel_reads_2(
         candidates,
+        
+        targets,
         non_targets, 
-            
-        lt_matches,
-        mid_matches,
-        rt_matches,
-
         undetermined,
+        
         contig,
         ss,
         user_params
-    );
-    
-    transfer_vector(targets, lt_matches);
-    transfer_vector(targets, mid_matches);
-    transfer_vector(targets, rt_matches);
+    );   
 }

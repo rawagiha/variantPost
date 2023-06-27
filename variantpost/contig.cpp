@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <string_view>
 
+#include "eval.h"
 #include "util.h"
 #include "merge.h"
 #include "reads.h"
@@ -83,7 +84,7 @@ void unite_coordinates(Coord& coord, const Reads& reads)
     }
 }
 
-
+/*
 //experimental
 bool is_easy_case(const Reads& reads, Reads& seeds)
 {
@@ -100,7 +101,7 @@ bool is_easy_case(const Reads& reads, Reads& seeds)
     } 
     
     return false;                   
-}
+}*/
 
 
 void find_seed_indel_reads(
@@ -310,6 +311,7 @@ void make_contig(
    contig.furnish(_merged, target);
 }
 
+
 void mock_target_seq(
     Contig& contig,
     const Variant& target,
@@ -319,7 +321,6 @@ void mock_target_seq(
 {
     size_t n = 2;
     int offset = target.is_complex ?  1 : 0;
-    
     
     int _start = (target.pos <= int(offset + user_params.kmer_size * n)) 
                ? 0 : target.pos - offset - user_params.kmer_size * n;
@@ -370,6 +371,7 @@ void mock_target_seq(
 }
 
 
+// used for non complex inputs
 void prefilter_candidates(
     Contig& contig,
     Reads& candidates,
@@ -394,7 +396,7 @@ void prefilter_candidates(
     for (auto& read : candidates)
     {
         read.kmer_score = count_kmer_overlap(read.seq, target_kmers);
-        
+
         // kmer becomes zero for immediate variant clusters
         if (!read.kmer_score)
         {
@@ -405,6 +407,145 @@ void prefilter_candidates(
         }
               
     }
+    
+    sort_by_kmer(candidates);
+
+    for (Reads::reverse_iterator i = candidates.rbegin(); 
+        i != candidates.rend(); ++i)
+    {
+        if ((*i).kmer_score)
+        {
+            break; //stop if candidate with kmer > 0
+        }
+        else
+        {
+            non_targets.insert(
+                non_targets.end(), 
+                std::make_move_iterator(candidates.rbegin()), 
+                std::make_move_iterator(candidates.rbegin() + 1)
+            );
+            candidates.pop_back();  
+        }
+    }
+    
+    candidates.shrink_to_fit();
+}
+
+/*
+void to_simple_variants(
+    const UserParams& user_params,
+    const Contig& contig,
+    LocalReference& loc_ref,
+    std::vector<Variant>& simples
+)
+{
+    Filter filter;
+    Alignment alignment;
+    local_alignment(
+        user_params.match_score,
+        user_params.mismatch_penal,
+        user_params.gap_open_penal,
+        user_params.gap_ext_penal,
+        contig.mocked_seq,
+        contig.mocked_ref,
+        filter,
+        alignment
+    );
+
+    std::vector<std::pair<char, int>> cigar_vec = to_cigar_vector(
+        alignment.cigar_string
+    );
+    
+    move_up_insertion(cigar_vec);
+    
+    std::vector<int> pos_vec = expand_coordinates(contig.mocked_coord); 
+    
+    int query_begin = alignment.query_begin;
+    if (cigar_vec[0].first == 'S')
+    {
+        query_begin -= cigar_vec[0].second;
+    }
+    
+    //bool include_clips = false;   
+    std::string _tmp = ""; //won't need
+    parse_variants(
+        pos_vec[alignment.ref_begin],
+        contig.mocked_ref.substr(alignment.ref_begin),
+        contig.mocked_seq.substr(query_begin),
+        contig.mocked_seq.substr(query_begin), //for mocking
+        cigar_vec,
+        loc_ref.dict,
+        simples,
+        _tmp
+    );
+
+    std::sort(simples.begin(), simples.end());
+}
+*/
+
+
+
+void extract_indels(
+    std::vector<Variant>& indels,
+    const std::vector<Variant>& decomposed
+)
+{                     
+    for (const auto& v : decomposed)
+    {
+        if (!v.is_substitute) indels.push_back(v);
+    }
+}
+
+
+void prefilter_cplx_candidates(
+    Contig& contig,
+    Reads& candidates,
+    Reads& non_targets,
+    const Variant& target,
+    const UserParams& user_params,
+    LocalReference& loc_ref,
+    std::vector<Variant>& decomposed
+)
+{
+    
+    mock_target_seq(
+        contig,
+        target, 
+        user_params, 
+        loc_ref
+    );
+    
+    std::vector<Variant> indels;
+    to_simple_variants(user_params, contig, loc_ref, decomposed);   
+ 
+    extract_indels(indels, decomposed);    
+
+    std::vector<Variant> shared;
+    for (auto& read : candidates)
+    {
+        if (read.may_be_complex && !read.variants.empty())
+        {
+            find_shared_variants(shared, read.variants, indels);
+            if (!shared.empty())
+            {
+                read.kmer_score = 1; //pseudo count
+            }           
+            
+            /*
+            for (const auto& indel : indels)
+            {
+                for (const auto& v : read.variants)
+                {
+                    if (indel.is_equivalent(v, loc_ref))
+                    {
+                        read.kmer_score = 1; //pseudo count
+                        break;
+                    }    
+                }
+            }*/
+        }
+        shared.clear(); 
+    } 
     
     sort_by_kmer(candidates);
 
@@ -476,19 +617,6 @@ void concat_top_tens(
      sort_by_start(top_tens);
 }
 
-//obsolete?
-/*
-void flag_contig_member(const Reads& used, Reads& candidates)
-{
-    for (auto& read : candidates)
-    {
-        if (std::find(used.begin(), used.end(), read) != used.end())
-        {
-            read.is_contig_member = true;
-        }
-    }
-}*/
-
 
 void suggest_contig(
     Contig& contig,
@@ -552,7 +680,6 @@ void suggest_contig(
             );
         }
         
-        //flag_contig_member(top_tens, candidates);  
         unite_coordinates(coord, top_tens);
     }
     else
@@ -575,7 +702,6 @@ void suggest_contig(
             );
         }
 
-        //flag_contig_member(prioritized, candidates);
         unite_coordinates(coord, prioritized);
     }
     

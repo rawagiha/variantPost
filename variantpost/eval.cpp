@@ -42,7 +42,6 @@ void local_alignment(
     ); 
 }
 
-
 void to_simple_variants(
     const UserParams& user_params,
     const Contig& contig,
@@ -89,8 +88,9 @@ void to_simple_variants(
         simples,
         _tmp
     );
-}
 
+    std::sort(simples.begin(), simples.end());
+}
 
 void postprocess_alignment(
     AlnResult& rslt, 
@@ -308,7 +308,7 @@ void eval_by_variant(
 
 void eval_by_variant_lst(
     AlnResult& rslt,
-    const std::vector<Variant>& simples,
+    const std::vector<Variant>* p_decomposed,
     const UserParams& user_params,
     LocalReference& loc_ref,
     int& alternative_pos 
@@ -316,10 +316,30 @@ void eval_by_variant_lst(
 {
     if (!pass_gap_check(rslt, user_params)) return;
 
+    std::vector<Variant> shared;
+    find_shared_variants(shared, rslt.variants, *p_decomposed);
+    
+    size_t total_match = shared.size(), indel_match = 0;
+    
+    //find indel with biggest change
     int alternative_indel_len = 0;
-    size_t total_match = 0, indel_match = 0;
-    for (const auto& simple : simples)
+    for (const auto& v : shared)
     {
+        if (!v.is_substitute)
+        {
+            ++indel_match;
+            if (alternative_indel_len <= v.ref_len + v.alt_len)    
+            {    
+                alternative_pos = v.pos;
+                alternative_indel_len = (v.ref_len + v.alt_len);
+            }
+         }
+    }
+    /*
+    for (const auto& simple : *p_decomposed)
+    {
+        
+        
         for (const auto& variant : rslt.variants)
         {
             if (simple.is_equivalent(variant, loc_ref))
@@ -338,11 +358,11 @@ void eval_by_variant_lst(
                 break; //exit from the inner loop
             } 
         }
-    }
+    }*/
     
     if (!total_match) return;
     
-    if (total_match == simples.size())
+    if (total_match == p_decomposed->size())
     {
         rslt.has_target = true;
         rslt.is_passed = true;
@@ -477,14 +497,18 @@ char eval_by_aln(
     Contig& contig,
     const Variant& target,
     const UserParams& user_params,
-    LocalReference& loc_ref
+    LocalReference& loc_ref,
+    const std::vector<Variant>* p_decomposed
 )
 {
-    std::vector<Variant> simples;
-    if (target.is_complex)
-    {
-        to_simple_variants(user_params, contig, loc_ref, simples);
-    }
+    
+    //for (auto& h : *p_decomposed) std::cout << h.pos << " " << h.ref << " " << h.alt << std::endl;
+    
+    //std::vector<Variant> simples;
+    //if (target.is_complex)
+    //{
+    //    to_simple_variants(user_params, contig, loc_ref, simples);
+    //}
     
     // evaluation by grid search
     std::vector<std::pair<int, int>> gap_penals;
@@ -517,10 +541,12 @@ char eval_by_aln(
         
         postprocess_alignment(rslt, pos_vec, contig, loc_ref, aln);
         
-        int alternative_pos = target.pos;
-        if (target.is_complex)
+        int target_pos = target.pos;
+        //if (target.is_complex)
+        if (p_decomposed != NULL)
         {
-            eval_by_variant_lst(rslt, simples, user_params, loc_ref, alternative_pos);
+            //target_pos may change -> one of decomposed simple indels
+            eval_by_variant_lst(rslt, p_decomposed, user_params, loc_ref, target_pos);
         }
         else
         { 
@@ -530,7 +556,8 @@ char eval_by_aln(
         if (rslt.terminate_search)
         {    
             annot_alignment(contig, rslt);
-            update_contig_layout(contig, alternative_pos);
+            update_contig_layout(contig, target_pos);
+            //std::cout << "terminated " << std::endl;
             return 'A';   
         }
         else if (rslt.is_passed)
@@ -558,9 +585,11 @@ char eval_by_aln(
         {
             annot_alignment(contig, rslt);
             update_contig_layout(contig, target.pos);
+            //std::cout << "assembled " << std::endl;
             return 'A';
         }
         //count check by mocked seq
+        //std::cout << "mock used" << std::endl;
         return 'B';   
     }
      

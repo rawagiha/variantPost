@@ -104,7 +104,41 @@ struct Variant
     {
         return (pos == rhs.pos && ref == rhs.ref && alt == rhs.alt);
     }
+
+    bool operator < (const Variant& rhs) const
+    {
+        if (pos < rhs.pos) 
+        {    
+            return true;
+        }
+        else if (rhs.pos < pos) 
+        {    
+            return false;
+        }
+        else //pos == rhs.pos
+        {
+            if (ref.size() < rhs.ref.size()) 
+            {
+                return true;
+            }
+            else if (rhs.ref.size() < ref.size())
+            {
+                return false;
+            }
+            else //same ref deleted
+            {
+                return (alt < rhs.alt);
+            }
+        }
+    }
 };
+
+
+void find_shared_variants(
+    std::vector<Variant>& shared,
+    std::vector<Variant>& var_vec1,
+    const std::vector<Variant>& var_vec2
+);
 
 
 std::vector<std::pair<char, int>> to_cigar_vector(std::string_view cigar_string);
@@ -183,6 +217,13 @@ void diff_kmers(
 
 
 int count_kmer_overlap(std::string_view seq, const Kmers& kmer_set);
+
+
+int find_split_idx(
+    const int read_start,
+    const int target_pos,
+    const std::vector<std::pair<char, int>>& cigar_vector
+);
 
 
 #endif 
