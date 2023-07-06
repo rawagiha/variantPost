@@ -11,7 +11,7 @@ class VariantAlignment(object):
         window=200, 
         exclude_duplicates=True, 
         downsample_threshold=-1, 
-        mapping_quality_threshold=-1, 
+        mapping_quality_threshold=1, 
         base_quality_threshold=20, 
         low_quality_base_rate_threshold=0.1, 
         match_score=3,

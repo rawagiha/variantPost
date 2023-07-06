@@ -114,12 +114,18 @@ Variant::Variant
     {
         if (alt.substr(0, ref_len) == ref) is_complex = false; 
         else is_complex = true;
+
+        indel_len = alt_len - 1;
     }
     else
     {
         if (ref.substr(0, alt_len) == alt) is_complex = false;
         else is_complex = true;
-    }    
+
+        indel_len = ref_len - 1;
+    }
+    
+        
 }
 
 
@@ -339,6 +345,40 @@ bool Variant::is_equivalent(
 } 
 
 
+std::string to_tandem_rep(std::string_view seq)
+{
+    int seq_size = seq.size();
+    if (seq_size < 2) 
+    {
+        return std::string{seq};
+    }
+    else 
+    {
+        int mid_len = (int)seq_size / 2;
+
+        int step = 1;
+        while (step <= mid_len) 
+        {
+            std::vector<std::string_view> tandems;
+            for (int i = 0; step * i < seq_size; ++i) 
+            {
+                tandems.push_back(
+                    seq.substr(step * i, std::min(step, seq_size - (step * i)))
+                );    
+            }
+            std::sort(tandems.begin(), tandems.end());
+            tandems.erase(
+                std::unique(tandems.begin(), tandems.end()), tandems.end()
+            );
+            if (tandems.size() == 1) return std::string{tandems[0]};
+            else ++step;    
+        }
+    }
+    return std::string{seq};
+}
+
+
+
 std::string Variant::minimal_repeat_unit() const
 {
     std::string seq = "";
@@ -346,6 +386,8 @@ std::string Variant::minimal_repeat_unit() const
     if (is_ins) seq = alt.substr(1);
     if (is_del) seq = ref.substr(1);
     
+    return to_tandem_rep(seq);
+    /*
     int seq_size = seq.size();
     if (seq_size < 2) 
     {
@@ -373,7 +415,7 @@ std::string Variant::minimal_repeat_unit() const
             else ++step;    
         }
     }
-    return seq;
+    return seq;*/
 }
 
 

@@ -157,7 +157,7 @@ struct BaseCount
 
 void find_overlaps(std::vector<Overlap>& overlaps, const std::vector<Seq>& inputs)
 {
-    const uint8_t match_score = 2, mismatch_penalty = 2;
+    const uint8_t match_score = 3, mismatch_penalty = 2;
     const uint8_t gap_open_penalty = 255, gap_extention_penalty = 255;
 
     Filter filter;

@@ -150,19 +150,15 @@ void annot_ref_seq(Read& read, LocalReference& loc_ref)
     {
         read.ref_seq = get_spliced_ref_seq(
             read.spliced_ref_seq,
-            loc_ref.chrom, 
-            loc_ref.fasta, 
-            read.aln_start, 
-            read.cigar_vector
+            loc_ref.chrom, loc_ref.fasta, 
+            read.aln_start, read.cigar_vector
         );
     }
     else
     {
         read.ref_seq = get_unspliced_ref_seq(
-            loc_ref.start, 
-            loc_ref.seq,
-            read.aln_start, 
-            read.aln_end
+            loc_ref.start, loc_ref.seq,
+            read.aln_start, read.aln_end
         );
     }
     
@@ -333,14 +329,9 @@ void annot_covering_ptrn(
         if (!read.is_ref)
         {
             parse_variants(
-                read.aln_start, 
-                read.ref_seq, 
-                read.seq,
-                read.base_quals, 
-                read.cigar_vector, 
-                loc_ref.dict, 
-                read.variants, 
-                read.non_ref_quals
+                read.aln_start, read.ref_seq, 
+                read.seq, read.base_quals, read.cigar_vector, 
+                loc_ref.dict, read.variants, read.non_ref_quals
             );
          }
     }
@@ -352,7 +343,6 @@ void annot_covering_ptrn(
         if (read.aln_start <= target.pos 
             && target.pos <= read.aln_end) read.is_tight_covering = true;
         
-        /*
         // experimental central score 
         if (target.pos - read.covering_start > read.covering_end - target.pos)
         {
@@ -363,7 +353,7 @@ void annot_covering_ptrn(
         {
             read.central_score = (target.pos - read.covering_start)
                 / static_cast<double>(read.covering_end - read.covering_start);
-        }*/
+        }
     }     
 }
 
@@ -379,11 +369,11 @@ void annot_target_info(
     //int target_end = target.variant_end_pos - 1;
     int target_start = target.lpos;
     int target_end = target.rpos + target.ref_len - 1;
+    //int target_end = target.rpos - 1;
     bool is_target = false, is_already_found = false;
 
     int idx = 0;
     std::vector<int> dist;
-    
     for (auto& variant : read.variants) 
     {
         if (is_already_found) is_target = false;
@@ -401,8 +391,11 @@ void annot_target_info(
         {
             // non-ref exists within target's shiftable region
             if (target_start <= variant.pos && variant.pos <= target_end) 
-            {
-                read.incomplete_shift = true; 
+            {      
+                if (target.indel_len < 4 && read.central_score > 0.15)
+                {
+                    read.incomplete_shift = true; 
+                }
                 dist.push_back(0);
             }
 
@@ -518,7 +511,7 @@ void annot_non_ref_signature(Read& read)
 {
     if (read.is_ref || read.is_na_ref) return;   
     
-    std::string sig = "", spl_sig = "";
+    std::string sig = "non_ref:", spl_sig = "spl:";
     
     for (const auto& variant : read.variants) 
     {
@@ -608,8 +601,7 @@ void annot_local_ptrn(
     {    
         read.may_be_complex = true;
     }
-                   
-    
+                      
     //partial match to target for cplx or multiallelic
     if (!read.dist_to_non_target) 
     {    
@@ -637,7 +629,6 @@ void annot_local_ptrn(
                 return;
             }
         }
-       
         read.local_ptrn = 'N';
         return;
     }
@@ -680,7 +671,7 @@ void eval_read_quality(Read& read, const UserParams& user_params)
         }
 
         read.nonref_lq_rate = non_ref_cnt / read.non_ref_quals.length();
-        read.overall_lq_rate = overall_cnt / read.seq.length();
+        read.overall_lq_rate = non_ref_cnt / read.seq.length();
     }
 }
 
@@ -694,21 +685,13 @@ void annotate_reads(
 {
     for (auto& read : reads)
     {
-        //std::cout << "annot ref" << std::endl;
         annot_ref_seq(read, loc_ref);
-        //std::cout << "annot spl" << std::endl; 
         annot_splice_pattern(read);
-        //std::cout << "annot covering" << std::endl;
         annot_covering_ptrn(read, target, loc_ref);
-        //std::cout << "annot target" << std::endl;
         annot_target_info(read, target, loc_ref);
-        //std::cout << "annot clip" << std::endl;
         annot_clip_pattern(read, target);
-        //std::cout << "annot nonref" << std::endl;
         annot_non_ref_signature(read);  
-        //std::cout << "annot local" << std::endl; 
         annot_local_ptrn(read, target, user_params, loc_ref);
-        //std::cout << "annot qual" << std::endl;
         eval_read_quality(read, user_params);
     }    
 }
@@ -729,7 +712,6 @@ void classify_reads(
      
     for (size_t i = 0; i < max_size; ++i)
     {
-        
         if (reads[i].local_ptrn == 'A') 
         {
             transfer_elem(targets, reads, i);

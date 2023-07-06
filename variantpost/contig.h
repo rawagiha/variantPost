@@ -17,6 +17,7 @@ struct Contig
     //mocked from input
     bool is_mocked = false;
     std::string mocked_seq;
+    std::string m_quals;
     std::string mocked_ref;
     Coord mocked_coord;
     
@@ -40,6 +41,7 @@ struct Contig
     size_t rt_len;
     
     //alignments
+    std::vector<int> pos_by_seq_idx{};
     std::vector<int> positions{};
     std::vector<int> skip_starts{};
     std::vector<int> skip_ends{};
@@ -89,6 +91,7 @@ void prefilter_cplx_candidates(
 
 
 void suggest_contig(
+    const Variant& target,
     Contig& contig,
     Reads& candidates,
     const UserParams& user_params,

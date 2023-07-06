@@ -1,6 +1,7 @@
 #include <vector>
 #include <string>
 #include <chrono>
+#include <algorithm>
 
 #include "eval.h"
 #include "util.h"
@@ -32,10 +33,10 @@ void SearchResult::report(
     const Reads& undetermined
 )
 {
-    size_t buff_size = 
-        targets.size() + non_targets.size() + undetermined.size();
-    //size_t buff_size = targets.size() + non_targets.size();
-    
+    size_t buff_size = (
+        targets.size() + non_targets.size() + undetermined.size()
+    );
+
     read_names.reserve(buff_size);
     are_reverse.reserve(buff_size);
     target_statuses.reserve(buff_size);
@@ -87,15 +88,9 @@ void prep_reads(
     for (size_t i = 0; i < n_reads; ++i)
     {
         reads.emplace_back(
-            read_names[i],
-            are_reverse[i],
-            cigar_strs[i],
-            aln_starts[i],
-            aln_ends[i],
-            read_seqs[i],
-            quals[i],
-            mapqs[i],
-            are_from_first_bam[i]
+            read_names[i], are_reverse[i], cigar_strs[i],
+            aln_starts[i], aln_ends[i], read_seqs[i],
+            quals[i], mapqs[i], are_from_first_bam[i]
         );
     }
 }
@@ -112,7 +107,6 @@ void from_target_reads(
     LocalReference& loc_ref
 )
 {
-    //std::cout << "making" << std::endl;
     make_contig(
         contig,
         target, 
@@ -121,36 +115,24 @@ void from_target_reads(
         loc_ref
     );
     
-    //std::cout << contig.seq << " " << contig.seq.size() << std::endl;
-    //std::cout << "eval" << std::endl;             
     char _eval = eval_by_aln(contig, target, user_params, loc_ref);
-    //std::cout << "eval reult " << _eval  << std::endl;
 
     if (_eval == 'C')
     {
+        //NO -> rather make contig with centered most.
         transfer_vector(non_targets, targets);
         transfer_vector(non_targets, candidates); 
         return;      
     }
 
-    //std::cout << "repeat" << std::endl;
     ShiftableSegment ss;
     annot_shiftable_segment(ss, target, contig);   
     
-    //std::cout << "cand classify" << std::endl; 
     Reads lt_matches, mid_matches, rt_matches;    
     classify_cand_indel_reads(
-        candidates,
-        non_targets, 
-            
-        lt_matches,
-        mid_matches,
-        rt_matches,
-
-        undetermined,
-        contig,
-        ss,
-        user_params
+        candidates, non_targets, 
+        lt_matches, mid_matches, rt_matches,
+        undetermined, contig, ss, user_params
     );
     
     if (_eval != 'A')
@@ -165,22 +147,6 @@ void from_target_reads(
 }
 
 
-inline void switch_to_mock_layout(Contig& contig)
-{
-    contig.seq = contig.mocked_seq;
-    contig.ref_seq = contig.mocked_ref;
-    contig.coordinates = contig.mocked_coord;
-    contig.len = contig.mock_len;
-    contig.lt_end_idx = contig.mock_lt_end_idx;
-    contig.lt_len = contig.mock_lt_len;
-    contig.mid_len = contig.mock_mid_len;
-    contig.rt_len = contig.mock_rt_len;
-    contig.rt_start_idx = contig.mock_rt_start_idx;
-
-    contig.is_mocked = true;
-}
-
-
 void from_candidate_reads(
     Contig& contig,
     const Variant& target,
@@ -192,72 +158,51 @@ void from_candidate_reads(
     LocalReference& loc_ref
 )
 {
-    //std::cout << "prefilter" << std::endl;
-    
     std::vector<Variant>* p_decomposed = NULL;
     std::vector<Variant> decomposed;
     if (target.is_complex)
     {
         prefilter_cplx_candidates(
-            contig,
-            candidates,
-            non_targets,
-            target,
-            user_params,
-            loc_ref,
-            decomposed
+            contig, candidates, non_targets, target, 
+            user_params, loc_ref, decomposed
         );
         
-        //for (const auto& h: *p_decomposed) std::cout << h.pos << " " << h.ref << " " << h.alt << std::endl; 
     }
     else
     {
         prefilter_candidates(
-            contig,
-            candidates,
-            non_targets,
-            target,
-            user_params,
-            loc_ref
+            contig, candidates, non_targets, target, 
+            user_params, loc_ref
         );
     }
-        
-    if (!decomposed.empty())
-    {
-        p_decomposed = &decomposed;
-    }
     
-    if (candidates.empty()) return;
-        
+    if (candidates.empty()) return;    
     
-    //std::cout << "suggest" << std::endl;
-    suggest_contig(contig, candidates, user_params, loc_ref);       
+    // for complex inputs
+    if (!decomposed.empty()) p_decomposed = &decomposed;
+    
+    suggest_contig(target, contig, candidates, user_params, loc_ref);       
     
     //may happen if all candidates are of low-qual bases
     if (contig.seq.empty()) return;
     
-    //std::cout << contig.seq << " " << contig.ref_seq << std::endl;
-    
-    //std::cout << "eval contig" << std::endl;
     char _eval = eval_by_aln(contig, target, user_params, loc_ref, p_decomposed);
-
     if (_eval != 'A')
     {
-        switch_to_mock_layout(contig);
-    }    
-    
-    //std::cout << _eval << std::endl;
-    //std::cout << contig.seq << " " << contig.ref_seq << std::endl;
+        bool is_mocked = false;
+        switch_to_mock(
+            contig, target, user_params, loc_ref, is_mocked, p_decomposed
+        );
+        if (!is_mocked)
+        {
+            transfer_vector(non_targets, candidates);
+            return;           
+        }
+    }
 
-    //std::cout << "classify" << std::endl;
     classify_cand_indel_read_2(
-        targets,
-        candidates,
-        non_targets,
-        undetermined,
-        target,
-        contig,
-        user_params
+        targets, candidates, non_targets, undetermined,
+        p_decomposed, target, contig, user_params
     );
 }   
 
@@ -311,99 +256,45 @@ void _search_target(
     
     // packing data from Python 
     UserParams user_params(
-        mapq_thresh, 
-        base_q_thresh, 
-        lq_base_rate_thresh,
-        match_score, 
-        mismatch_penal, 
-        gap_open_penal, 
-        gap_ext_penal, 
-        kmer_size, 
-        local_thresh 
+        mapq_thresh, base_q_thresh, lq_base_rate_thresh,
+        match_score, mismatch_penal, gap_open_penal, gap_ext_penal, 
+        kmer_size, local_thresh 
     );
 
     LocalReference loc_ref(fastafile, chrom, ref_start, ref_end);   
 
     Variant target = prep_target(pos, ref, alt, loc_ref);
     
-    //std::cout << "read prep " <<std::endl;
     Reads reads;
     prep_reads(
-        reads, 
-        read_names, 
-        are_reverse,
-        cigar_strs,
-        aln_starts,
-        aln_ends,
-        read_seqs,
-        quals,
-        mapqs,
-        are_from_first_bam
+        reads, read_names, are_reverse, cigar_strs,
+        aln_starts, aln_ends, read_seqs, quals, mapqs, are_from_first_bam
     );
     
-    //std::cout << "read anot " <<std::endl;
     // read processing
-    annotate_reads(
-        reads, 
-        target, 
-        user_params, 
-        loc_ref
-    );  
+    annotate_reads(reads, target, user_params, loc_ref);  
     
     Reads targets, candidates, non_targets, undetermined;
     classify_reads(reads, targets, candidates, non_targets, user_params);
-    
+        
     // contig processing
-    //Contig contig(target);
     Contig contig;
     if (!targets.empty())
     {
-        //std::cout << "conting from target " <<std::endl;
         from_target_reads(
-            contig,
-            target,
-            targets,
-            candidates,
-            non_targets,
-            undetermined,
-            user_params,
-            loc_ref
+            contig, target,
+            targets, candidates, non_targets, 
+            undetermined, user_params, loc_ref
         );
     }
     else if (!candidates.empty()) 
     {   
-        //std::cout << "conting from kmer " <<std::endl;
         from_candidate_reads(
-            contig,
-            target,
-            targets,
-            candidates,
-            non_targets,
-            undetermined,
-            user_params,
-            loc_ref
+            contig, target,
+            targets, candidates, non_targets,
+            undetermined, user_params, loc_ref
         );
     }
     
     rslt.report(contig, targets, non_targets, undetermined); 
-    
-    /*
-    for (auto& read : non_targets)
-    {
-        std::cout << read.name << " " << read.cigar_str << std::endl;   
-    }*/
-    //auto t2 = std::chrono::high_resolution_clock::now();
-    //auto ms_int = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
-    //std::chrono::duration<double, std::milli> ms_double = t2 - t1;
-    //std::cout << ms_int.count() << "ms\n";
-    //std::cout << ms_double.count() << "ms\n";
-    
-    /*
-    size_t r = contig.positions.size();
-    for (size_t i = 0; i < r; ++i)
-    {
-        std::cout << contig.positions[i] << " " << contig.ref_bases[i] << " " << contig.alt_bases[i]<< std::endl; 
-    }*/
-    
-    return;
 }   

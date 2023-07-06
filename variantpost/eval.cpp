@@ -23,24 +23,18 @@ void local_alignment(
 )
 {
     Aligner aligner(
-        match_score, 
-        mismatch_penal, 
-        gap_open_penal, 
-        gap_ext_penal
+        match_score, mismatch_penal, gap_open_penal, gap_ext_penal
     ); 
        
     int32_t mask_len = strlen(seq.c_str()) / 2;
     mask_len = mask_len < 15 ? 15 : mask_len;
 
     aligner.Align(
-        seq.c_str(), 
-        ref_seq.c_str(), 
-        ref_seq.size(),
-        filter, 
-        &alignment, 
-        mask_len
+        seq.c_str(), ref_seq.c_str(), ref_seq.size(),
+        filter, &alignment, mask_len
     ); 
 }
+
 
 void to_simple_variants(
     const UserParams& user_params,
@@ -52,14 +46,9 @@ void to_simple_variants(
     Filter filter;
     Alignment alignment;
     local_alignment(
-        user_params.match_score,
-        user_params.mismatch_penal,
-        user_params.gap_open_penal,
-        user_params.gap_ext_penal,
-        contig.mocked_seq,
-        contig.mocked_ref,
-        filter,
-        alignment
+        user_params.match_score, user_params.mismatch_penal, 
+        user_params.gap_open_penal, user_params.gap_ext_penal,
+        contig.mocked_seq, contig.mocked_ref, filter, alignment
     );
 
     std::vector<std::pair<char, int>> cigar_vec = to_cigar_vector(
@@ -83,10 +72,7 @@ void to_simple_variants(
         contig.mocked_ref.substr(alignment.ref_begin),
         contig.mocked_seq.substr(query_begin),
         contig.mocked_seq.substr(query_begin), //for mocking
-        cigar_vec,
-        loc_ref.dict,
-        simples,
-        _tmp
+        cigar_vec, loc_ref.dict, simples, _tmp
     );
 
     std::sort(simples.begin(), simples.end());
@@ -102,10 +88,8 @@ void postprocess_alignment(
     rslt.cigar_str = alignment.cigar_string;
     rslt.cigar_vec = to_cigar_vector(rslt.cigar_str);
     splice_cigar(
-        rslt.cigar_vec, 
-        alignment.ref_begin, 
-        pos_vec, 
-        contig.coordinates
+        rslt.cigar_vec, alignment.ref_begin, 
+        pos_vec, contig.coordinates
     );
     
     move_up_insertion(rslt.cigar_vec);
@@ -121,17 +105,11 @@ void postprocess_alignment(
     rslt.ref_seq = contig.ref_seq.substr(alignment.ref_begin);
     rslt.quals = contig.quals.substr(query_begin);
     
-    //bool include_clips = true;
-    std::string _tmp = ""; //won't need
+    std::string _tmp = "";
     parse_variants(
-        rslt.genomic_start_pos,
-        rslt.ref_seq,
-        rslt.seq,
-        rslt.quals,
-        rslt.cigar_vec,
-        loc_ref.dict,
-        rslt.variants,
-        _tmp
+        rslt.genomic_start_pos, rslt.ref_seq,
+        rslt.seq, rslt.quals, rslt.cigar_vec, 
+        loc_ref.dict, rslt.variants, _tmp
     );
 }
 
@@ -199,6 +177,8 @@ void annot_end_mappping(AlnResult& rslt, const UserParams& user_params)
     rslt.is_well_ref_mapped = (
         rslt.lt_well_ref_mapped && rslt.rt_well_ref_mapped
     ) ? true : false;
+
+    //TODO relax this to matches > user.loc.theresh around target//
 }
 
 
@@ -242,11 +222,7 @@ void annot_nearest_variant(
     for (size_t i = 0; i < variants.size(); ++i)
     {
         tmp_dist = dist_from_target(
-            lt_lim, 
-            target_pos, 
-            rt_lim, 
-            loc_ref, 
-            variants[i]
+            lt_lim, target_pos, rt_lim, loc_ref, variants[i]
         );
 
         if (tmp_dist < dist)  
@@ -278,7 +254,7 @@ void eval_by_variant(
     const UserParams& user_params,
     LocalReference& loc_ref
 )
-{
+{   
     if (!pass_gap_check(rslt, user_params)) return;
     
     annot_nearest_variant(
@@ -302,7 +278,6 @@ void eval_by_variant(
         rslt.has_target = true;
         if (rslt.is_well_ref_mapped) rslt.terminate_search = true;
     }
-
 } 
 
 
@@ -335,30 +310,6 @@ void eval_by_variant_lst(
             }
          }
     }
-    /*
-    for (const auto& simple : *p_decomposed)
-    {
-        
-        
-        for (const auto& variant : rslt.variants)
-        {
-            if (simple.is_equivalent(variant, loc_ref))
-            {
-                ++total_match;
-                if (!simple.is_substitute) 
-                {    
-                    ++indel_match;
-                    if (alternative_indel_len <= (simple.ref_len + simple.alt_len))
-                    {
-                        alternative_pos = simple.pos;
-                        alternative_indel_len = (simple.ref_len + simple.alt_len);
-                    }
-                
-                }
-                break; //exit from the inner loop
-            } 
-        }
-    }*/
     
     if (!total_match) return;
     
@@ -383,7 +334,7 @@ void annot_alignment(Contig& contig, const AlnResult& rslt)
     contig.len = contig.seq.size();
     contig.ref_seq = rslt.ref_seq;
     contig.quals = rslt.quals;
-    
+     
     int op_len;
     char op = '\0';
     size_t seq_idx = 0, ref_idx = 0, v_idx = 0;    
@@ -398,6 +349,7 @@ void annot_alignment(Contig& contig, const AlnResult& rslt)
             case 'X':
                 for (int i = 0; i < op_len; ++i)
                 {                   
+                    contig.pos_by_seq_idx.push_back(genomic_pos);
                     contig.positions.push_back(genomic_pos);
                     contig.ref_bases.push_back(contig.ref_seq.substr(ref_idx, 1));
                     contig.alt_bases.push_back(contig.seq.substr(seq_idx, 1));
@@ -419,6 +371,8 @@ void annot_alignment(Contig& contig, const AlnResult& rslt)
                 contig.base_quals.pop_back();
                 contig.base_quals.push_back(contig.quals.substr(seq_idx - 1, op_len + 1));
                 
+                std::fill_n(std::back_inserter(contig.pos_by_seq_idx), op_len, genomic_pos - 1);
+                
                 seq_idx += op_len;
                 ++v_idx;
                 break;
@@ -434,8 +388,11 @@ void annot_alignment(Contig& contig, const AlnResult& rslt)
                 contig.skip_starts.push_back(genomic_pos);
                 genomic_pos += op_len;
                 contig.skip_ends.push_back(genomic_pos - 1);
+
+                contig.pos_by_seq_idx.pop_back();
                 break;
             case 'S':
+                std::fill_n(std::back_inserter(contig.pos_by_seq_idx), op_len, -1);
                 seq_idx += op_len;
                 break;
         }
@@ -469,8 +426,10 @@ void update_contig_layout(Contig& contig, const int pos)
         
         idx = tmp_idx;    
     }    
-    
-    idx = std::distance(contig.positions.begin(), it);
+    else
+    { 
+        idx = std::distance(contig.positions.begin(), it);
+    } 
 
     contig.lt_len = 0;
     contig.mid_len =0;
@@ -501,16 +460,6 @@ char eval_by_aln(
     const std::vector<Variant>* p_decomposed
 )
 {
-    
-    //for (auto& h : *p_decomposed) std::cout << h.pos << " " << h.ref << " " << h.alt << std::endl;
-    
-    //std::vector<Variant> simples;
-    //if (target.is_complex)
-    //{
-    //    to_simple_variants(user_params, contig, loc_ref, simples);
-    //}
-    
-    // evaluation by grid search
     std::vector<std::pair<int, int>> gap_penals;
     gap_penal_grid(
         user_params.gap_open_penal,
@@ -529,15 +478,13 @@ char eval_by_aln(
         AlnResult rslt;
         
         local_alignment(
-            user_params.match_score,
-            user_params.mismatch_penal,
-            gap_penal.first,
-            gap_penal.second,
-            contig.seq,
-            contig.ref_seq, 
-            filter,
-            aln
+            user_params.match_score, user_params.mismatch_penal,
+            gap_penal.first, gap_penal.second, 
+            contig.seq, contig.ref_seq, filter, aln
         );
+        
+        // local alignment failed
+        if (aln.cigar_string.empty()) continue;
         
         postprocess_alignment(rslt, pos_vec, contig, loc_ref, aln);
         
@@ -557,7 +504,6 @@ char eval_by_aln(
         {    
             annot_alignment(contig, rslt);
             update_contig_layout(contig, target_pos);
-            //std::cout << "terminated " << std::endl;
             return 'A';   
         }
         else if (rslt.is_passed)
@@ -585,11 +531,9 @@ char eval_by_aln(
         {
             annot_alignment(contig, rslt);
             update_contig_layout(contig, target.pos);
-            //std::cout << "assembled " << std::endl;
             return 'A';
         }
-        //count check by mocked seq
-        //std::cout << "mock used" << std::endl;
+        
         return 'B';   
     }
      
@@ -626,17 +570,42 @@ void aln_extended_contig(
    AlnResult rslt; 
     
    local_alignment(
-       user_params.match_score,
-       user_params.mismatch_penal,
-       user_params.gap_open_penal,
-       user_params.gap_ext_penal,
-       contig.seq,
-       contig.ref_seq, 
-       filter,
-       aln
+       user_params.match_score, user_params.mismatch_penal,
+       user_params.gap_open_penal, user_params.gap_ext_penal,
+       contig.seq, contig.ref_seq, filter, aln
    );
 
    postprocess_alignment(rslt, pos_vec, contig, loc_ref, aln);
    annot_alignment(contig, rslt);
    update_contig_layout(contig, target.pos);
+}
+
+
+void switch_to_mock(
+    Contig& contig,
+    const Variant& target,
+    const UserParams& user_params,
+    LocalReference& loc_ref,
+    bool& is_mocked,
+    const std::vector<Variant>* p_decomposed
+)
+{
+    contig.seq = contig.mocked_seq;
+    contig.quals = contig.m_quals;
+    contig.ref_seq = contig.mocked_ref;
+    contig.coordinates = contig.mocked_coord;
+    contig.len = contig.mock_len;
+    contig.lt_end_idx = contig.mock_lt_end_idx;
+    contig.lt_len = contig.mock_lt_len;
+    contig.mid_len = contig.mock_mid_len;
+    contig.rt_len = contig.mock_rt_len;
+    contig.rt_start_idx = contig.mock_rt_start_idx;
+    
+    char res = eval_by_aln(contig, target, user_params, loc_ref, p_decomposed); 
+    
+    if (res == 'A')
+    {
+        is_mocked = true;
+        contig.is_mocked = true;
+    }
 }

@@ -15,7 +15,8 @@
 
 
 typedef std::set<std::string_view> Kmers;
-typedef std::vector<std::pair<int, int> > Coord;
+typedef std::vector<std::pair<int, int>> Coord;
+typedef std::vector<std::pair<char, int>> CigarVec;
 
 
 struct UserParams{ 
@@ -75,6 +76,7 @@ struct Variant
     
     int ref_len;
     int alt_len;
+    int indel_len;
     int variant_end_pos = pos + ref_len;
     int lpos = -1;
     int rpos = -1;
@@ -141,14 +143,14 @@ void find_shared_variants(
 );
 
 
-std::vector<std::pair<char, int>> to_cigar_vector(std::string_view cigar_string);
+CigarVec to_cigar_vector(std::string_view cigar_string);
 
 
 void move_up_insertion(std::vector<std::pair<char, int>>& cigar_vector);
 
 
 void splice_cigar(
-    std::vector<std::pair<char, int>>& cigar_vector,
+    CigarVec& cigar_vector,
     const int start_offset,
     const std::vector<int>& genomic_positions,
     const Coord& coordinates
@@ -192,6 +194,7 @@ void transfer_elem(std::vector<T>& dest, std::vector<T>& src, const size_t i)
     );
 }
 
+std::string to_tandem_rep(std::string_view seq);
 
 std::vector<int> expand_coordinates(const Coord& coordinates);
 
@@ -224,6 +227,7 @@ int find_split_idx(
     const int target_pos,
     const std::vector<std::pair<char, int>>& cigar_vector
 );
+
 
 
 #endif 

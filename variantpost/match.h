@@ -10,11 +10,14 @@ struct ShiftableSegment
 {
     bool is_complete_tandem_repeat = false; 
     int n_tandem_repeats = 0; 
+    std::string seq;
+    std::string rep_unit = "";
     std::string fw_repeat_unit;
     std::string rv_repeat_unit;
     size_t unit_len = 0;
-    int boundary_start = -1;
-    int boundary_end = -1;
+    int start = -1;
+    int end = -1;
+    int n_reps = 0;
 };
 
 void annot_shiftable_segment(
@@ -44,6 +47,7 @@ void classify_cand_indel_read_2(
     Reads& candidates,
     Reads& non_targets,
     Reads& undetermined,
+    const std::vector<Variant>* p_decomposed,
     const Variant& target,
     const Contig& contig,
     const UserParams& user_params

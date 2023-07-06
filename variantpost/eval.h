@@ -63,4 +63,15 @@ void to_simple_variants(
     std::vector<Variant>& simples
 );
 
+
+void switch_to_mock(
+    Contig& contig,
+    const Variant& target,
+    const UserParams& user_params,
+    LocalReference& loc_ref,
+    bool& is_mocked,
+    const std::vector<Variant>* p_decomposed = NULL
+);
+
+
 #endif

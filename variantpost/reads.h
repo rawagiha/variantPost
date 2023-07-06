@@ -65,7 +65,7 @@ struct Read
     char local_ptrn = '\0';   
     
     //metrics   
-    //double central_score = -1.0;
+    double central_score = -1.0;
     double overall_lq_rate = 0.0;
     double nonref_lq_rate = 0.0;
     int kmer_score = -1;
@@ -92,6 +92,7 @@ struct Read
 
 
 typedef std::vector<Read> Reads;
+
 
 void sort_by_start(Reads & reads);
 
