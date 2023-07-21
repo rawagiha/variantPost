@@ -1,3 +1,6 @@
+
+Tentatively named as variantPost, but only supports for indels.
+
 ### Installation
 Plese pre-install the followings
 * [cython>=0.29.12](https://cython.org/)
@@ -38,9 +41,9 @@ valn = VariantAlignment(v, bam_1, bam_2)
 cnt = valn.count_alleles()
 
 # if unpaired, cnt is an AlleleCount obj
-print(cnt.s) # supporting reads fw and rv 
+print(cnt.s) # supporting reads fw and rv (unique count) 
 print(cnt.s_fw, cnt.s_rv) # fw/rv breakdown
-print(cnt.n) # non-supporing reads fw and rv
+print(cnt.n) # non-supporting reads fw and rv 
 print(cnt.n_fw, cnt.n_rv) # fw/rv breakdown
 print(cnt.u) # undetermined reads (low qual etc...)
 print(cnt.u_fw, cnt.u_rv) # fw/rv breakdown
@@ -56,4 +59,4 @@ cnt2 = cnt.second # AlleleCount obj for bam_2
 phased = valn.phase() 
 ```
 
-Please report anything concerned. 
+Please report anything of concern. 
