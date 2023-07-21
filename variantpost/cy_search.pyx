@@ -260,10 +260,12 @@ cdef object search_target(
     )
     
     contig_dict = OrderedDict()
+    #contig_dict = list()
     for pos, ref_base, alt_base, base_qual in zip(
         rslt.positions, rslt.ref_bases, rslt.alt_bases, rslt.base_quals
     ):
-        contig_dict[pos] = (ref_base.decode("utf-8"), alt_base.decode("utf-8"), base_qual)
+        contig_dict[pos] = (ref_base.decode("utf-8"), alt_base.decode("utf-8"), base_qual.decode("utf-8"))
+        #contig_dict.append([pos, ref_base.decode("utf-8"), alt_base.decode("utf-8"), base_qual.decode("utf-8")])       
 
     annot_reads = []
     for read_name, is_reverse, target_status, is_first_bam in zip(
@@ -272,5 +274,6 @@ cdef object search_target(
         annot_reads.append(AnnotatedRead(read_name.decode("utf-8"), is_reverse, is_first_bam, target_status))
     
     skips = [(start, end) for start, end in zip(rslt.skip_starts, rslt.skip_ends)]
+    
     return contig_dict, skips, rslt.read_names,  rslt.are_reverse, rslt.target_statuses, rslt.are_from_first_bam
     #return contig_dict, skips, annot_reads

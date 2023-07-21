@@ -549,6 +549,54 @@ void annot_non_ref_signature(Read& read)
 }
                                                                             
 
+bool is_locally_unique(
+    Read& read,
+    const LocalReference& loc_ref
+)
+{
+    if (read.clip_ptrn != 'U' || read.variants.empty()) return false;
+    
+    int lt_len = read.variants.front().pos - read.aln_start;
+    int rt_len = read.aln_end - read.variants.back().variant_end_pos + 1;  
+    int read_len = static_cast<int>(read.seq.size());
+    if (lt_len  >= read_len || rt_len >= read_len) return false;    
+ 
+    // lt check
+    bool lt_uniq = false;
+    int lt_start_pos = -1;
+    const size_t lt_most = loc_ref.seq.find(read.seq.substr(0, lt_len));
+    if (lt_most != std::string_view::npos)
+    {
+        const size_t _lt_most = loc_ref.seq.rfind(read.seq.substr(0, lt_len));
+        if (lt_most == _lt_most)
+        { 
+            lt_start_pos = loc_ref.start + static_cast<int>(lt_most);
+            if (lt_start_pos ==  read.aln_start) lt_uniq = true;
+            //std::cout << "lt pos:" << lt_start_pos << " aln start:" << read.aln_start << std::endl;      
+        }
+    }
+    
+    //rt check
+    bool rt_uniq = false;
+    int rt_start_pos = -1;
+    const size_t rt_most = loc_ref.seq.rfind(read.seq.substr(read.seq.size() - rt_len));
+    if (rt_most != std::string_view::npos)
+    {    
+        const size_t _rt_most = loc_ref.seq.find(read.seq.substr(read.seq.size() - rt_len));
+        if (rt_most == _rt_most)
+        {
+            rt_start_pos = loc_ref.start + static_cast<int>(rt_most);
+            if (rt_start_pos == (read.aln_end - rt_len + 1)) rt_uniq = true;     
+            //std::cout << "rt pos:" << rt_start_pos << " actual:" <<  read.aln_end - rt_len + 1<< std::endl;
+        }
+    } 
+
+    if (lt_uniq && rt_uniq) return true;
+
+    return false;
+}
+
+
 void annot_local_ptrn(
     Read& read, 
     const Variant& target,
@@ -557,7 +605,7 @@ void annot_local_ptrn(
 )
 {
     //trivial cases
-    if (read.is_ref) 
+    if (read.is_ref || read.covering_ptrn == 'X') 
     {    
         // 'N': no futher check
         read.local_ptrn = 'N';
@@ -570,6 +618,13 @@ void annot_local_ptrn(
         return;
     }
       
+    read.is_loc_uniq = is_locally_unique(read, loc_ref);
+    if (read.is_loc_uniq && !has_gaps(read.cigar_str))
+    {
+        read.local_ptrn = 'N';
+        return;
+    }
+    
     switch (read.covering_ptrn)
     {
         case 'X':

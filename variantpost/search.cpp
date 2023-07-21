@@ -49,6 +49,7 @@ void SearchResult::report(
     positions = contig.positions;
     ref_bases = contig.ref_bases;
     alt_bases = contig.alt_bases;
+    base_quals = contig.base_quals;
     skip_starts = contig.skip_starts;
     skip_ends = contig.skip_ends;
 }
@@ -116,7 +117,7 @@ void from_target_reads(
     );
     
     char _eval = eval_by_aln(contig, target, user_params, loc_ref);
-
+    
     if (_eval == 'C')
     {
         //NO -> rather make contig with centered most.
@@ -187,6 +188,7 @@ void from_candidate_reads(
     if (contig.seq.empty()) return;
     
     char _eval = eval_by_aln(contig, target, user_params, loc_ref, p_decomposed);
+    
     if (_eval != 'A')
     {
         bool is_mocked = false;

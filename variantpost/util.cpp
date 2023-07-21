@@ -326,6 +326,20 @@ bool Variant::is_equivalent(
     std::string _ref = other.ref;
     std::string _alt = other.alt;
     
+    //cplx other
+    if (_ref.size() > 1 && _alt.size() > 1)
+    {
+        if (ref == _ref && pos == _pos) return true; //del seq match
+        if (alt.substr(1) == _alt.substr(1))
+        {
+            //inserted seq (w/o padding base) may be anywhere in the deletion
+            if (_pos <= pos 
+                && pos <= _pos + static_cast<int>(_ref.size()) - 1) return true;
+        }
+
+        return false;
+    }
+    
     if (pos == _pos && ref == _ref && alt == _alt) return true;
     if (is_clipped_segment || other.is_clipped_segment) return false;
     if (ref_len != other.ref_len || alt_len != other.alt_len) return false;
@@ -378,7 +392,6 @@ std::string to_tandem_rep(std::string_view seq)
 }
 
 
-
 std::string Variant::minimal_repeat_unit() const
 {
     std::string seq = "";
@@ -387,35 +400,6 @@ std::string Variant::minimal_repeat_unit() const
     if (is_del) seq = ref.substr(1);
     
     return to_tandem_rep(seq);
-    /*
-    int seq_size = seq.size();
-    if (seq_size < 2) 
-    {
-        return seq;
-    }
-    else 
-    {
-        int mid_len = (int)seq_size / 2;
-
-        int step = 1;
-        while (step <= mid_len) 
-        {
-            std::vector<std::string> tandems;
-            for (int i = 0; step * i < seq_size; ++i) 
-            {
-                tandems.push_back(
-                    seq.substr(step * i, std::min(step, seq_size - (step * i)))
-                );    
-            }
-            std::sort(tandems.begin(), tandems.end());
-            tandems.erase(
-                std::unique(tandems.begin(), tandems.end()), tandems.end()
-            );
-            if (tandems.size() == 1) return tandems[0];
-            else ++step;    
-        }
-    }
-    return seq;*/
 }
 
 
@@ -462,7 +446,6 @@ std::vector<std::pair<char, int>> to_cigar_vector(std::string_view cigar_str)
 
   return cigar_vec;
 }
-
 
 
 std::pair<char, int> concat_gaps(const std::vector<std::pair<char, int>>& cigar_sub_vector)
@@ -530,7 +513,7 @@ void move_up_insertion(std::vector<std::pair<char, int>>& cigar_vector)
 // swap N and simple ins
 // {<'=', 2>, <'N', 6>, <'I', '4'>, <'=', 2>} -> {<'=', 2>, <'I', '4'>,  <'N', 6>,  <'=', 2>}
 //------------------------------------------------------------------------------------------
-void make_skip_after_ins(std::vector<std::pair<char, int>>& cigar_vector)
+void make_skip_after_ins(CigarVec& cigar_vector)
 {
     std::vector<int> idx_lst; 
     int last_idx = cigar_vector.size() - 1;
@@ -550,6 +533,146 @@ void make_skip_after_ins(std::vector<std::pair<char, int>>& cigar_vector)
         std::iter_swap(cigar_vector.begin() + j, cigar_vector.begin() + j + 1);
     }
 
+}
+
+
+// find I/D*X
+//----------------------------------------------------------------------
+std::vector<int> find_mismatches_after_gap(const CigarVec& cigar_vector)
+{
+    int i = 0;
+    char op = '\0';
+    bool is_prev_gap = false;
+    std::vector<int> indexes;
+    for (const auto& cigar : cigar_vector)
+    {
+        op = cigar.first;
+        switch (op)
+        {   
+            case 'X':
+                if (is_prev_gap)
+                {
+                    indexes.push_back(i);
+                }
+                is_prev_gap = false;
+                break;
+            case 'I':
+            case 'D':
+                is_prev_gap = true;
+                break;
+            default:
+                is_prev_gap = false;
+                break;
+        }
+        ++i;
+    }
+    return indexes;
+}
+
+
+inline bool is_target_idx(const std::vector<int>& target_indexes, const int idx)
+{
+    if (
+        std::find(
+            target_indexes.begin(), target_indexes.end(), idx
+        ) != target_indexes.end()
+    ) 
+    {
+        return true;
+    }
+    else 
+    {    
+        return false;
+    } 
+}
+
+
+void parse_to_cplx_gaps(
+    const int aln_start, 
+    std::string_view ref_seq,
+    std::string_view read_seq,
+    const CigarVec& cigar_vector,
+    const std::vector<int>& target_indexes,
+    std::vector<Variant>& variants 
+)
+{
+    char op = '\0';
+    int op_len = 0, ref_idx = 0, read_idx = 0, pos = aln_start, cigar_idx = 0;
+    std::string_view ref, alt;
+    for (const auto & cigar : cigar_vector)
+    {
+        op = cigar.first;
+        op_len = cigar.second;
+        switch (op)
+        {
+            case '=':
+            case 'X':
+                ref_idx += op_len;
+                read_idx += op_len;
+                pos += op_len;
+                ++cigar_idx;
+                break;
+            case 'I':
+                if (is_target_idx(target_indexes, cigar_idx + 1))
+                { 
+                    //del first
+                    int del_len = cigar_vector[cigar_idx + 1].second;
+                    ref = ref_seq.substr(ref_idx - 1, del_len + 1);
+                    alt = ref_seq.substr(ref_idx - 1, 1);
+                    variants.emplace_back(
+                        pos - 1, 
+                        std::string(ref),
+                        std::string(alt)
+                    );
+                    
+                    //ins next
+                    ref = ref_seq.substr(ref_idx + del_len - 1, 1);
+                    variants.emplace_back(
+                        pos - 1 + del_len,                   
+                        std::string(ref),
+                        std::string(ref) 
+                        + std::string(read_seq.substr(read_idx, op_len + del_len))
+                    );
+                } 
+                ++cigar_idx;
+                read_idx += op_len;
+                break; 
+            case 'D':
+                if (is_target_idx(target_indexes, cigar_idx + 1)) 
+                {
+                    //del(not ins) first
+                    int ins_len = cigar_vector[cigar_idx + 1].second;
+                    ref = ref_seq.substr(ref_idx - 1, op_len + ins_len + 1);
+                    alt = ref_seq.substr(ref_idx - 1, 1);
+                    variants.emplace_back(
+                        pos - 1,
+                        std::string(ref),
+                        std::string(alt)
+                    );
+
+                    //ins
+                    ref =  ref_seq.substr(ref_idx + op_len - 1, 1);
+                    variants.emplace_back(
+                        pos - 1 + op_len,
+                        std::string(ref),
+                        std::string(ref)
+                        + std::string(read_seq.substr(read_idx, ins_len))
+                    );
+                }
+                ref_idx += op_len;
+                pos += op_len;
+                ++cigar_idx;
+                break;
+            case 'N':
+                pos += op_len;
+                ++cigar_idx;
+                break;
+            case 'S':
+                read_idx += op_len;
+                ++cigar_idx;
+                break;
+         }
+     }
 }
 
 
@@ -779,6 +902,34 @@ void parse_variants(
                 break;
          }
      }
+}
+
+// merge ins and del at same pos to a cplx indel
+// variants are sorted ins first (by move_up_insertion)
+//--------------------------------------------------------------------
+std::vector<Variant> merge_to_cplx(const std::vector<Variant>& variants)
+{
+    std::vector<Variant> merged;
+    for (size_t i = 0; i < variants.size();)
+    {
+        if (i < variants.size() - 1 && variants[i].pos == variants[i + 1].pos)
+        {
+            if (variants[i].is_ins && variants[i + 1].is_del)
+            {    
+                merged.emplace_back(
+                    variants[i].pos,
+                    variants[i + 1].ref,
+                    variants[i].alt
+                );
+                i +=2;
+                continue;
+            }
+        }
+        
+        merged.push_back(variants[i]);  
+        ++i; 
+    }
+    return merged;
 }
 
 

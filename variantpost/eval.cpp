@@ -36,6 +36,13 @@ void local_alignment(
 }
 
 
+bool is_gapped_aln(std::string_view cigar_str)
+{
+    if (cigar_str.size()) return has_gaps(cigar_str);
+    else return false;
+}
+
+
 void to_simple_variants(
     const UserParams& user_params,
     const Contig& contig,
@@ -78,6 +85,7 @@ void to_simple_variants(
     std::sort(simples.begin(), simples.end());
 }
 
+
 void postprocess_alignment(
     AlnResult& rslt, 
     const std::vector<int>& pos_vec,
@@ -110,7 +118,230 @@ void postprocess_alignment(
         rslt.genomic_start_pos, rslt.ref_seq,
         rslt.seq, rslt.quals, rslt.cigar_vec, 
         loc_ref.dict, rslt.variants, _tmp
-    );
+    );  
+}
+
+
+size_t rt_most_idx(
+    const size_t curr_idx, 
+    const size_t ins_len,
+    std::string_view seq
+)
+{
+    //size_t rt_most_idx = curr_idx;
+    for (size_t i = curr_idx; i + ins_len < seq.size(); ++i)
+    {
+        if (seq[i] != seq[i + ins_len]) return i + ins_len - 1;     
+    }
+
+    return curr_idx;
+}
+
+
+int get_rt_pos(
+    const size_t curr_seq_idx, 
+    const size_t target_idx,
+    const size_t curr_cigar_idx,
+    const int curr_pos,
+    const CigarVec& cigar_vec        
+)
+{
+    char op = '\0';
+    size_t seq_idx = curr_seq_idx;
+    int op_len = 0, pos = curr_pos;
+    for (size_t i = curr_cigar_idx; i < cigar_vec.size(); ++i)
+    {
+        op = cigar_vec[i].first;
+        op_len = cigar_vec[i].second;
+        
+        switch (op)
+        {
+            case '=':
+            case 'X':
+            {
+                seq_idx += op_len;
+                pos += op_len;
+                break;
+            }
+            case 'I':
+            {
+                seq_idx += op_len;
+                break;               
+            }
+            case 'D':
+            case 'N':
+            {
+                pos += op_len;
+                break;           
+            }
+        }
+        
+        if (seq_idx == target_idx)
+        {
+            if (i + 1 < cigar_vec.size())
+            {
+                if (cigar_vec[i+1].first != 'D' && cigar_vec[i+1].first != 'N')   
+                {
+                    return pos;
+                }
+            }
+        }
+    }
+    
+    return 0;   
+}
+
+
+void rt_aln_insertions(
+    const AlnResult& rslt,
+    std::vector<Variant>& varlst,
+    LocalReference& loc_ref
+)
+{
+   char op = '\0';
+   size_t seq_idx = 0;
+   int op_len = 0, curr_pos = rslt.genomic_start_pos;
+   for (size_t i = 0; i < rslt.cigar_vec.size(); ++i)
+   {   
+        op = rslt.cigar_vec[i].first;
+        op_len = rslt.cigar_vec[i].second;
+
+        switch (op)
+        {
+            case '=':
+            case 'X':
+            {
+                seq_idx += op_len;
+                curr_pos += op_len;       
+                break;
+            }
+            case 'I':
+            {
+                //int _curr_pos = curr_pos - 1;
+                //int _seg_idx = seq_idx - 1;
+                size_t rt_idx = rt_most_idx(seq_idx, op_len, rslt.seq);
+                if (seq_idx + op_len < rt_idx)
+                {
+                    int _pos = get_rt_pos(
+                        seq_idx, rt_idx, i, curr_pos, rslt.cigar_vec
+                    );
+                    
+                    if (_pos)
+                    {
+                        std::string ins_seq = rslt.seq.substr(
+                            rt_idx - static_cast<size_t>(op_len),  
+                            op_len + 1
+                        );
+                        
+                        varlst.emplace_back(_pos, ins_seq.substr(0, 1), ins_seq);
+                    }    
+                }
+                seq_idx += op_len;
+                break;   
+            } 
+            case 'D':
+            case 'N':
+            {    
+                curr_pos += op_len;
+                break;
+            }
+            case 'S':
+            {
+                seq_idx += op_len;
+                break;
+            }
+        }
+   }
+}
+
+
+void swappable_gaps(
+    const std::vector<Variant>& varlst,
+    std::vector<Variant>& augmented,
+    LocalReference& loc_ref
+)
+{
+    // varlst.size() >= 2 guaranteed
+    for (size_t i = 0; i < varlst.size() - 1; ++i)
+    {
+        if (varlst[i].is_ins 
+            && varlst[i + 1].is_del 
+            && varlst[i].pos < varlst[i + 1].pos
+        )
+        {
+            size_t mapped_len = varlst[i + 1].pos - varlst[i].pos;
+            size_t del_len = varlst[i + 1].ref.size();
+            if (mapped_len < del_len)
+            { 
+                std::string inserted = varlst[i].alt.substr(1) 
+                    + loc_ref.fasta.getSubSequence(
+                        loc_ref.chrom, varlst[i].pos, mapped_len);
+
+                if (inserted.substr(0, mapped_len) 
+                    == varlst[i + 1].ref.substr(del_len - mapped_len))
+                {
+                    int _ins_pos = varlst[i + 1].variant_end_pos - mapped_len;
+                    augmented.emplace_back(
+                        _ins_pos, inserted.substr(0, 1), inserted);
+                    
+                    int _del_pos = varlst[i + 1].pos - mapped_len;
+                    std::string _del_seq = loc_ref.fasta.getSubSequence(
+                        loc_ref.chrom, _del_pos - 1, del_len); 
+                    augmented.emplace_back(
+                        _del_pos, _del_seq, _del_seq.substr(0, 1));   
+                } 
+            }
+        }
+    }
+}
+
+
+void create_target_ins(
+    AlnResult& rslt, 
+    std::vector<Variant>& varlst,
+    const int target_pos,
+    const size_t event_len
+)
+{
+    char op = '\0';
+    int op_len = 0, seq_idx = 0, curr_pos = rslt.genomic_start_pos;
+    
+    for (const auto& c : rslt.cigar_vec)
+    {
+        op = c.first;
+        op_len = c.second;
+         
+        switch (op)
+        {
+            case '=':
+            case 'X':
+            {
+                if (curr_pos <= target_pos && target_pos < curr_pos + op_len)
+                {
+                    seq_idx += (target_pos - curr_pos); 
+                    
+                    varlst.emplace_back(
+                        target_pos, rslt.seq.substr(seq_idx, 1), rslt.seq.substr(seq_idx, event_len)
+                    );
+                    return;     
+                }
+                else
+                {
+                    seq_idx += op_len;
+                    curr_pos += op_len;
+                }
+                break;
+             }
+             case 'I':
+             case 'S':
+                 seq_idx += op_len;
+                 break;
+             case 'D':
+             case 'N':
+                curr_pos += op_len;
+                break;       
+        }
+    }   
 }
 
 
@@ -134,6 +365,41 @@ void gap_penal_grid(
     if (std::find(grid.begin(), grid.end(), _default) ==  grid.end())
     {
         grid.push_back(_default);
+    }
+}
+
+
+void penal_grid(
+    const int mismatch_penal,
+    const int gap_open_penal,
+    const int gap_ext_penal,
+    size_t & basic_grid_sz,
+    std::vector<std::vector<int>>& grid  
+)
+{
+    std::vector<int> _default = {mismatch_penal, gap_open_penal, gap_ext_penal};
+
+    uint8_t max_gap_open = 10, min_gap_open = 2; //configureable?
+    if (gap_open_penal > max_gap_open) max_gap_open = gap_open_penal;
+    
+    for (uint8_t i = min_gap_open; i <= max_gap_open; i += 2)
+    {
+        grid.push_back({mismatch_penal, i, 1});
+        grid.push_back({mismatch_penal, i, 0});
+    }
+
+    if (std::find(grid.begin(), grid.end(), _default) ==  grid.end()) 
+    {
+        grid.push_back(_default);
+    }
+
+    basic_grid_sz = grid.size();
+
+    //encourage gaps over mismathces
+    for (uint8_t i = min_gap_open; i <= max_gap_open; i += 2)
+    {
+        grid.push_back({mismatch_penal * 5, i, 1});
+        grid.push_back({mismatch_penal * 5, i, 0});
     }
 }
 
@@ -179,6 +445,57 @@ void annot_end_mappping(AlnResult& rslt, const UserParams& user_params)
     ) ? true : false;
 
     //TODO relax this to matches > user.loc.theresh around target//
+}
+
+
+void annot_matched_segments(Coord& coord, AlnResult& rslt)
+{
+    char op = '\0';
+    int curr_pos = rslt.genomic_start_pos, op_len = 0;
+    for (const auto& c : rslt.cigar_vec)
+    {
+        op = c.first;
+        op_len = c.second;
+        if (op == '=')
+        {
+            coord.emplace_back(curr_pos, curr_pos + op_len -1);
+            curr_pos += op_len;
+        }
+        else if (op == 'D' || op == 'N')
+        {
+            curr_pos += op_len;
+        }
+    }
+
+}
+
+
+bool has_enough_margin(Coord& coord, const int pos, const UserParams& user_param)
+{
+    bool is_enough_lt = false, is_enough_rt = false, is_first_rt = true;
+    for (const auto& seg : coord)
+    {
+        
+        if (seg.second <= pos)
+        { 
+            if (seg.second - seg.first + 1 >= user_param.local_thresh) 
+            {    
+                is_enough_lt = true;
+            }
+        }
+        else if (pos < seg.first)
+        {
+            if (is_first_rt)
+            {
+                if (seg.second - seg.first + 1 >= user_param.local_thresh) 
+                {    
+                    is_enough_rt = true;
+                }
+            }
+        }   
+    }
+
+    return (is_enough_lt && is_enough_rt);
 }
 
 
@@ -248,36 +565,215 @@ inline bool pass_gap_check(AlnResult& rslt, const UserParams& user_params)
 }
 
 
+bool is_overlapping_cluster(
+    const Variant& target,
+    const std::vector<Variant>& varlst,
+    const UserParams& user_params
+)
+{
+    int cnt = 0;
+    bool is_overlapping = false;
+    const int local_radius = user_params.local_thresh / 2;
+    for (const auto& var : varlst)
+    {
+        if (var.pos <= target.pos)
+        {
+            if (target.pos < var.variant_end_pos)
+            {
+                ++cnt;
+                is_overlapping = true;     
+            }
+            else
+            {
+                if (target.pos - var.variant_end_pos < local_radius)
+                {
+                    ++cnt;
+                    if (target.pos == var.pos) is_overlapping = true;
+                }
+            }
+        }
+        else
+        {
+            if (var.pos < target.variant_end_pos)
+            {
+                ++cnt;
+                is_overlapping = true;
+            }
+            else
+            {    
+                if (var.pos - target.pos < local_radius) ++cnt;
+            }
+        }  
+    }
+
+    if (cnt > 1 && is_overlapping) return true;
+    else return false;
+}
+
+
 void eval_by_variant(
     AlnResult& rslt,
     const Variant& target,
     const UserParams& user_params,
-    LocalReference& loc_ref
+    LocalReference& loc_ref,
+    int& alternative_pos
 )
 {   
     if (!pass_gap_check(rslt, user_params)) return;
+    rslt.is_passed = true;
     
+    bool is_orig_aln = false;
+    for (auto& v : rslt.variants)
+    {
+        if (target.is_equivalent(v, loc_ref))
+        {
+            rslt.has_target = true;
+            is_orig_aln = true;
+            break;
+        }
+    }
+    
+    //augment variant list for complex cases
+    if (!rslt.has_target && rslt.variants.size() > 1)
+    {
+        //merge consecutive I/Ds
+        std::vector<Variant> augmented = merge_to_cplx(rslt.variants);
+        
+        //right alignment on contig 
+        rt_aln_insertions(rslt, augmented, loc_ref);
+        
+        // merget I/D*X to complx
+        std::vector<int> target_idxes 
+        = find_mismatches_after_gap(rslt.cigar_vec);
+        if (!target_idxes.empty())
+        {
+            parse_to_cplx_gaps(
+                rslt.genomic_start_pos, rslt.ref_seq, rslt.seq, 
+                rslt.cigar_vec, target_idxes, augmented
+            );
+        }
+        
+        // test if the expectd ins-seq recovered
+        create_target_ins(rslt, augmented, target.pos, target.alt.size());
+        
+        //swap without chaning the number of mapped bases
+        swappable_gaps(rslt.variants, augmented, loc_ref);
+        
+        for (auto& v : augmented)
+        {
+            
+            if (target.is_equivalent(v, loc_ref))
+            {
+                 rslt.has_target = true;
+                 is_orig_aln = false;
+                 break;
+            }
+        }
+
+        if (!rslt.has_target)
+        {
+            //cluster match
+            bool looks_good = is_overlapping_cluster(target, rslt.variants, user_params);
+        
+            if (looks_good)
+            { 
+                rslt.has_target = true;
+                is_orig_aln = false;
+            }
+        }
+    }    
+    
+    if (rslt.has_target)
+    {
+        if (is_orig_aln)
+        {
+            Coord mapped_seg;
+            annot_matched_segments(mapped_seg, rslt);
+            bool is_enough = has_enough_margin(
+                mapped_seg, target.pos, user_params
+            );
+        
+            if (is_enough) rslt.terminate_search = true;
+        }
+        else
+        {
+            annot_nearest_variant(
+                target.lpos, target.pos, target.rpos + target.ref_len - 1,
+                loc_ref, rslt.variants, rslt.idx_to_closest, rslt.dist_to_closest
+            );
+
+            alternative_pos = rslt.variants[rslt.idx_to_closest].pos;
+            if (rslt.is_well_ref_mapped) rslt.terminate_search = true;
+        }
+    }
+
+    
+    /*
+    // accomodate complex cases
+    std::vector<Variant> merged = merge_to_cplx(rslt.variants);   
+    rt_aln_insertions(rslt, merged, loc_ref);
+    
+    for (auto& v : merged)
+    {
+        if (target.is_equivalent(v, loc_ref)) std::cout << v.pos << " " << v.ref << " " << v.alt << std::endl;
+    }
     annot_nearest_variant(
         target.lpos,
         target.pos,
         target.rpos + target.ref_len - 1,
         loc_ref,
-        rslt.variants,
+        merged,
         rslt.idx_to_closest,
         rslt.dist_to_closest
     );
 
     if (rslt.dist_to_closest > user_params.local_thresh) return;
     
-    Variant maybe_target = rslt.variants[rslt.idx_to_closest];
+    Variant maybe_target = merged[rslt.idx_to_closest];
+    
+    std::cout << maybe_target.pos << " closet " << maybe_target.alt << std::endl;
     
     rslt.is_passed = true;
     
+    //allow complex match
     if (target.is_equivalent(maybe_target, loc_ref)) 
     {    
+        Coord mapped_seg;
+        annot_matched_segments(mapped_seg, rslt);
+        bool is_enough = has_enough_margin(
+            mapped_seg, maybe_target.pos, user_params
+        );
+        
         rslt.has_target = true;
-        if (rslt.is_well_ref_mapped) rslt.terminate_search = true;
+        if (is_enough) rslt.terminate_search = true;
     }
+    else
+    {
+        std::vector<int> target_idxes 
+        = find_mismatches_after_gap(rslt.cigar_vec);
+    
+        if (!target_idxes.empty())
+        {
+            std::vector<Variant> gapped_mismaches;
+            parse_to_cplx_gaps(
+                rslt.genomic_start_pos, rslt.ref_seq, rslt.seq, 
+                rslt.cigar_vec, target_idxes, gapped_mismaches
+            );
+
+            for (auto& _gapped : gapped_mismaches)
+            {
+                if (target.is_equivalent(_gapped, loc_ref))
+                {
+                    rslt.has_target = true;
+                    alternative_pos = maybe_target.pos;
+                    if (rslt.is_well_ref_mapped) rslt.terminate_search = true;
+                    break;
+                }
+            }
+
+        }
+    }
+    */    
 } 
 
 
@@ -293,7 +789,7 @@ void eval_by_variant_lst(
 
     std::vector<Variant> shared;
     find_shared_variants(shared, rslt.variants, *p_decomposed);
-    
+   
     size_t total_match = shared.size(), indel_match = 0;
     
     //find indel with biggest change
@@ -460,11 +956,18 @@ char eval_by_aln(
     const std::vector<Variant>* p_decomposed
 )
 {
-    std::vector<std::pair<int, int>> gap_penals;
+    /*std::vector<std::pair<int, int>> gap_penals;
     gap_penal_grid(
         user_params.gap_open_penal,
         user_params.gap_ext_penal,
         gap_penals
+    );*/
+
+    size_t basic_sz = 0;
+    std::vector<std::vector<int>> penals;
+    penal_grid(
+        user_params.mismatch_penal, user_params.gap_open_penal, 
+        user_params.gap_ext_penal, basic_sz, penals
     );
 
     std::vector<int> pos_vec = expand_coordinates(contig.coordinates);
@@ -472,32 +975,28 @@ char eval_by_aln(
     Filter filter;
     Alignment aln;
     std::vector<AlnResult> rslts;
-    rslts.reserve(gap_penals.size());
-    for (const auto& gap_penal : gap_penals)
+    //rslts.reserve(gap_penals.size());
+    for (const auto& penal :penals)
     { 
         AlnResult rslt;
         
         local_alignment(
-            user_params.match_score, user_params.mismatch_penal,
-            gap_penal.first, gap_penal.second, 
+            user_params.match_score, penal[0], penal[1], penal[2], 
             contig.seq, contig.ref_seq, filter, aln
         );
         
-        // local alignment failed
-        if (aln.cigar_string.empty()) continue;
+        if (!is_gapped_aln(aln.cigar_string)) continue;
         
         postprocess_alignment(rslt, pos_vec, contig, loc_ref, aln);
         
         int target_pos = target.pos;
-        //if (target.is_complex)
         if (p_decomposed != NULL)
         {
-            //target_pos may change -> one of decomposed simple indels
             eval_by_variant_lst(rslt, p_decomposed, user_params, loc_ref, target_pos);
         }
         else
         { 
-            eval_by_variant(rslt, target, user_params, loc_ref);
+            eval_by_variant(rslt, target, user_params, loc_ref, target_pos);
         }
 
         if (rslt.terminate_search)
@@ -515,44 +1014,62 @@ char eval_by_aln(
     if (rslts.empty()) return 'C';
 
     std::vector<std::string_view> aln_ptrns;
-    for (const auto& rslt : rslts)
-    {
-        aln_ptrns.push_back(rslt.cigar_str);
-    }
-    
-    //most stable alignment
-    std::string_view common_ptrn = find_commonest_str(aln_ptrns);
-    auto it = std::find(aln_ptrns.begin(), aln_ptrns.end(), common_ptrn);
-    auto rslt = rslts[std::distance(aln_ptrns.begin(), it)];
-    
     if (contig.by_kmer_suggestion)
     {
-        if (rslt.has_target) 
+        for (const auto& rslt : rslts)
         {
+            if (rslt.has_target)
+            {
+                aln_ptrns.push_back(rslt.cigar_str);
+            }
+        }
+
+        if (!aln_ptrns.empty())
+        {
+            std::string_view common_ptrn = find_commonest_str(aln_ptrns);
+            auto it = std::find(aln_ptrns.begin(), aln_ptrns.end(), common_ptrn);
+            auto rslt = rslts[std::distance(aln_ptrns.begin(), it)];
             annot_alignment(contig, rslt);
             update_contig_layout(contig, target.pos);
             return 'A';
         }
-        
-        return 'B';   
+        else
+        {
+            return 'B';
+        }   
     }
+    else
+    { 
+        //most stable aln
+        for (const auto& rslt : rslts)
+        {
+            aln_ptrns.push_back(rslt.cigar_str);
+        }    
      
-    //spliced -> no extension
-    for (const auto& c : rslt.cigar_vec)
-    {
-        if (c.first == 'N') return 'A';
-    }
+        std::string_view common_ptrn = find_commonest_str(aln_ptrns);
+        auto it = std::find(aln_ptrns.begin(), aln_ptrns.end(), common_ptrn);
+        auto rslt = rslts[std::distance(aln_ptrns.begin(), it)];
+
+        //spliced -> no extension
+        for (const auto& c : rslt.cigar_vec)
+        {
+            if (c.first == 'N') return 'A';
+        }
     
-    //do extension
-    if (!rslt.lt_well_ref_mapped && rslt.rt_well_ref_mapped)
-    {
-        return 'L';
+        //do extension
+        if (!rslt.lt_well_ref_mapped && rslt.rt_well_ref_mapped)
+        {
+            return 'L';
+        }
+        else if (rslt.lt_well_ref_mapped && !rslt.rt_well_ref_mapped)
+        {
+            return 'R';
+        }
+        else
+        {    
+            return 'E';
+        }
     }
-    else if (rslt.lt_well_ref_mapped && !rslt.rt_well_ref_mapped)
-    {
-        return 'R';
-    }
-    else return 'E';
 }
 
 

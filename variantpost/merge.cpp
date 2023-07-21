@@ -189,7 +189,6 @@ void find_overlaps(std::vector<Overlap>& overlaps, const std::vector<Seq>& input
             &aln, 
             mask_len
         );
-            
         
         if (has_gaps(aln.cigar_string)) return;
         if (aln.ref_begin >=  prev_end || prev_start >= aln.ref_end) return; 
@@ -324,7 +323,7 @@ Seq merge_reads(const std::vector<Seq>& inputs)
             
             // investigate this version
             // may be able to avoid "twice" approach
-            for (int j = 0; j <= int(seq.size()); ++j)
+            for (int j = 0; j <= int(seq.size()) - 1; ++j)
             {
                 if (target_start == j) is_target_start = 1;
                 
@@ -433,10 +432,13 @@ Seq merge_reads(const std::vector<Seq>& inputs)
     std::string merged_read = "";
     std::string merged_qualities = "";
     std::vector<int> n_start_checks;
+    std::pair<char, char> consensus('\0', '\0');
     for (const auto& b : base_cnts)
     {
-        merged_read += b.get_consensus().first;
-        merged_qualities += b.get_consensus().second;
+        consensus = b.get_consensus();
+        merged_read += consensus.first;
+        merged_qualities += consensus.second;
+        
         n_start_checks.push_back(
             std::accumulate(b.start_checks.begin(), b.start_checks.end(), 0)
         );

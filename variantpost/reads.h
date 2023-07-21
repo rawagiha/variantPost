@@ -58,6 +58,7 @@ struct Read
     bool has_target = false;
     bool incomplete_shift= false;
     bool may_be_complex = false; 
+    bool is_loc_uniq = false;
     
     //annotated patterns    
     char covering_ptrn = '\0';

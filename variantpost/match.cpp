@@ -33,6 +33,7 @@ inline void to_right(std::string& allele, std::string& rt_seq)
     rt_seq.erase(0, 1);
 }
 
+
 std::vector<int> pos_by_read_idx(const int aln_start, const CigarVec& cigar_vec)
 {
     std::vector<int> pos_by_idx;   
@@ -72,6 +73,12 @@ std::vector<int> pos_by_read_idx(const int aln_start, const CigarVec& cigar_vec)
         }
     }
     
+    // to allow match in case where read starts/ends
+    // in the middle of contig's shiftable region
+    if (pos_by_idx[0] != -1) pos_by_idx[0] = -1;
+    size_t last = pos_by_idx.size() - 1;
+    if (pos_by_idx[last] != -1) pos_by_idx[last] = -1;
+       
     return pos_by_idx;
 }
 
@@ -193,8 +200,15 @@ double fw_sim_score(
     double miss = 0.0;
     for (size_t i = 0; i < query.size(); ++i)
     {
-        if (query[i] != subject[i]
-            && quals[i] > user_params.base_q_thresh) ++miss;
+        //boundary must be exact
+        if (i == 0 || i == query.size() - 1)
+        {
+            if (query[i] != subject[i]) ++miss;
+        }
+        {
+            if (query[i] != subject[i]
+                && quals[i] > user_params.base_q_thresh) ++miss;
+        }
     }
     return 1.0 - miss/query.size();
 }
@@ -211,8 +225,15 @@ double rv_sim_score(
     size_t q_last = query.size() - 1, s_last = subject.size() - 1;
     for (size_t i = 0; i <= q_last; ++i) 
     {
-        if (query[q_last - i] != subject[s_last - i]
-            && quals[q_last - i] > user_params.base_q_thresh) ++miss;
+        if (i == 0)
+        {
+            if (query[q_last - i] != subject[s_last - i]) ++miss;
+        }
+        else
+        {        
+            if (query[q_last - i] != subject[s_last - i]
+                && quals[q_last - i] > user_params.base_q_thresh) ++miss;
+        }
     }
     return 1.0 - miss/query.size();
 }
@@ -222,6 +243,7 @@ char indel_match_pattern(
     const std::string& query, 
     std::string_view base_quals,
     const std::vector<int>& pos_by_idx,
+    const bool is_locally_uniq,
     const Contig& contig,
     const ShiftableSegment& ss,
     const UserParams& user_params,
@@ -251,7 +273,7 @@ char indel_match_pattern(
         }
         return 'F';
     }
-     
+    
     // aln ends before ss
     if (aln.ref_end <= int(ss.start))
     {
@@ -270,12 +292,6 @@ char indel_match_pattern(
         else return 'U'; 
     } 
 
-    // del needs to be covered
-    /*if (!contig.mid_len)
-    {
-        if (int(ss.start) < aln.ref_begin || aln.ref_end < int(ss.end)) return 'F'; 
-    }*/
-    
     //trival case
     // these exact matches may be used for extension
     if (is_exact_match(aln, ss, query.size()))
@@ -357,12 +373,21 @@ char indel_match_pattern(
         if (contig.pos_by_seq_idx[ss.start] == pos_by_idx[query_ss_start] 
             &&  pos_by_idx[query_ss_end] == -1) return 'M';   
         
-        if (contig.pos_by_seq_idx[ss.start] == pos_by_idx[query_ss_start] 
-            && pos_by_idx[query_ss_end] <= contig.pos_by_seq_idx[ss.end]) return 'M';
-        if (contig.pos_by_seq_idx[ss.start] <= pos_by_idx[query_ss_start] 
-            && pos_by_idx[query_ss_end] == contig.pos_by_seq_idx[ss.end]) return 'M';
-        if (contig.pos_by_seq_idx[ss.start] != pos_by_idx[query_ss_start] 
-            || contig.pos_by_seq_idx[ss.end] != pos_by_idx[query_ss_end]) return 'F';
+        if (is_locally_uniq)
+        {
+            if (contig.pos_by_seq_idx[ss.start] != pos_by_idx[query_ss_start]
+                || contig.pos_by_seq_idx[ss.end] != pos_by_idx[query_ss_end]) return 'F';
+        }
+        else
+        {
+            if (contig.pos_by_seq_idx[ss.start] == pos_by_idx[query_ss_start] 
+                && pos_by_idx[query_ss_end] <= contig.pos_by_seq_idx[ss.end]) return 'M';
+            if (contig.pos_by_seq_idx[ss.start] <= pos_by_idx[query_ss_start] 
+                && pos_by_idx[query_ss_end] == contig.pos_by_seq_idx[ss.end]) return 'M';
+        }  
+        //std::cout << contig.pos_by_seq_idx[ss.start] << " " << pos_by_idx[query_ss_start] << " " << contig.pos_by_seq_idx[ss.end] << " " << pos_by_idx[query_ss_end] << " " << query_ss_end << " " << query.size() - 1 << std::endl;
+        //if (contig.pos_by_seq_idx[ss.start] != pos_by_idx[query_ss_start] 
+       //     || contig.pos_by_seq_idx[ss.end] != pos_by_idx[query_ss_end]) return 'F';
     } 
     
     return 'M';
@@ -395,11 +420,11 @@ void classify_cand_indel_reads(
 
     for (size_t i = 0; i < candidates.size(); ++i)
     {         
-        if (ss.n_reps && candidates[i].incomplete_shift)
+        /*if (ss.n_reps && candidates[i].incomplete_shift)
         {
             transfer_elem(non_targets, candidates, i);
             continue;   
-        }
+        }*/
         
         std::vector<int> pos_by_idx = pos_by_read_idx(
             candidates[i].aln_start, 
@@ -408,7 +433,7 @@ void classify_cand_indel_reads(
 
         char match_rlst = indel_match_pattern(
             std::string(candidates[i].seq), candidates[i].base_quals,
-            pos_by_idx, contig, ss, user_params, filter, aligner, aln
+            pos_by_idx, candidates[i].is_loc_uniq, contig, ss, user_params, filter, aligner, aln
         );
         
         switch (match_rlst)
@@ -462,7 +487,7 @@ void classify_simplified(
         
         char match_rlst = indel_match_pattern(
             std::string(candidates[i].seq), candidates[i].base_quals,
-            pos_by_idx, contig, ss, user_params, filter, aligner, aln
+            pos_by_idx, candidates[i].is_loc_uniq, contig, ss, user_params, filter, aligner, aln
         );
         
         switch (match_rlst)

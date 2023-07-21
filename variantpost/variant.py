@@ -50,7 +50,7 @@ class Variant(object):
             i = self
         else:
             i = Variant(self.chrom, self.pos, self.ref, self.alt, self.reference)
-
+        
         condition_1 = i.ref[-1].upper() == i.alt[-1].upper() != "N"
         lhs = i.reference.fetch(
             i.chrom, max(0, i.pos - 1 - int(self.window * 1.5)), i.pos - 1

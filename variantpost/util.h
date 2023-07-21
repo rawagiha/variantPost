@@ -149,11 +149,25 @@ CigarVec to_cigar_vector(std::string_view cigar_string);
 void move_up_insertion(std::vector<std::pair<char, int>>& cigar_vector);
 
 
+std::vector<int> find_mismatches_after_gap(const CigarVec& cigar_vector);
+
+
 void splice_cigar(
     CigarVec& cigar_vector,
     const int start_offset,
     const std::vector<int>& genomic_positions,
     const Coord& coordinates
+);
+
+
+
+void parse_to_cplx_gaps(
+    const int aln_start, 
+    std::string_view ref_seq,
+    std::string_view read_seq,
+    const CigarVec& cigar_vector,
+    const std::vector<int>& target_indexes,
+    std::vector<Variant>& variants 
 );
 
 
@@ -167,6 +181,9 @@ void parse_variants(
     std::vector<Variant>& variants, 
     std::string& non_ref_quals
 );
+
+
+std::vector<Variant> merge_to_cplx(const std::vector<Variant>& variants);
 
 
 template<typename T>

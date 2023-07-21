@@ -392,13 +392,13 @@ void prefilter_candidates(
     for (auto& read : candidates)
     {
         read.kmer_score = count_kmer_overlap(read.seq, target_kmers);
-
+        
         // kmer becomes zero for immediate variant clusters
-        if (!read.kmer_score)
+        if (read.kmer_score == 0)
         {
             if (!read.dist_to_non_target || !read.dist_to_clip)
             {
-                if (read.nonref_lq_rate == 0.0) read.kmer_score = 1;    
+                read.kmer_score = 1; //pseudo count   
             }    
         }
               
@@ -409,7 +409,7 @@ void prefilter_candidates(
     for (Reads::reverse_iterator i = candidates.rbegin(); 
         i != candidates.rend(); ++i)
     {
-        if ((*i).kmer_score)
+        if ((*i).kmer_score > 0)
         {
             break; //stop if candidate with kmer > 0
         }
@@ -453,9 +453,15 @@ void prefilter_cplx_candidates(
     
     mock_target_seq(contig, target, user_params, loc_ref);
     
+    Kmers target_kmers;
+    diff_kmers(
+        contig.mocked_seq, contig.mocked_ref,  user_params.kmer_size, target_kmers
+    );
+
+   
     std::vector<Variant> indels;
     to_simple_variants(user_params, contig, loc_ref, decomposed);   
- 
+    
     extract_indels(indels, decomposed);    
 
     std::vector<Variant> shared;
@@ -466,10 +472,15 @@ void prefilter_cplx_candidates(
             find_shared_variants(shared, read.variants, indels);
             if (!shared.empty())
             {
-                read.kmer_score = 1; //pseudo count
+                read.kmer_score = 255; //pseudo count
             }           
         }
         shared.clear(); 
+       
+        if (read.kmer_score <= 0)
+        { 
+            read.kmer_score = count_kmer_overlap(read.seq, target_kmers);           
+        }
     } 
     
     sort_by_kmer(candidates);
@@ -477,7 +488,7 @@ void prefilter_cplx_candidates(
     for (Reads::reverse_iterator i = candidates.rbegin(); 
         i != candidates.rend(); ++i)
     {
-        if ((*i).kmer_score)
+        if ((*i).kmer_score > 0)
         {
             break; //stop if candidate with kmer > 0
         }
@@ -502,7 +513,7 @@ void prioritize_reads_for_contig_construction(
     const UserParams& user_params
 )
 {
-    std::string_view common_spl_ptrn = common_splice_ptrn(candidates);
+    std::string_view common_spl_ptrn = common_splice_ptrn(candidates);    
     
     prioritized.reserve(candidates.size());
     for (const auto& read : candidates)
@@ -514,7 +525,7 @@ void prioritize_reads_for_contig_construction(
                 prioritized.push_back(read);
             }
         }
-    }
+    }   
     prioritized.shrink_to_fit();
 }
 
@@ -535,7 +546,7 @@ void concat_top_tens(
         while (i < tmp_range)
         {
             transfer_elem(top_tens, tmp, i);
-            ++i;
+            ++i; 
         }
      }
 
@@ -647,10 +658,67 @@ bool is_successful_extension(
 )
 {
     if (orig_seq.size() >= ext_seq.size()) return false;
-    if (ext_seq.find(orig_seq) == std::string_view::npos) return false;
+    //if (ext_seq.find(orig_seq) == std::string_view::npos) return false;
     if (orig_end - orig_start >= ext_end - ext_start) return false;
     
     return true; 
+}
+
+
+void prep_lt_input(
+    Reads& lt_matches,
+    int& ext_coord_start,
+    std::vector<Seq>& inputs,
+    const int ext_sz = 3
+)
+{
+    sort_by_start(lt_matches);
+    
+    int i = ext_sz;
+    const int lt_last = static_cast<int>(lt_matches.size()) - 1;
+    while (i >= 0)
+    {
+        if (lt_last - i >= 0)
+        {
+            inputs.emplace_back(
+                std::string(lt_matches[lt_last - i].seq),
+                lt_matches[lt_last - i].base_quals, -1
+            );
+                    
+            if (lt_matches[lt_last - i].aln_start < ext_coord_start)
+            {
+                ext_coord_start = lt_matches[lt_last - i].aln_start;
+            }
+        }
+        --i; 
+    }
+}
+
+
+void prep_rt_input(
+    Reads& rt_matches,
+    int& ext_coord_end,
+    std::vector<Seq>& inputs,
+    const size_t ext_sz = 3
+)
+{
+    sort_by_start(rt_matches);
+    
+    size_t rt_last = rt_matches.size() - 1;
+    size_t j = 0;
+    while (j <= rt_last && j <= ext_sz)
+    {
+        inputs.emplace_back(
+            std::string(rt_matches[j].seq),
+            rt_matches[j].base_quals, -1
+        );
+
+        if (ext_coord_end < rt_matches[j].aln_end)
+        {
+            ext_coord_end =  rt_matches[j].aln_end;
+        }
+        ++j;
+    }
 }
 
 
@@ -662,7 +730,6 @@ void extend_contig(
     LocalReference& loc_ref
 )
 {   
-    size_t i = 0, n = 3;
     int ext_coord_start = contig.coordinates.front().first;
     int ext_coord_end = contig.coordinates.back().second;
     
@@ -673,28 +740,9 @@ void extend_contig(
         case 'L':
         {    
             if (lt_matches.empty()) return;
-        
-            sort_by_start(lt_matches);
-            size_t lim = std::min(n, lt_matches.size());
-            while (i < lim)
-            { 
-                if (i == 0)
-                {
-                    inputs.emplace_back(
-                        std::string(lt_matches[i].seq), lt_matches[i].base_quals, -1);
-                    ext_coord_start = lt_matches[i].aln_start;
-                }
-                else
-                {
-                    inputs.emplace_back(
-                        std::string(lt_matches[i].seq), lt_matches[i].base_quals, -1);
-                }
-
-                ++i;
-            }
             
+            prep_lt_input(lt_matches, ext_coord_start, inputs);            
             inputs.emplace_back(contig.seq, contig.quals, -1);
-            
             ext_coord.emplace_back(ext_coord_start, ext_coord_end);
             break; 
         }
@@ -703,26 +751,7 @@ void extend_contig(
             if (rt_matches.empty()) return;
            
             inputs.emplace_back(contig.seq, contig.quals, -1);
-            
-            sort_by_start(rt_matches); 
-            size_t n = 3;
-            size_t j = 0;
-            size_t last_idx = rt_matches.size() - 1;
-            while (j <= n)
-            { 
-                if (last_idx >= n - j)
-                {    
-                    inputs.emplace_back(
-                        std::string(rt_matches[last_idx - n + j].seq),
-                        rt_matches[last_idx - n + j].base_quals,
-                        -1
-                    );
-
-                    if (j == n)
-                        ext_coord_end = rt_matches[last_idx - n + j].aln_end;    
-                }
-                ++j;
-            } 
+            prep_rt_input(rt_matches, ext_coord_end, inputs);
             ext_coord.emplace_back(ext_coord_start, ext_coord_end);
             break;
        }
@@ -734,45 +763,30 @@ void extend_contig(
             }
             else
             {    
-                sort_by_start(lt_matches);
-
-                if (lt_matches[0].aln_start < ext_coord_start)
-                { 
-                    inputs.emplace_back(
-                        std::string(lt_matches[0].seq), lt_matches[0].base_quals, -1);
-                    
-                    ext_coord_start = lt_matches[0].aln_start;
-                }
-                
+                prep_lt_input(lt_matches, ext_coord_start, inputs);        
                 inputs.emplace_back(contig.seq, contig.quals, -1);
             }
             
             if (!rt_matches.empty())
             {
-                if (ext_coord_end < rt_matches.back().aln_end)
-                {
-                    inputs.emplace_back(
-                        std::string(rt_matches.back().seq), 
-                        rt_matches.back().base_quals, 
-                    -1);
-                }
+                prep_rt_input(rt_matches, ext_coord_end, inputs);
             }
             ext_coord.emplace_back(ext_coord_start, ext_coord_end);
             break;
         }      
     }
 
-    Seq exteded = merge_reads(inputs);
+    Seq extended = merge_reads(inputs);
     
     bool is_passed = is_successful_extension(
         contig.coordinates.front().first, ext_coord_start,
-        contig.coordinates.back().second, ext_coord_end, contig.seq, exteded.seq
+        contig.coordinates.back().second, ext_coord_end, contig.seq, extended.seq
     );
      
     if (is_passed)
     {    
-        contig.seq = exteded.seq;
-        contig.quals = exteded.base_quals;
+        contig.seq = extended.seq;
+        contig.quals = extended.base_quals;
         contig.coordinates = ext_coord;
 
         set_ref_info(contig, ext_coord, loc_ref);

@@ -1,8 +1,9 @@
-from .phaser import phase
+from .phaser import _phase
 from variantpost.cy_search cimport search_target
 from .variant import Variant
 
 from collections import namedtuple
+
 
 class VariantAlignment(object):
     def __init__(
@@ -12,7 +13,7 @@ class VariantAlignment(object):
         exclude_duplicates=True, 
         downsample_threshold=-1, 
         mapping_quality_threshold=1, 
-        base_quality_threshold=20, 
+        base_quality_threshold=30, 
         low_quality_base_rate_threshold=0.1, 
         match_score=3,
         mismatch_penalty=2,
@@ -23,11 +24,22 @@ class VariantAlignment(object):
     ):     
         if not variant.is_normalized:
             variant.normalize(inplace=True)
-         
+        
+        self.chrom = variant.chrom
+        self.target_pos = variant.pos
+        self.reference = variant.reference 
+        self.local_thresh = local_threshold
         self.has_second = second_bam
 
         # interact with c++ code
-        self.contig_dict, self.skips, self.read_names, self.are_reverse, self.target_status, self.are_from_first_bam  = search_target(
+        (
+            self.contig_dict, 
+            self.skips, 
+            self.read_names, 
+            self.are_reverse, 
+            self.target_status, 
+            self.are_first_bam  
+        ) = search_target(
                 bam,
                 second_bam,
                 variant.reference_len,
@@ -86,7 +98,7 @@ class VariantAlignment(object):
     def _paired_count(self):
         
         sf1, sf2, sr1, sr2, nf1, nf2, nr1, nr2, uf1, uf2, ur1, ur2 = ([] for i in range(12))     
-        for read_name, status, is_rv, is_first in zip(self.read_names, self.target_status, self.are_reverse, self.are_from_first_bam):  
+        for read_name, status, is_rv, is_first in zip(self.read_names, self.target_status, self.are_reverse, self.are_first_bam):  
             
             flags = (status, is_rv, is_first)
             
@@ -120,6 +132,15 @@ class VariantAlignment(object):
         pac = PairedAlleleCount(fill_cnt_data(sf1, sr1, nf1, nr1, uf1, ur1), fill_cnt_data(sf2, sr2, nf2, nr2, uf2, ur2))
         
         return pac  
+
+
+    def phase(self, match_penal=0.5, max_common_substr_len=15):
+        phased = _phase(self.contig_dict, self.skips, self.target_pos, self.local_thresh, match_penal, max_common_substr_len)
+        if phased:
+            return Variant(self.chrom, phased[0], phased[1], phased[2], self.reference).normalize()
+        else:
+            ref_base = self.reference.fetch(self.chrom, self.target_pos - 1, self.target_pos)
+            return Variant(self.chrom, self.target_pos, ref_base, ref_base, self.reference)
 
 
 def fill_cnt_data(sf, sr, nf, nr, uf, ur):
