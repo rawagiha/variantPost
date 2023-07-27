@@ -14,9 +14,6 @@ def _phase(
     match_penal,
     max_common_substr_len,
 ):
-    
-    print(contig_dict)
-
     if len(contig_dict) == 0:
         return None
 
