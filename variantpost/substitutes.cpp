@@ -9,16 +9,6 @@
 #include "contig.h"
 
 
-void fill_contig(
-    const std::string& seq, 
-    const std::string& base_quals,
-    const std::string& ref_seq, 
-    const int aln_start,
-    const CigarVec& cigar_vector,
-    Contig& contig
-);
-
-
 void substitute_patterns(
     int& a_cnt,
     int& b_cnt,
@@ -570,6 +560,73 @@ void search_retargetable(
 }
 
 
+void fill_contig(
+    const std::string& seq, 
+    const std::string& base_quals,
+    const std::string& ref_seq, 
+    const int aln_start,
+    const CigarVec& cigar_vector,
+    Contig& contig
+)
+{
+    char op = '\0';
+    int op_len = 0, curr_pos = aln_start;
+    //curr_pos = read.aln_start;
+    size_t ref_idx = 0, seq_idx = 0;
+    //std::string seq = static_cast<std::string>(read.seq);
+    //std::string ref_seq = static_cast<std::string>(read.ref_seq);
+    for (const auto& c : cigar_vector)
+    {
+        op = c.first;
+        op_len = c.second;
+       
+        switch (op)
+        {
+            case '=':
+            case 'X':
+            case 'M':
+                for (int i = 0; i < op_len; ++i)
+                {
+                    contig.positions.push_back(curr_pos);
+                    contig.ref_bases.push_back(ref_seq.substr(ref_idx, 1));
+                    contig.alt_bases.push_back(seq.substr(seq_idx, 1));
+                    contig.base_quals.push_back(base_quals.substr(seq_idx, 1));
+                    
+                    ++curr_pos;
+                    ++ref_idx;
+                    ++seq_idx; 
+                }
+                break; 
+            case 'I':
+                contig.alt_bases.pop_back();
+                contig.alt_bases.push_back(seq.substr(seq_idx - 1, op_len + 1));
+                contig.base_quals.pop_back();
+                contig.base_quals.push_back(base_quals.substr(seq_idx - 1, op_len + 1));
+
+                seq_idx += op_len;
+                break;
+            case 'D':
+                contig.ref_bases.pop_back();
+                contig.ref_bases.push_back(ref_seq.substr(ref_idx - 1, op_len + 1));
+                
+                ref_idx += op_len;
+                curr_pos += op_len;
+                break;
+            case 'N':
+                contig.skip_starts.push_back(curr_pos);
+                curr_pos += op_len;
+                contig.skip_ends.push_back(curr_pos - 1);
+                break;
+            case 'S':
+                seq_idx += op_len;
+                break;
+            default:
+                break;
+        }    
+    }    
+}
+
+
 void fill_contig_by_mock(
     Reads& reads, 
     const int mock_start,
@@ -657,11 +714,7 @@ void retarget_to_indel(
         return;
     }
     
-    if (!b_cnt) 
-    {    
-        is_non_supporting = true;
-    }
-    else
+    if (b_cnt) 
     {
         //obscured cases
         int mock_start = -1;
@@ -713,76 +766,9 @@ void retarget_to_indel(
             }   
         }
     }
-    is_non_supporting = false;
+    
+    is_non_supporting = true;
 } 
-
-
-//void fill_contig(const Read& read, Contig& contig)
-void fill_contig(
-    const std::string& seq, 
-    const std::string& base_quals,
-    const std::string& ref_seq, 
-    const int aln_start,
-    const CigarVec& cigar_vector,
-    Contig& contig
-)
-{
-    char op = '\0';
-    int op_len = 0, curr_pos = aln_start;
-    //curr_pos = read.aln_start;
-    size_t ref_idx = 0, seq_idx = 0;
-    //std::string seq = static_cast<std::string>(read.seq);
-    //std::string ref_seq = static_cast<std::string>(read.ref_seq);
-    for (const auto& c : cigar_vector)
-    {
-        op = c.first;
-        op_len = c.second;
-       
-        switch (op)
-        {
-            case '=':
-            case 'X':
-            case 'M':
-                for (int i = 0; i < op_len; ++i)
-                {
-                    contig.positions.push_back(curr_pos);
-                    contig.ref_bases.push_back(ref_seq.substr(ref_idx, 1));
-                    contig.alt_bases.push_back(seq.substr(seq_idx, 1));
-                    contig.base_quals.push_back(base_quals.substr(seq_idx, 1));
-                    
-                    ++curr_pos;
-                    ++ref_idx;
-                    ++seq_idx; 
-                }
-                break; 
-            case 'I':
-                contig.alt_bases.pop_back();
-                contig.alt_bases.push_back(seq.substr(seq_idx - 1, op_len + 1));
-                contig.base_quals.pop_back();
-                contig.base_quals.push_back(base_quals.substr(seq_idx - 1, op_len + 1));
-
-                seq_idx += op_len;
-                break;
-            case 'D':
-                contig.ref_bases.pop_back();
-                contig.ref_bases.push_back(ref_seq.substr(ref_idx - 1, op_len + 1));
-                
-                ref_idx += op_len;
-                curr_pos += op_len;
-                break;
-            case 'N':
-                contig.skip_starts.push_back(curr_pos);
-                curr_pos += op_len;
-                contig.skip_ends.push_back(curr_pos - 1);
-                break;
-            case 'S':
-                seq_idx += op_len;
-                break;
-            default:
-                break;
-        }    
-    }    
-}
 
 
 void from_target_substitute_reads(
