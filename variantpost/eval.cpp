@@ -95,6 +95,7 @@ void postprocess_alignment(
 {
     rslt.cigar_str = alignment.cigar_string;
     rslt.cigar_vec = to_cigar_vector(rslt.cigar_str);
+    
     splice_cigar(
         rslt.cigar_vec, alignment.ref_begin, 
         pos_vec, contig.coordinates
@@ -112,13 +113,13 @@ void postprocess_alignment(
     rslt.seq = contig.seq.substr(query_begin);
     rslt.ref_seq = contig.ref_seq.substr(alignment.ref_begin);
     rslt.quals = contig.quals.substr(query_begin);
-    
+
     std::string _tmp = "";
     parse_variants(
         rslt.genomic_start_pos, rslt.ref_seq,
         rslt.seq, rslt.quals, rslt.cigar_vec, 
         loc_ref.dict, rslt.variants, _tmp
-    );  
+    );
 }
 
 
@@ -443,8 +444,6 @@ void annot_end_mappping(AlnResult& rslt, const UserParams& user_params)
     rslt.is_well_ref_mapped = (
         rslt.lt_well_ref_mapped && rslt.rt_well_ref_mapped
     ) ? true : false;
-
-    //TODO relax this to matches > user.loc.theresh around target//
 }
 
 
@@ -706,74 +705,6 @@ void eval_by_variant(
             if (rslt.is_well_ref_mapped) rslt.terminate_search = true;
         }
     }
-
-    
-    /*
-    // accomodate complex cases
-    std::vector<Variant> merged = merge_to_cplx(rslt.variants);   
-    rt_aln_insertions(rslt, merged, loc_ref);
-    
-    for (auto& v : merged)
-    {
-        if (target.is_equivalent(v, loc_ref)) std::cout << v.pos << " " << v.ref << " " << v.alt << std::endl;
-    }
-    annot_nearest_variant(
-        target.lpos,
-        target.pos,
-        target.rpos + target.ref_len - 1,
-        loc_ref,
-        merged,
-        rslt.idx_to_closest,
-        rslt.dist_to_closest
-    );
-
-    if (rslt.dist_to_closest > user_params.local_thresh) return;
-    
-    Variant maybe_target = merged[rslt.idx_to_closest];
-    
-    std::cout << maybe_target.pos << " closet " << maybe_target.alt << std::endl;
-    
-    rslt.is_passed = true;
-    
-    //allow complex match
-    if (target.is_equivalent(maybe_target, loc_ref)) 
-    {    
-        Coord mapped_seg;
-        annot_matched_segments(mapped_seg, rslt);
-        bool is_enough = has_enough_margin(
-            mapped_seg, maybe_target.pos, user_params
-        );
-        
-        rslt.has_target = true;
-        if (is_enough) rslt.terminate_search = true;
-    }
-    else
-    {
-        std::vector<int> target_idxes 
-        = find_mismatches_after_gap(rslt.cigar_vec);
-    
-        if (!target_idxes.empty())
-        {
-            std::vector<Variant> gapped_mismaches;
-            parse_to_cplx_gaps(
-                rslt.genomic_start_pos, rslt.ref_seq, rslt.seq, 
-                rslt.cigar_vec, target_idxes, gapped_mismaches
-            );
-
-            for (auto& _gapped : gapped_mismaches)
-            {
-                if (target.is_equivalent(_gapped, loc_ref))
-                {
-                    rslt.has_target = true;
-                    alternative_pos = maybe_target.pos;
-                    if (rslt.is_well_ref_mapped) rslt.terminate_search = true;
-                    break;
-                }
-            }
-
-        }
-    }
-    */    
 } 
 
 
@@ -838,7 +769,7 @@ void annot_alignment(Contig& contig, const AlnResult& rslt)
     {  
         op = cigar.first;
         op_len = cigar.second;
-       
+        
         switch (op)
         {
             case '=':
@@ -976,7 +907,7 @@ char eval_by_aln(
     Alignment aln;
     std::vector<AlnResult> rslts;
     //rslts.reserve(gap_penals.size());
-    for (const auto& penal :penals)
+    for (const auto& penal : penals)
     { 
         AlnResult rslt;
         
@@ -1053,7 +984,11 @@ char eval_by_aln(
         //spliced -> no extension
         for (const auto& c : rslt.cigar_vec)
         {
-            if (c.first == 'N') return 'A';
+            if (c.first == 'N') 
+            {    
+                annot_alignment(contig, rslt);
+                return 'A';
+            }
         }
     
         //do extension

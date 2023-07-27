@@ -1009,7 +1009,7 @@ void make_kmers(std::string_view seq, const size_t k, Kmers& kmers)
         return;
     }
     
-    for (size_t i = 0; i < n - k; ++i) {
+    for (size_t i = 0; i <= n - k; ++i) {
         kmers.insert(seq.substr(i, k));
     }
 }

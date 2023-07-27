@@ -27,6 +27,7 @@ class VariantAlignment(object):
         
         self.chrom = variant.chrom
         self.target_pos = variant.pos
+        self.target_is_indel = variant.is_indel
         self.reference = variant.reference 
         self.local_thresh = local_threshold
         self.has_second = second_bam
@@ -38,7 +39,8 @@ class VariantAlignment(object):
             self.read_names, 
             self.are_reverse, 
             self.target_status, 
-            self.are_first_bam  
+            self.are_first_bam,
+            self.is_retargeted  
         ) = search_target(
                 bam,
                 second_bam,
@@ -135,7 +137,10 @@ class VariantAlignment(object):
 
 
     def phase(self, match_penal=0.5, max_common_substr_len=15):
-        phased = _phase(self.contig_dict, self.skips, self.target_pos, self.local_thresh, match_penal, max_common_substr_len)
+        if self.is_retargeted:
+            self.target_is_indel = True
+       
+        phased = _phase(self.contig_dict, self.skips, self.target_pos, self.target_is_indel, self.local_thresh, match_penal, max_common_substr_len)
         if phased:
             return Variant(self.chrom, phased[0], phased[1], phased[2], self.reference).normalize()
         else:

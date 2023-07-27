@@ -65,6 +65,12 @@ struct Read
     char clip_ptrn = '\0';
     char local_ptrn = '\0';   
     
+    // substitute-related
+    char sb_ptrn = '\0';
+    bool has_sb_target = false;
+    size_t sb_read_idx = 0; 
+    int sb_kmer_score = -1;
+    
     //metrics   
     double central_score = -1.0;
     double overall_lq_rate = 0.0;
@@ -94,16 +100,33 @@ struct Read
 
 typedef std::vector<Read> Reads;
 
-
 void sort_by_start(Reads & reads);
 
 void sort_by_kmer(Reads & reads);
+
+void annot_ref_seq(Read& read, LocalReference& loc_ref);
+
+void annot_splice_pattern(Read& read);
+
+void annot_clip_pattern(Read& read, const Variant& target);
+
+void annot_non_ref_signature(Read& read);
+
+bool is_locally_unique(Read& read, const LocalReference& loc_ref);
+
+void annot_covering_ptrn(
+    Read& read, 
+    const Variant& target, 
+    LocalReference& loc_ref,
+    bool is_retargeted
+);
 
 void annotate_reads(
     Reads& reads, 
     const Variant& target, 
     const UserParams& user_params, 
-    LocalReference& loc_ref
+    LocalReference& loc_ref,
+    bool is_retargeted
 );
 
 

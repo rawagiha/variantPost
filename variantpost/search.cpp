@@ -9,7 +9,7 @@
 #include "reads.h"
 #include "search.h"
 #include "contig.h"
-
+#include "substitutes.h"
 
 SearchResult::SearchResult() {}
 
@@ -30,7 +30,8 @@ void SearchResult::report(
     const Contig& contig,
     const Reads& targets,
     const Reads& non_targets,
-    const Reads& undetermined
+    const Reads& undetermined,
+    const bool _is_retargeted
 )
 {
     size_t buff_size = (
@@ -52,6 +53,7 @@ void SearchResult::report(
     base_quals = contig.base_quals;
     skip_starts = contig.skip_starts;
     skip_ends = contig.skip_ends;
+    is_retargeted = _is_retargeted;
 }
 
 
@@ -266,21 +268,52 @@ void _search_target(
     LocalReference loc_ref(fastafile, chrom, ref_start, ref_end);   
 
     Variant target = prep_target(pos, ref, alt, loc_ref);
+   
+    Reads reads, targets, candidates, non_targets, undetermined;
     
-    Reads reads;
+    // read parsing
     prep_reads(
         reads, read_names, are_reverse, cigar_strs,
         aln_starts, aln_ends, read_seqs, quals, mapqs, are_from_first_bam
-    );
-    
-    // read processing
-    annotate_reads(reads, target, user_params, loc_ref);  
-    
-    Reads targets, candidates, non_targets, undetermined;
-    classify_reads(reads, targets, candidates, non_targets, user_params);
-        
-    // contig processing
+    ); 
+       
     Contig contig;
+    bool is_retargeted = false, is_non_supporting = false, is_mocked = false;
+    if (target.is_substitute)
+    {
+        retarget_to_indel(
+            reads, target, contig, user_params, loc_ref, 
+            is_retargeted, is_non_supporting, is_mocked
+        );
+        
+        if (is_retargeted) // process as indel
+        {    
+            target = prep_target(target.pos, target.ref, target.alt, loc_ref);    
+        }
+        else 
+        {    
+            if (is_non_supporting)
+            {
+                from_no_substitute_reads(target, contig, reads, non_targets);    
+            }
+            else
+            {
+                from_target_substitute_reads(
+                    contig, reads, targets, non_targets, is_mocked
+                );
+            }      
+            
+            rslt.report(contig, targets, non_targets, undetermined);
+            return;
+        }
+    }
+    
+    // indel read annotation
+    annotate_reads(reads, target, user_params, loc_ref, is_retargeted);  
+    
+    classify_reads(reads, targets, candidates, non_targets, user_params);
+    
+    // indel contig processing
     if (!targets.empty())
     {
         from_target_reads(
@@ -298,5 +331,5 @@ void _search_target(
         );
     }
     
-    rslt.report(contig, targets, non_targets, undetermined); 
+    rslt.report(contig, targets, non_targets, undetermined, is_retargeted); 
 }   

@@ -1,5 +1,6 @@
 #include <vector>
 #include <string>
+#include <algorithm>
 #include <string_view>
 
 #include "reads.h"
@@ -316,7 +317,8 @@ void covering_patterns(Read& read, const Variant& target)
 void annot_covering_ptrn(
     Read& read, 
     const Variant& target, 
-    LocalReference& loc_ref
+    LocalReference& loc_ref,
+    bool is_retargeted
 )
 {    
     if (read.is_na_ref)
@@ -328,11 +330,14 @@ void annot_covering_ptrn(
     {
         if (!read.is_ref)
         {
-            parse_variants(
-                read.aln_start, read.ref_seq, 
-                read.seq, read.base_quals, read.cigar_vector, 
-                loc_ref.dict, read.variants, read.non_ref_quals
-            );
+            if (!is_retargeted)
+            {
+                parse_variants(
+                    read.aln_start, read.ref_seq, 
+                    read.seq, read.base_quals, read.cigar_vector, 
+                    loc_ref.dict, read.variants, read.non_ref_quals
+                );
+            }
          }
     }
 
@@ -735,14 +740,21 @@ void annotate_reads(
     Reads& reads, 
     const Variant& target, 
     const UserParams& user_params, 
-    LocalReference& loc_ref
+    LocalReference& loc_ref,
+    bool is_retargeted
 )
 {
     for (auto& read : reads)
     {
-        annot_ref_seq(read, loc_ref);
-        annot_splice_pattern(read);
-        annot_covering_ptrn(read, target, loc_ref);
+        if (!is_retargeted)
+        {
+            annot_ref_seq(read, loc_ref);
+            annot_splice_pattern(read);
+        }
+        
+        annot_covering_ptrn(read, target, loc_ref, is_retargeted);
+        
+
         annot_target_info(read, target, loc_ref);
         annot_clip_pattern(read, target);
         annot_non_ref_signature(read);  

@@ -42,6 +42,7 @@ cdef extern from "search.h":
         vector[bool_t] are_reverse
         vector[int] target_statuses
         vector[bool_t] are_from_first_bam
+        bool_t is_retargeted
 
 
     void _search_target(
@@ -266,7 +267,7 @@ cdef object search_target(
     ):
         contig_dict[pos] = (ref_base.decode("utf-8"), alt_base.decode("utf-8"), base_qual.decode("utf-8"))
         #contig_dict.append([pos, ref_base.decode("utf-8"), alt_base.decode("utf-8"), base_qual.decode("utf-8")])       
-
+    
     annot_reads = []
     for read_name, is_reverse, target_status, is_first_bam in zip(
         rslt.read_names, rslt.are_reverse, rslt.target_statuses, rslt.are_from_first_bam
@@ -275,5 +276,5 @@ cdef object search_target(
     
     skips = [(start, end) for start, end in zip(rslt.skip_starts, rslt.skip_ends)]
     
-    return contig_dict, skips, rslt.read_names,  rslt.are_reverse, rslt.target_statuses, rslt.are_from_first_bam
+    return contig_dict, skips, rslt.read_names,  rslt.are_reverse, rslt.target_statuses, rslt.are_from_first_bam, rslt.is_retargeted
     #return contig_dict, skips, annot_reads

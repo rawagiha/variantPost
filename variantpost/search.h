@@ -21,6 +21,7 @@ struct SearchResult
     std::vector<bool> are_reverse;
     std::vector<int> target_statuses;
     std::vector<bool> are_from_first_bam;
+    bool is_retargeted;
 
     SearchResult();
                                                 
@@ -30,7 +31,8 @@ struct SearchResult
         const Contig& contig,
         const Reads& targets,
         const Reads& non_targets,
-        const Reads& undetermined
+        const Reads& undetermined,
+        const bool is_retargeted = false
     );
 };
 

@@ -23,6 +23,10 @@ class Variant(object):
         #    self.unspliced_local_reference_start - 1,
         #    self.unspliced_local_reference_end,
         #)
+     
+    @property
+    def is_indel(self):
+        return len(self.ref) != len(self.alt)
 
     @property
     def is_leftaligned(self):

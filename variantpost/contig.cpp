@@ -322,12 +322,10 @@ void mock_target_seq(
     int _start = (target.pos <= int(offset + user_params.kmer_size * n)) 
                ? 0 : target.pos - offset - user_params.kmer_size * n;
     int _len = (target.pos - _start < int(user_params.kmer_size * n)) 
-               ? target.pos - _start  : user_params.kmer_size * n;
+               ? target.pos - _start : user_params.kmer_size * n;
     
     std::string lt_frag = loc_ref.fasta.getSubSequence(
-        loc_ref.chrom,
-        _start,
-        _len
+        loc_ref.chrom, _start, _len
     );
 
     contig.mock_lt_len = lt_frag.size();

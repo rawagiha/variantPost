@@ -136,6 +136,18 @@ struct Variant
 };
 
 
+template<> struct std::hash<Variant>
+{
+    size_t operator() (const Variant& v) const noexcept
+    {
+        size_t h1 = std::hash<int>()(v.pos);
+        size_t h2 = std::hash<std::string>()(v.ref);
+        size_t h3 = std::hash<std::string>()(v.alt);
+        return h1 ^ h2 ^ h3;
+    }
+};
+
+
 void find_shared_variants(
     std::vector<Variant>& shared,
     std::vector<Variant>& var_vec1,

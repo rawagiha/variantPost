@@ -30,6 +30,7 @@ extensions = [
             "variantpost/match.cpp",
             "variantpost/merge.cpp",
             "variantpost/util.cpp",
+            "variantpost/substitutes.cpp",
             "variantpost/ssw/ssw.c",
             "variantpost/ssw/ssw_cpp.cpp",
             "variantpost/fasta/Fasta.cpp",

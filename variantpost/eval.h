@@ -38,6 +38,18 @@ struct AlnResult
 };   
 
 
+void local_alignment(
+    const uint8_t match_score,
+    const uint8_t mismatch_penal,
+    const uint8_t gap_open_penal,
+    const uint8_t gap_ext_penal,
+    const std::string& seq,
+    const std::string& ref_seq,
+    const Filter& filter,
+    Alignment& alignment
+);
+
+
 char eval_by_aln(
     Contig& contig,
     const Variant& target,
