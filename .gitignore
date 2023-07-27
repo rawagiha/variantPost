@@ -4,6 +4,11 @@
 #
 variantpost/cy_search.cpp
 variantpost/variantalignment.cpp
+build/
+dist/
+test/
+variantpost.egg-info/
+run_test.py
 
 */__pycache__/
 
