@@ -566,7 +566,7 @@ bool is_locally_unique(
     int read_len = static_cast<int>(read.seq.size());
     if (lt_len  >= read_len || rt_len >= read_len) return false;    
  
-    // lt check
+    // lt fragment
     bool lt_uniq = false;
     int lt_start_pos = -1;
     const size_t lt_most = loc_ref.seq.find(read.seq.substr(0, lt_len));
@@ -581,7 +581,7 @@ bool is_locally_unique(
         }
     }
     
-    //rt check
+    // rt fragment
     bool rt_uniq = false;
     int rt_start_pos = -1;
     const size_t rt_most = loc_ref.seq.rfind(read.seq.substr(read.seq.size() - rt_len));

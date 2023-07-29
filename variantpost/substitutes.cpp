@@ -35,13 +35,13 @@ void substitute_patterns(
             case 'M':
             case 'X':
             case '=':
-                if (curr_pos + op_len < target.pos)
+                /*if (curr_pos + op_len < target.pos)
                 {
                     ref_idx += op_len;
                     read_idx += op_len;
                     curr_pos += op_len;    
-                }
-                else if (curr_pos <= target.pos && target.pos < curr_pos + op_len)
+                }*/
+                if (curr_pos <= target.pos && target.pos < curr_pos + op_len)
                 {
                     std::string_view query = read.seq.substr(
                         read_idx + (target.pos - curr_pos), target.alt.size()); 
@@ -62,6 +62,10 @@ void substitute_patterns(
                         return;
                     }
                 }
+                
+                ref_idx += op_len;
+                read_idx += op_len;
+                curr_pos += op_len;
                 break;
             case 'I':
                 read_idx += op_len;
@@ -92,7 +96,7 @@ void substitute_patterns(
                 break;           
             default :
                 break;
-        }    
+        }
     }    
     read.sb_ptrn = 'C';  
 }
@@ -334,7 +338,7 @@ void has_compatible_trans_gap(
         if (read.sb_ptrn == 'C')
         {
             read.sb_kmer_score = count_kmer_overlap(read.seq, core_kmers);
-        }    
+        } 
     }
 
     std::sort(
@@ -348,21 +352,35 @@ void has_compatible_trans_gap(
     {
         Variant _gap(-1, "N", "N");       
         nearest_gap(reads[0].variants, target.pos, _gap);
+        
         int _gap_idx = pos_to_idx(reads[0].aln_start, _gap.pos, reads[0].cigar_vector);
-         
         if (_gap_idx >= 0)
         {
-            size_t i = 0, target_idx = static_cast<size_t>(_gap_idx);
-         
+            size_t i = 0;
+            size_t target_idx_start = static_cast<size_t>(_gap_idx);
+            size_t target_idx_end = target_idx_start + _gap.alt.size() - 1;
             int cnt = 0;
             for (const auto& kmer : core_kmers)
             {
                 i = reads[0].seq.find(kmer);
-                if (i != std::string_view::npos 
-                    && i <= target_idx && target_idx <= i + kmer.size()) ++cnt;          
-            }
+                
+                if (i == std::string_view::npos)
+                {
+                    continue;;
+                }
+                else if (target_idx_end < i) 
+                {
+                    continue;
+                }
+                else if (i + kmer.size() - 1 < target_idx_start)
+                {
+                    continue;
+                }
 
-            if (2 * cnt > static_cast<int>(core_kmers.size()))
+                ++cnt;
+            }
+            
+            if (cnt)
             {
                 target = _gap;
                 is_retargeted = true;               
@@ -685,8 +703,7 @@ void retarget_to_indel(
         bool is_exact = false, is_loc_uniq = false;
         is_exact_cis(
         reads, cis_gaps, cis_gaps.empty(), _gap, is_exact, is_loc_uniq);
-
-    
+            
         // linked with a gap in cis (typically complex indel)
         if (is_exact)
         {
