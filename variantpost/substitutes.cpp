@@ -191,14 +191,13 @@ void is_exact_cis(
            
             if (read.aln_start <= _gap.pos 
                 && _gap.variant_end_pos <= read.aln_end) ++cnt;
-
         }
     }
-       
+    
     if (!is_not_excl && !has_no_cis_gaps) 
     {    
         is_excl = ( 
-            static_cast<double>(cnt) * 0.8 < static_cast<double>(cis_gaps.at(_gap))
+            static_cast<double>(cnt) * 2/3 < static_cast<double>(cis_gaps.at(_gap))
         );
     } 
 }
@@ -534,17 +533,33 @@ void match_to_target(
             && read.nonref_lq_rate < user_params.lq_rate_thresh)
         {                    
             seq = static_cast<std::string>(read.seq);
+            
+            /* 
+            //against ref
+            local_alignment(
+                user_params.match_score, user_params.mismatch_penal,
+                user_params.gap_open_penal, user_params.gap_ext_penal,
+                seq, mock_ref, filter, aln
+            );
+            
+            ref_score = aln.sw_score;           
+            
+            //against mock
+            */
             local_alignment(
                 user_params.match_score, user_params.mismatch_penal,
                 user_params.gap_open_penal, user_params.gap_ext_penal,
                 seq, mock_seq, filter, aln
             );
-
+            
+            //if (aln.sw_score <= ref_score) continue;
+             
             if (
                 is_target_sb_compatible(aln, target_idx_start, target_idx_end)
             )
             {
-                read.sb_ptrn = 'A';
+                read.aln_score = aln.sw_score;
+                read.sb_ptrn = 'A'; //tentative may change in "search_retargetable"
                 ++a_cnt;               
             }
         }
@@ -557,6 +572,7 @@ void search_retargetable(
     const UserParams& user_params,
     const int target_pos,
     const int mock_start,
+    int& a_cnt,
     Reads& reads,
     LocalReference& loc_ref,
     std::unordered_map<Variant, int>& retargetables
@@ -565,7 +581,7 @@ void search_retargetable(
     Filter filter;
     Alignment aln;
     std::string seq = "";
-    for (const auto& read : reads)
+    for (auto& read : reads)
     {
         if (read.sb_ptrn == 'A')
         {
@@ -575,6 +591,13 @@ void search_retargetable(
                 user_params.gap_open_penal, user_params.gap_ext_penal,
                 seq, mock_ref, filter, aln
             );
+            
+            if (read.aln_score <= aln.sw_score)
+            {
+                read.sb_ptrn = 'C';
+                --a_cnt;
+                continue;
+            }
             
             if (has_gaps(aln.cigar_string))
             {
@@ -699,6 +722,7 @@ void retarget_to_indel(
         annot_splice_pattern(read);
         annot_covering_ptrn(read, target, loc_ref, is_retargeted);
         annot_clip_pattern(read, target);
+        eval_read_quality(read, user_params);
         is_locally_unique(read, loc_ref);
         substitute_patterns(a_cnt, b_cnt, read, target);
         
@@ -713,7 +737,7 @@ void retarget_to_indel(
         bool is_exact = false, is_loc_uniq = false;
         is_exact_cis(
         reads, cis_gaps, cis_gaps.empty(), _gap, is_exact, is_loc_uniq);
-            
+        
         // linked with a gap in cis (typically complex indel)
         if (is_exact)
         {
@@ -764,7 +788,7 @@ void retarget_to_indel(
             std::unordered_map<Variant, int> retargetables;
             search_retargetable(
                 mock_ref, user_params, target.pos, 
-                mock_start, reads, loc_ref, retargetables
+                mock_start, a_cnt, reads, loc_ref, retargetables
             );
 
             
@@ -785,11 +809,15 @@ void retarget_to_indel(
                     return;
                 }
             }
-            else
+            else if (a_cnt)
             {
                 fill_contig_by_mock(reads, mock_start, mock_ref, user_params, contig);
                 is_mocked = true;
                 return;
+            }
+            else
+            {       
+                is_non_supporting = true;
             }   
         }
     }

@@ -70,6 +70,7 @@ struct Read
     bool has_sb_target = false;
     size_t sb_read_idx = 0; 
     int sb_kmer_score = -1;
+    int aln_score = 0;
     
     //metrics   
     double central_score = -1.0;
@@ -111,6 +112,8 @@ void annot_splice_pattern(Read& read);
 void annot_clip_pattern(Read& read, const Variant& target);
 
 void annot_non_ref_signature(Read& read);
+
+void eval_read_quality(Read& read, const UserParams& user_params);
 
 bool is_locally_unique(Read& read, const LocalReference& loc_ref);
 
