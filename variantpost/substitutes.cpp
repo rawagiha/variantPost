@@ -123,7 +123,7 @@ void collect_gaps(
                 if (std::abs(v.pos - target_pos) < local_thresh
                     || std::abs(v.variant_end_pos - target_pos) < local_thresh)
                 {
-                    ++cis_gaps[v];                       
+                    ++cis_gaps[v];
                 }
             }        
         }
@@ -181,16 +181,26 @@ void is_exact_cis(
         }
         else
         {
+         // for 'A' sb_prtn, count reads covering the retarget candidate locus   
+         // generally cnt >= cis_gaps.at(_gap) due to sequencing error in inserted seq
+         // in candidate
+               
             if (!is_loc_uniq) is_loc_uniq = read.is_loc_uniq;
             
             if (has_no_cis_gaps) continue;
            
             if (read.aln_start <= _gap.pos 
                 && _gap.variant_end_pos <= read.aln_end) ++cnt;
+
         }
     }
-    
-    if (!is_not_excl && !has_no_cis_gaps) is_excl = (cnt == cis_gaps.at(_gap)); 
+       
+    if (!is_not_excl && !has_no_cis_gaps) 
+    {    
+        is_excl = ( 
+            static_cast<double>(cnt) * 0.8 < static_cast<double>(cis_gaps.at(_gap))
+        );
+    } 
 }
 
 
