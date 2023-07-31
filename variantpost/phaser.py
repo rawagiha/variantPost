@@ -2,8 +2,6 @@ import numpy as np
 from difflib import SequenceMatcher
 from collections import OrderedDict, Counter
 
-# from .variant import Variant
-
 
 def _phase(
     contig_dict,
@@ -17,25 +15,33 @@ def _phase(
     if len(contig_dict) == 0:
         return None
 
-    # contig_dict = to_tight_layout(contig_dict, target_pos)
     snvs, indels, actual_target = profile_non_refs(contig_dict, target_pos, is_indel)
-    
     if actual_target.is_null():
         return None
-
+    
     contig_dict, snvs, indels = crop_contig(
         contig_dict, skips, snvs, indels, actual_target.pos
     )
     
     if not snvs and not indels:
         trim_contig(contig_dict, actual_target.pos, actual_target.end_pos)
-    elif not indels:
+        return greedy_phasing(contig_dict)    
+    
+    # to capture cases where phasable only after right alignment
+    lt_max = lt_max_lim(actual_target, indels, max_common_substr_len, contig_dict)
+    phasable_dist = phasable_dist_to_mismatch(match_penal, local_thresh, contig_dict)
+    rt_min = rt_min_lim(actual_target, snvs, indels, phasable_dist, max_common_substr_len, contig_dict)
+    
+    if not indels:
         lt_end = find_peak(
             contig_dict, actual_target, snvs, match_penal, local_thresh, True
         )
+
         rt_end = find_peak(
             contig_dict, actual_target, snvs, match_penal, local_thresh, False
         )
+        rt_end = max(rt_end, rt_min)
+        
         trim_contig(contig_dict, lt_end, rt_end)
     else:
         remove_common_substrs(contig_dict, actual_target.pos, max_common_substr_len)
@@ -68,56 +74,115 @@ class NonReferenceEvent(object):
             return False
 
 
-# def _rt_aln(prev_ref, prev_alt, prev_qual, curr_ref, curr_alt, curr_qual):
-#    if len(prev_ref) > len(prev_alt):
-#        if prev_ref[1] == curr_ref:
-#            return (prev_ref[1 : ] + curr_ref, curr_ref, curr_qual)
-#    else:
-#        if prev_alt[1] == curr_ref:
-#            return (curr_ref, prev_alt[1 : ] + curr_ref, curr_qual +  prev_qual[1 : ])
+def phasable_dist_to_mismatch(match_penal, local_thresh, contig_dict):
+    score = 0
+    for i in range(len(contig_dict)):
+        score += loss(i, match_penal, local_thresh)
+        if score < -1.0:
+            return i
 
-#    return None
-
-# def _update(contig_dicti_lst, i, alned):
-#    contig_dicti_lst[i - 1][1][0] = contig_dicti_lst[i - 1][1][0][0]
-#    contig_dicti_lst[i - 1][1][1] = contig_dicti_lst[i - 1][1][1][0]
-#    contig_dicti_lst[i - 1][1][2] = contig_dicti_lst[i - 1][1][2][0]
-#    contig_dicti_lst[i][1][0] = alned[0]
-#    contig_dicti_lst[i][1][1] = alned[1]
-#    contig_dicti_lst[i][1][2] = alned[2]
+    return len(contig_dict)
 
 
-# def _to_tight_layout(contig_dict, target_pos):
-#    data = [[k, list(v)] for k,v in contig_dict.items()]
-#
-#    prev_pos, prev_ref, prev_alt, prev_qual = data[0], data[0][1][0], data[0][1][1], data[0][1][2]
-#    for i in range(1, len(data)- 1):
-#        curr_pos, curr_ref, curr_alt, curr_qual = data[i][0], data[i][1][0], data[i][1][1], data[i][1][2]
-#        if curr_ref == curr_alt:
-#            if len(prev_ref) != len(prev_alt):
-#                alned = rt_aln(prev_ref, prev_alt, prev_qual, curr_ref, curr_alt, curr_qual)
-#
-#                if alned:
-#                    update(data, i, alned)
-#        prev_pos, prev_ref, prevr_alt, prev_qual = curr_pos, curr_ref, curr_alt, curr_qual
-#
-#    return OrderedDict((i[0], (i[1][0], i[1][1], i[1][2])) for i in data)
+def is_rt_shiftable(non_ref, contig_dict):
+    if len(non_ref.ref) == len(non_ref.alt):
+        return False
+    
+    longer = non_ref.alt if len(non_ref.alt) > len(non_ref.ref) else non_ref.ref
+    shorter =  non_ref.alt if len(non_ref.alt) < len(non_ref.ref) else non_ref.ref
+    
+    # complex
+    if longer[: len(shorter)] != shorter:
+        return False
+   
+    rt_data = contig_dict.get(non_ref.end_pos + 1, None)
+    if rt_data:
+        if rt_data[0] != rt_data[1]:
+            return False
+    
+        return (longer[1] == rt_data[0])
+    else:
+        return False
 
 
-# def rt_aln(newlst, prev_ref, prev_alt, prev_qual, curr_ref, curr_alt, curr_qual):
-#    if len(prev_ref) > len(prev_alt):
-#        if prev_ref[1] == curr_ref:
+def has_rt_variants(subject_pos, snvs, indels):
+    for snv in snvs:
+        if subject_pos < snv.pos:
+            return True
 
-#
-# def to_tight_layout(cntg_lst, target_pos):
-#
-#    _tight = list()
-#
-#    prev_pos, prep_ref, prev_alt, prev_qual = cntg_lst[0]
-#    for i in range(1, len(cntg_lst) -1):
-#        curr_pos, curr_ref, curr_alt, curr_qual = cntg_lst[i]
-#        if curr_ref == curr_alt:
-#            if len(prev_ref) != len(prev_alt):
+    for indel in indels:
+        if subject_pos < indel.pos:
+            return True
+
+    return False
+
+
+def rt_aln_pos(non_ref, contig_dict, contig_end):
+    curr_pos = non_ref.pos
+    curr_allele = non_ref.alt if len(non_ref.alt) > len(non_ref.ref) else non_ref.ref
+    variant_len = len(non_ref.ref)
+    is_alignable = True
+    while is_alignable and curr_pos < contig_end:
+        variant_end = curr_pos + variant_len 
+        data = contig_dict.get(variant_end, None)
+        if data:
+            if curr_allele[1] == data[0]:
+                curr_pos += 1
+                curr_allele = curr_allele[1 :] + data[0]
+            else:
+                return curr_pos
+        else:
+            return curr_pos    
+     
+    return curr_pos
+
+
+def lt_max_lim(target, indels, max_common_substr_len, contig_dict):
+    min_lim = np.inf
+    lt_indels = [indel for indel in indels if indel.pos < target.pos]
+
+    if lt_indels:
+        nearest_indel = lt_indels[-1]
+        if target.pos - nearest_indel.pos >= max_common_substr_len:
+            rt_pos = rt_aln_pos(nearest_indel, contig_dict, target.pos)
+            if rt_pos - target.pos < max_common_substr_len:
+                return rt_pos
+    return min_lim
+
+
+def rt_min_lim(target, snvs, indels, phasable_dist, max_common_substr_len, contig_dict):
+    min_lim = -1
+
+    nearest_snv_pos, nearest_indel_pos = np.inf, np.inf
+    if is_rt_shiftable(target, contig_dict):
+        
+        contig_end = next(reversed(contig_dict))
+
+        # snvs, indels sorte by construction
+        for snv in snvs:
+            if target.pos < snv.pos:
+                nearest_snv_pos = snv.pos
+                break
+       
+        for indel in indels:
+            if target.pos < indelpos:
+                nearest_indel_pos = indel.pos
+                break
+        
+        # note: np.inf < np.inf -> False
+        if nearest_snv_pos < nearest_indel_pos:
+            if nearest_snv_pos - target.pos >= phasable_dist:
+                rt_pos = rt_aln_pos(target, contig_dict, contig_end)
+                if nearest_snv_pos - rt_pos < phasable_dist:
+                    return nearest_snv_pos
+
+        elif nearest_indel_pos < nearest_snv_pos:
+            if nearest_indel_pos - target.pos >= max_common_substr_len:
+                rt_pos = rt_aln_pos(target, contig_dict, contig_end)
+                if nearest_indel_pos - rt_pos < max_common_substr_len:
+                    return nearest_indel_pos
+    
+    return min_lim
 
 
 def parse_contig_for_exons(contig_dict, skips):

@@ -404,7 +404,7 @@ void has_compatible_trans_gap(
                 {
                     continue;
                 }
-
+                
                 ++cnt;
             }
             
@@ -775,7 +775,7 @@ void retarget_to_indel(
             make_core_kmers(
                 _rep.seq, user_params.kmer_size, _rep.sb_read_idx, core_kmers
             );
-        
+           
             has_compatible_trans_gap(reads, core_kmers, target, is_retargeted);
             if (is_retargeted) return;
         }
