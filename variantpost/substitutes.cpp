@@ -13,7 +13,8 @@ void substitute_patterns(
     int& a_cnt,
     int& b_cnt,
     Read& read, 
-    const Variant& target
+    const Variant& target,
+    const UserParams& user_params
 )
 {
     if (read.covering_ptrn != 'A') 
@@ -45,7 +46,7 @@ void substitute_patterns(
                 {
                     std::string_view query = read.seq.substr(
                         read_idx + (target.pos - curr_pos), target.alt.size()); 
-                    
+                      
                     if (query == target.alt)
                     {
                         //read.has_sb_target = true;
@@ -58,7 +59,27 @@ void substitute_patterns(
                     }
                     else 
                     {    
-                        read.sb_ptrn = 'C';
+                        std::string quals = read.base_quals.substr(
+                            read_idx + (target.pos - curr_pos), target.alt.size());
+                        
+                        bool is_hq = true;
+                        for (size_t i = 0; i < quals.size(); ++i)
+                        { 
+                            if (quals[i] < user_params.base_q_thresh)
+                            {
+                                is_hq = false;
+                                break;
+                            }
+                        }
+                        
+                        if (is_hq)
+                        {
+                            read.sb_ptrn = 'C';
+                        }
+                        else
+                        {
+                            read.sb_ptrn = 'U';
+                        }
                         return;
                     }
                 }
@@ -117,7 +138,7 @@ void collect_gaps(
         {
             for (const auto& v : read.variants)
             {
-                if (v.is_substitute) continue;
+                if (v.ref.size() == v.alt.size()) continue;
             
                 //TODO lpos/rpop
                 if (std::abs(v.pos - target_pos) < local_thresh
@@ -196,9 +217,7 @@ void is_exact_cis(
     
     if (!is_not_excl && !has_no_cis_gaps) 
     {    
-        is_excl = ( 
-            static_cast<double>(cnt) * 2/3 < static_cast<double>(cis_gaps.at(_gap))
-        );
+        is_excl = (cnt < 2 * cis_gaps.at(_gap));
     } 
 }
 
@@ -724,7 +743,7 @@ void retarget_to_indel(
         annot_clip_pattern(read, target);
         eval_read_quality(read, user_params);
         is_locally_unique(read, loc_ref);
-        substitute_patterns(a_cnt, b_cnt, read, target);
+        substitute_patterns(a_cnt, b_cnt, read, target, user_params);
         
     } 
     
@@ -837,7 +856,6 @@ void from_target_substitute_reads(
     size_t max_size = reads.size();
     targets.reserve(max_size);
     non_targets.reserve(max_size);
-    
     for (size_t i = 0; i < max_size; ++i)
     {    
         if (reads[i].sb_ptrn == 'A')
@@ -847,13 +865,13 @@ void from_target_substitute_reads(
         else if (reads[i].sb_ptrn == 'C' && reads[i].is_tight_covering)
         {
              transfer_elem(non_targets, reads, i);
-        }        
+        }
     }
     
     reads.clear();
     targets.shrink_to_fit();
     non_targets.shrink_to_fit();
-     
+      
     if (!is_mocked)
     {
         Read _rep = find_representative_read(targets);

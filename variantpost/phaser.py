@@ -19,14 +19,14 @@ def _phase(
 
     # contig_dict = to_tight_layout(contig_dict, target_pos)
     snvs, indels, actual_target = profile_non_refs(contig_dict, target_pos, is_indel)
-
+    
     if actual_target.is_null():
         return None
 
     contig_dict, snvs, indels = crop_contig(
         contig_dict, skips, snvs, indels, actual_target.pos
     )
-
+    
     if not snvs and not indels:
         trim_contig(contig_dict, actual_target.pos, actual_target.end_pos)
     elif not indels:
@@ -221,7 +221,7 @@ def find_peak(contig_dict, target, snvs, match_penal, local_thresh, is_left):
     else:
         loci = [pos for pos, _data in contig_dict.items() if pos > target.end_pos]
         snv_loci = [snv.pos for snv in snvs if snv.pos > target.pos]
-
+   
     peak_locus = -np.inf if is_left else np.inf
     if not loci:
         return peak_locus
@@ -248,7 +248,7 @@ def find_peak(contig_dict, target, snvs, match_penal, local_thresh, is_left):
         peak_locus = target.pos
     elif peak_locus == np.inf:
         peak_locus = target.end_pos
-
+    
     return peak_locus
 
 
@@ -406,17 +406,24 @@ def remove_unclustered_snvs(contig_dict, target, snvs, match_penal, local_thresh
     if not lt_far_indel:
         lt_far_indel = target
 
-    lt_peak_locus = find_peak(
-        contig_dict, lt_far_indel, snvs, match_penal, local_thresh, True
-    )
+    if lt_far_indel.pos <= target.pos:
+        lt_peak_locus = find_peak(
+            contig_dict, lt_far_indel, snvs, match_penal, local_thresh, True
+        )
+    else:
+        lt_peak_locus = -np.inf
+
 
     # rt process
     rt_far_indel = get_far_indel(contig_dict, False)
     if not rt_far_indel:
         rt_far_indel = target
 
-    rt_peak_locus = find_peak(
-        contig_dict, rt_far_indel, snvs, match_penal, local_thresh, False
-    )
+    if rt_far_indel.pos >= target.pos:
+        rt_peak_locus = find_peak(
+            contig_dict, rt_far_indel, snvs, match_penal, local_thresh, False
+        )
+    else:
+        rt_peak_locus = np.inf
 
     trim_contig(contig_dict, lt_peak_locus, rt_peak_locus)
