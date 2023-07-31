@@ -18,20 +18,22 @@ def _phase(
     snvs, indels, actual_target = profile_non_refs(contig_dict, target_pos, is_indel)
     if actual_target.is_null():
         return None
-    
+
     contig_dict, snvs, indels = crop_contig(
         contig_dict, skips, snvs, indels, actual_target.pos
     )
-    
+
     if not snvs and not indels:
         trim_contig(contig_dict, actual_target.pos, actual_target.end_pos)
-        return greedy_phasing(contig_dict)    
-    
+        return greedy_phasing(contig_dict)
+
     # to capture cases where phasable only after right alignment
     lt_max = lt_max_lim(actual_target, indels, max_common_substr_len, contig_dict)
     phasable_dist = phasable_dist_to_mismatch(match_penal, local_thresh, contig_dict)
-    rt_min = rt_min_lim(actual_target, snvs, indels, phasable_dist, max_common_substr_len, contig_dict)
-    
+    rt_min = rt_min_lim(
+        actual_target, snvs, indels, phasable_dist, max_common_substr_len, contig_dict
+    )
+
     if not indels:
         lt_end = find_peak(
             contig_dict, actual_target, snvs, match_penal, local_thresh, True
@@ -41,7 +43,7 @@ def _phase(
             contig_dict, actual_target, snvs, match_penal, local_thresh, False
         )
         rt_end = max(rt_end, rt_min)
-        
+
         trim_contig(contig_dict, lt_end, rt_end)
     else:
         remove_common_substrs(contig_dict, actual_target.pos, max_common_substr_len)
@@ -87,20 +89,20 @@ def phasable_dist_to_mismatch(match_penal, local_thresh, contig_dict):
 def is_rt_shiftable(non_ref, contig_dict):
     if len(non_ref.ref) == len(non_ref.alt):
         return False
-    
+
     longer = non_ref.alt if len(non_ref.alt) > len(non_ref.ref) else non_ref.ref
-    shorter =  non_ref.alt if len(non_ref.alt) < len(non_ref.ref) else non_ref.ref
-    
+    shorter = non_ref.alt if len(non_ref.alt) < len(non_ref.ref) else non_ref.ref
+
     # complex
     if longer[: len(shorter)] != shorter:
         return False
-   
+
     rt_data = contig_dict.get(non_ref.end_pos + 1, None)
     if rt_data:
         if rt_data[0] != rt_data[1]:
             return False
-    
-        return (longer[1] == rt_data[0])
+
+        return longer[1] == rt_data[0]
     else:
         return False
 
@@ -123,17 +125,17 @@ def rt_aln_pos(non_ref, contig_dict, contig_end):
     variant_len = len(non_ref.ref)
     is_alignable = True
     while is_alignable and curr_pos < contig_end:
-        variant_end = curr_pos + variant_len 
+        variant_end = curr_pos + variant_len
         data = contig_dict.get(variant_end, None)
         if data:
             if curr_allele[1] == data[0]:
                 curr_pos += 1
-                curr_allele = curr_allele[1 :] + data[0]
+                curr_allele = curr_allele[1:] + data[0]
             else:
                 return curr_pos
         else:
-            return curr_pos    
-     
+            return curr_pos
+
     return curr_pos
 
 
@@ -155,7 +157,7 @@ def rt_min_lim(target, snvs, indels, phasable_dist, max_common_substr_len, conti
 
     nearest_snv_pos, nearest_indel_pos = np.inf, np.inf
     if is_rt_shiftable(target, contig_dict):
-        
+
         contig_end = next(reversed(contig_dict))
 
         # snvs, indels sorte by construction
@@ -163,12 +165,12 @@ def rt_min_lim(target, snvs, indels, phasable_dist, max_common_substr_len, conti
             if target.pos < snv.pos:
                 nearest_snv_pos = snv.pos
                 break
-       
+
         for indel in indels:
-            if target.pos < indelpos:
+            if target.pos < indel.pos:
                 nearest_indel_pos = indel.pos
                 break
-        
+
         # note: np.inf < np.inf -> False
         if nearest_snv_pos < nearest_indel_pos:
             if nearest_snv_pos - target.pos >= phasable_dist:
@@ -181,7 +183,7 @@ def rt_min_lim(target, snvs, indels, phasable_dist, max_common_substr_len, conti
                 rt_pos = rt_aln_pos(target, contig_dict, contig_end)
                 if nearest_indel_pos - rt_pos < max_common_substr_len:
                     return nearest_indel_pos
-    
+
     return min_lim
 
 
@@ -232,7 +234,7 @@ def profile_non_refs(contig_dict, target_pos, is_indel):
                 snvs.append(non_ref)
             else:
                 indels.append(non_ref)
-    
+
     if is_indel and (actual_event in indels):
         indels.remove(actual_event)
 
@@ -286,7 +288,7 @@ def find_peak(contig_dict, target, snvs, match_penal, local_thresh, is_left):
     else:
         loci = [pos for pos, _data in contig_dict.items() if pos > target.end_pos]
         snv_loci = [snv.pos for snv in snvs if snv.pos > target.pos]
-   
+
     peak_locus = -np.inf if is_left else np.inf
     if not loci:
         return peak_locus
@@ -313,7 +315,7 @@ def find_peak(contig_dict, target, snvs, match_penal, local_thresh, is_left):
         peak_locus = target.pos
     elif peak_locus == np.inf:
         peak_locus = target.end_pos
-    
+
     return peak_locus
 
 
@@ -477,7 +479,6 @@ def remove_unclustered_snvs(contig_dict, target, snvs, match_penal, local_thresh
         )
     else:
         lt_peak_locus = -np.inf
-
 
     # rt process
     rt_far_indel = get_far_indel(contig_dict, False)
