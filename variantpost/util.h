@@ -29,6 +29,7 @@ struct UserParams{
     int gap_ext_penal;
     int kmer_size; 
     int local_thresh;
+    int retarget_thresh;
 
     UserParams(
         const int mapq_thresh,
@@ -39,7 +40,8 @@ struct UserParams{
         const int gap_open_penal,
         const int gap_ext_penal,
         const int kmer_size,
-        const int local_thresh
+        const int local_thresh,
+        const int retarget_thresh
     );
 }; 
 

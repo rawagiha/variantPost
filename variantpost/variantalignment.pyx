@@ -1,4 +1,4 @@
-from .phaser import _phase
+from .phaser import _phase, loss
 from variantpost.cy_search cimport search_target
 from .variant import Variant
 
@@ -9,9 +9,7 @@ class VariantAlignment(object):
     def __init__(
         self, variant, bam, 
         second_bam=None, 
-        window=200, 
         exclude_duplicates=True, 
-        downsample_threshold=-1, 
         mapping_quality_threshold=1, 
         base_quality_threshold=30, 
         low_quality_base_rate_threshold=0.1, 
@@ -20,7 +18,8 @@ class VariantAlignment(object):
         gap_open_penalty=3,
         gap_extention_penalty=1, 
         kmer_size=32, 
-        local_threshold=20
+        local_threshold=20,
+        match_penalty_for_phasing=0.5
     ):     
         if not variant.is_normalized:
             variant.normalize(inplace=True)
@@ -28,9 +27,14 @@ class VariantAlignment(object):
         self.chrom = variant.chrom
         self.target_pos = variant.pos
         self.target_is_indel = variant.is_indel
+        self.window = variant.window
         self.reference = variant.reference 
         self.local_thresh = local_threshold
         self.has_second = second_bam
+        
+        retarget_thresh = _retarget_thresh(
+            match_penalty_for_phasing, local_threshold, self.window
+        )
 
         # interact with c++ code
         (
@@ -46,8 +50,7 @@ class VariantAlignment(object):
                 second_bam,
                 variant.reference_len,
                 exclude_duplicates,
-                window,
-                downsample_threshold,
+                self.window,
                 variant.reference.filename,
                 variant.chrom, 
                 variant.pos, 
@@ -62,6 +65,7 @@ class VariantAlignment(object):
                 gap_extention_penalty,
                 kmer_size,
                 local_threshold,
+                retarget_thresh,
                 variant.unspliced_local_reference_start, 
                 variant.unspliced_local_reference_end, 
         )
@@ -136,11 +140,20 @@ class VariantAlignment(object):
         return pac  
 
 
-    def phase(self, match_penal=0.5, max_common_substr_len=15):
+    def phase(self, match_penalty_for_phasing=0.5, max_common_substr_len=15):
         if self.is_retargeted:
             self.target_is_indel = True
-       
-        phased = _phase(self.contig_dict, self.skips, self.target_pos, self.target_is_indel, self.local_thresh, match_penal, max_common_substr_len)
+        
+        phased = _phase(
+            self.contig_dict, 
+            self.skips, 
+            self.target_pos, 
+            self.target_is_indel, 
+            self.local_thresh, 
+            match_penalty_for_phasing, 
+            max_common_substr_len
+        )
+
         if phased:
             return Variant(self.chrom, phased[0], phased[1], phased[2], self.reference).normalize()
         else:
@@ -154,3 +167,11 @@ def fill_cnt_data(sf, sr, nf, nr, uf, ur):
     
     return ac
 
+
+def _retarget_thresh(match_penal, local_thresh, window):
+    score = 0
+    for i in range(window):
+        score += loss(i, match_penal, local_thresh)
+        if score < -1.0:
+            return i
+        

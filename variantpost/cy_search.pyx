@@ -1,34 +1,28 @@
-#import time
-import random
-
 from libcpp.string cimport string
 from libcpp.vector cimport vector
 from libcpp cimport bool as bool_t
-
 from collections import OrderedDict
-#from pysam.libcalignmentfile cimport AlignmentFile
-#from pysam.libcalignedsegment cimport AlignedSegment
-
-RAW_DEPTH = 0
 
 cdef extern from "search.h":
 
     cdef cppclass SearchResult:
 
         SearchResult() except +
-        SearchResult(vector[int] &,
-                        vector[string] &,
-                        vector[string] &,
-                        vector[string] &,
-                        vector[int] &,
-                        vector[int] &,
-                        int,
-                        string &,
-                        string &,
-                        vector[string] &,
-                        vector[bool_t] &,
-                        vector[int] &,
-                        vector[bool_t] &) except +
+        SearchResult(
+            vector[int]&,
+            vector[string]&,
+            vector[string]&,
+            vector[string]&,
+            vector[int]&,
+            vector[int]&,
+            int,
+            string&,
+            string&,
+            vector[string]&,
+            vector[bool_t]&,
+            vector[int]&,
+            vector[bool_t]&
+        ) except +
 
         vector[int] positions
         vector[string] ref_bases
@@ -46,34 +40,34 @@ cdef extern from "search.h":
 
 
     void _search_target(
-            SearchResult &,
-            string &,
-            string &,
-            int,
-            string &,
-            string &,
-            int,
-            int,
-            float,
-            int,
-            int,
-            int,
-            int,
-            int,
-            int,
-            int,
-            int,
-            vector[string] &,
-            vector[bool_t] &,
-            vector[string] &,
-            vector[int] &,
-            vector[int] &,
-            vector[string] &,
-            vector[vector[int]] &,
-            vector[int] &,
-            vector[bool_t] &
+        SearchResult&,
+        string&,
+        string&,
+        int,
+        string&,
+        string&,
+        int,
+        int,
+        float,
+        int,
+        int,
+        int,
+        int,
+        int,
+        int,
+        int,
+        int,
+        int,
+        vector[string]&,
+        vector[bool_t]&,
+        vector[string]&,
+        vector[int]&,
+        vector[int]&,
+        vector[string]&,
+        vector[vector[int]]&,
+        vector[int]&,
+        vector[bool_t]&
     )
-
 
 
 cdef inline bint is_qualified_read(read, bint exclude_duplicates):
@@ -95,23 +89,6 @@ cdef object fetch_reads(bam, str chrom, int pos, int chrom_len, int window, bint
     )
     
     return [read for read in reads if is_qualified_read(read, exclude_duplicates)]
-
-
-def downsampler(chrom, pos, bam, downsample_thresh, reads):
-    """Downsample reads if depth exceeds downsample_thresh
-    """
-    depth = bam.count(chrom, pos - 1, pos)
-
-    if depth > downsample_thresh:
-        pileup_size = len(reads)
-        random.seed(123)
-        reads = random.sample(reads, int(pileup_size * (downsample_thresh / depth)))
-        sample_factor = pileup_size / len(reads)
-    else:
-        sample_factor = 1.0
-
-    return reads, sample_factor
-
 
 
 cdef inline void pack_to_lists(
@@ -150,13 +127,13 @@ class AnnotatedRead(object):
         self.is_first_bam = is_first_bam
         self.target_status = target_status
 
+
 cdef object search_target(
      object bam,
      object second_bam,
      int chrom_len,
      bint exclude_duplicates,
      int window,
-     int downsample_threshold,
      string  fastafile,
      str  chrom,
      int pos,
@@ -171,13 +148,12 @@ cdef object search_target(
      int gap_extention_penalty,
      int kmer_size,
      int local_threshold,
+     int retarget_threshold,
      int unspliced_local_reference_start,
      int unspliced_local_reference_end,
 ):
 
     cdef SearchResult rslt
-    #cdeobject AlignedSegment read
-    #tt = time.time()
         
     cdef int buff_size = 0;
     first_reads = fetch_reads(bam, chrom, pos, chrom_len, window, exclude_duplicates)
@@ -187,16 +163,6 @@ cdef object search_target(
         second_reads = fetch_reads(second_bam, chrom, pos, chrom_len, window, exclude_duplicates)
         buff_size += len(second_reads)
 
-    #print("I/O by pysam", time.time() - tt)
-
-    #tt = time.time()
-    #if downsample_threshold < 0:
-    #    sample_factor = 1.0
-    #else:
-    #    reads, sample_factor = downsampler(chrom, pos, bam, downsample_threshold, reads)
-
-    #cdef int n = len(reads)
-    
     cdef vector[string] read_names 
     read_names.reserve(buff_size)
     cdef vector[bool_t] are_reverse 
@@ -218,8 +184,6 @@ cdef object search_target(
     cdef vector[bool_t] are_first_bam
     are_first_bam.reserve(buff_size)
 
-    #tt = time.time()
-    
     for read in first_reads:
         pack_to_lists(read, read_names, are_reverse, cigar_strings,
                      aln_starts, aln_ends, read_seqs, ref_seqs, qual_seqs, mapqs, are_first_bam, False)
@@ -228,8 +192,6 @@ cdef object search_target(
         for _read in second_reads:
             pack_to_lists(_read, read_names, are_reverse, cigar_strings,
                           aln_starts, aln_ends, read_seqs, ref_seqs, qual_seqs, mapqs, are_first_bam, True)
-    
-    #print("prep--", time.time() - tt)
     
     _search_target(
         rslt,
@@ -247,6 +209,7 @@ cdef object search_target(
         gap_extention_penalty,
         kmer_size,
         local_threshold,
+        retarget_threshold,
         unspliced_local_reference_start,
         unspliced_local_reference_end,
         read_names,
@@ -261,12 +224,10 @@ cdef object search_target(
     )
     
     contig_dict = OrderedDict()
-    #contig_dict = list()
     for pos, ref_base, alt_base, base_qual in zip(
         rslt.positions, rslt.ref_bases, rslt.alt_bases, rslt.base_quals
     ):
         contig_dict[pos] = (ref_base.decode("utf-8"), alt_base.decode("utf-8"), base_qual.decode("utf-8"))
-        #contig_dict.append([pos, ref_base.decode("utf-8"), alt_base.decode("utf-8"), base_qual.decode("utf-8")])       
     
     annot_reads = []
     for read_name, is_reverse, target_status, is_first_bam in zip(
@@ -277,4 +238,3 @@ cdef object search_target(
     skips = [(start, end) for start, end in zip(rslt.skip_starts, rslt.skip_ends)]
     
     return contig_dict, skips, rslt.read_names,  rslt.are_reverse, rslt.target_statuses, rslt.are_from_first_bam, rslt.is_retargeted
-    #return contig_dict, skips, annot_reads

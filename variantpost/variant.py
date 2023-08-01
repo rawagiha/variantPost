@@ -1,5 +1,5 @@
 class Variant(object):
-    def __init__(self, chrom, pos, ref, alt, reference, window=0):
+    def __init__(self, chrom, pos, ref, alt, reference, window=200):
 
         self.chrom = chrom
         self.pos = pos  # 1-based
@@ -7,7 +7,7 @@ class Variant(object):
         self.alt = alt
         self.reference = reference
 
-        self.window = 200 if window <= 200 else window
+        self.window = window
 
         # chrom name chrom end check
         self._chrom = self.chrom

@@ -125,27 +125,39 @@ void substitute_patterns(
 
 void collect_gaps(
     const int target_pos,
-    const int local_thresh,
-    const Reads& reads, 
+    const int retarget_thresh,
+    const LocalReference& loc_ref,
+    Reads& reads, 
     std::unordered_map<Variant, int>& cis_gaps
 )
 {
-    for (const auto& read : reads)
+    for (auto& read : reads)
     {
         if (read.variants.empty()) continue;
         
         if (read.sb_ptrn == 'A')
         {
-            for (const auto& v : read.variants)
+            for (auto& v : read.variants)
             {
                 if (v.ref.size() == v.alt.size()) continue;
             
-                //TODO lpos/rpop
-                if (std::abs(v.pos - target_pos) < local_thresh
-                    || std::abs(v.variant_end_pos - target_pos) < local_thresh)
+                v.set_leftmost_pos(loc_ref);
+                v.set_rightmost_pos(loc_ref);
+
+                if (v.rpos + v.ref_len <= target_pos)
                 {
-                    ++cis_gaps[v];
+                    if (target_pos - (v.rpos + v.ref_len) < retarget_thresh)
+                    {
+                         ++cis_gaps[v];
+                    }
                 }
+                else if(v.lpos >= target_pos)
+                {
+                    if (v.lpos - target_pos < retarget_thresh)
+                    {
+                         ++cis_gaps[v];
+                    }
+                } 
             }        
         }
     } 
@@ -750,7 +762,7 @@ void retarget_to_indel(
     if (a_cnt)
     {
         std::unordered_map<Variant, int> cis_gaps;
-        collect_gaps(target.pos, user_params.local_thresh, reads, cis_gaps);
+        collect_gaps(target.pos, user_params.retarget_thresh, loc_ref, reads, cis_gaps);
 
         Variant _gap(-1, "N", "N");
         bool is_exact = false, is_loc_uniq = false;

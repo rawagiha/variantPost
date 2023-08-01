@@ -29,9 +29,9 @@ struct SearchResult
     
     void report(
         const Contig& contig,
-        const Reads& targets,
-        const Reads& non_targets,
-        const Reads& undetermined,
+        Reads& targets,
+        Reads& non_targets,
+        Reads& undetermined,
         const bool is_retargeted = false
     );
 };
@@ -48,6 +48,7 @@ void _search_target(
     const int,
     const int, 
     const double,
+    const int,
     const int,
     const int,
     const int,

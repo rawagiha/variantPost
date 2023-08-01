@@ -25,7 +25,8 @@ UserParams::UserParams(
     const int gap_open_penal,
     const int gap_ext_penal,
     const int kmer_size,
-    const int local_thresh
+    const int local_thresh,
+    const int retarget_thresh
 ) : mapq_thresh(mapq_thresh),
     lq_rate_thresh(lq_rate_thresh), 
     match_score(match_score), 
@@ -33,7 +34,8 @@ UserParams::UserParams(
     gap_open_penal(gap_open_penal), 
     gap_ext_penal(gap_ext_penal),
     kmer_size(kmer_size), 
-    local_thresh(local_thresh) 
+    local_thresh(local_thresh),
+    retarget_thresh(retarget_thresh)
 {
     base_q_thresh = static_cast<char>(_base_q_thresh + 33);    
 };

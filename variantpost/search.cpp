@@ -26,11 +26,27 @@ void SearchResult::fill_read_info(const Reads& reads, const int target_status)
 }
 
 
+void rescue_sb_target_reads(Reads& targets, Reads& tmp, Reads& src)
+{
+    for (size_t i = 0; i < src.size(); ++i)
+    {
+        if (src[i].sb_ptrn == 'A')
+        {
+            transfer_elem(targets, src, i);
+        }
+        else
+        {
+            transfer_elem(tmp, src, i);
+        }
+    }
+}
+
+
 void SearchResult::report(
     const Contig& contig,
-    const Reads& targets,
-    const Reads& non_targets,
-    const Reads& undetermined,
+    Reads& targets,
+    Reads& non_targets,
+    Reads& undetermined,
     const bool _is_retargeted
 )
 {
@@ -43,10 +59,22 @@ void SearchResult::report(
     target_statuses.reserve(buff_size);
     are_from_first_bam.reserve(buff_size);
     
-    fill_read_info(targets, 1);
-    fill_read_info(non_targets, 0);
-    fill_read_info(undetermined, -1);
-    
+    if (_is_retargeted)
+    {
+        Reads tmp_n, tmp_u;
+        rescue_sb_target_reads(targets, tmp_n, non_targets);       
+        rescue_sb_target_reads(targets, tmp_u, undetermined);
+        fill_read_info(targets, 1);
+        fill_read_info(tmp_n, 0);
+        fill_read_info(tmp_u, -1);
+    }
+    else
+    {
+        fill_read_info(targets, 1);
+        fill_read_info(non_targets, 0);
+        fill_read_info(undetermined, -1);
+    }
+     
     positions = contig.positions;
     ref_bases = contig.ref_bases;
     alt_bases = contig.alt_bases;
@@ -236,6 +264,7 @@ void _search_target(
     const int gap_ext_penal,
     const int kmer_size,
     const int local_thresh,
+    const int retarget_thresh,
     const int ref_start, //local ref start/end
     const int ref_end,   //defined by user's window choice
     
@@ -262,7 +291,7 @@ void _search_target(
     UserParams user_params(
         mapq_thresh, base_q_thresh, lq_base_rate_thresh,
         match_score, mismatch_penal, gap_open_penal, gap_ext_penal, 
-        kmer_size, local_thresh 
+        kmer_size, local_thresh, retarget_thresh 
     );
 
     LocalReference loc_ref(fastafile, chrom, ref_start, ref_end);   
