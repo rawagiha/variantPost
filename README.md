@@ -1,5 +1,5 @@
+variantPost supports short-read analysis for SNVs, MNVs, and indels.  
 
-Tentatively named as variantPost, but only supports for indels.
 
 ### Installation
 Plese pre-install the followings
