@@ -27,6 +27,8 @@ void from_target_substitute_reads(
     Reads& reads,
     Reads& targets,
     Reads& non_targets,
+    const int target_pos,
+    const UserParams& user_params,
     const bool is_mocked
 );
 

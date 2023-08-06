@@ -552,19 +552,22 @@ void annot_non_ref_signature(Read& read)
     read.non_ref_signature = sig;
     read.splice_signature = spl_sig;
 }
-                                                                            
+                                                                           
 
-bool is_locally_unique(
+int eval_loc_uniq(
     Read& read,
+    const UserParams& user_params,
     const LocalReference& loc_ref
 )
 {
-    if (read.clip_ptrn != 'U' || read.variants.empty()) return false;
+    if (read.clip_ptrn != 'U' 
+        || read.variants.empty() 
+        || read.nonref_lq_rate >= user_params.lq_rate_thresh) return 0;
     
     int lt_len = read.variants.front().pos - read.aln_start;
     int rt_len = read.aln_end - read.variants.back().variant_end_pos + 1;  
     int read_len = static_cast<int>(read.seq.size());
-    if (lt_len  >= read_len || rt_len >= read_len) return false;    
+    if (lt_len  >= read_len || rt_len >= read_len) return 0;    
  
     // lt fragment
     bool lt_uniq = false;
@@ -596,9 +599,8 @@ bool is_locally_unique(
         }
     } 
 
-    if (lt_uniq && rt_uniq) return true;
-
-    return false;
+    if (lt_uniq && rt_uniq) return 1;
+    else return -1;
 }
 
 
@@ -623,8 +625,9 @@ void annot_local_ptrn(
         return;
     }
       
-    read.is_loc_uniq = is_locally_unique(read, loc_ref);
-    if (read.is_loc_uniq && !has_gaps(read.cigar_str))
+    read.local_uniqueness = eval_loc_uniq(read, user_params, loc_ref);
+    // filter likey non-gapped read
+    if (read.local_uniqueness > 0 && !has_gaps(read.cigar_str))
     {
         read.local_ptrn = 'N';
         return;

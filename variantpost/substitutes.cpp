@@ -36,12 +36,6 @@ void substitute_patterns(
             case 'M':
             case 'X':
             case '=':
-                /*if (curr_pos + op_len < target.pos)
-                {
-                    ref_idx += op_len;
-                    read_idx += op_len;
-                    curr_pos += op_len;    
-                }*/
                 if (curr_pos <= target.pos && target.pos < curr_pos + op_len)
                 {
                     std::string_view query = read.seq.substr(
@@ -49,7 +43,6 @@ void substitute_patterns(
                       
                     if (query == target.alt)
                     {
-                        //read.has_sb_target = true;
                         read.sb_ptrn = 'A';
                         ++a_cnt;
                         
@@ -119,8 +112,17 @@ void substitute_patterns(
                 break;
         }
     }    
-    read.sb_ptrn = 'C';  
-}
+    
+    if (read.nonref_lq_rate < user_params.lq_rate_thresh
+        && read.seq.find('N') == std::string_view::npos)
+    {
+        read.sb_ptrn = 'C';
+    }
+    else
+    {  
+        read.sb_ptrn = 'D';
+    }
+}   
 
 
 void collect_gaps(
@@ -212,13 +214,13 @@ void is_exact_cis(
                 != read.variants.end()
             ) is_not_excl = true;
         }
-        else
+        else if (read.sb_ptrn == 'A')
         {
          // for 'A' sb_prtn, count reads covering the retarget candidate locus   
          // generally cnt >= cis_gaps.at(_gap) due to sequencing error in inserted seq
          // in candidate
                
-            if (!is_loc_uniq) is_loc_uniq = read.is_loc_uniq;
+            if (!is_loc_uniq) is_loc_uniq = (read.local_uniqueness != -1);
             
             if (has_no_cis_gaps) continue;
            
@@ -234,23 +236,73 @@ void is_exact_cis(
 }
 
 
-Read find_representative_read(Reads& reads)
+void annot_loc_variant_siganature(
+    Read& read, 
+    const int target_pos, 
+    const int retarget_thresh
+)
 {
-    std::vector<std::string_view> non_ref_sigs;
-    for (auto& read : reads)
+    std::string sig = "local_vars:";
+    for (const auto& variant : read.variants)
     {
-        if (read.sb_ptrn == 'A')
-        {
-            annot_non_ref_signature(read);
-            non_ref_sigs.push_back(read.non_ref_signature); 
+        if (std::abs(variant.pos - target_pos) < retarget_thresh)
+        {    
+            sig += (
+                std::to_string(variant.pos) 
+                + "_"
+                + variant.ref
+                + "_"
+                + variant.alt
+                + ";"
+            );
         }
     }
+    read.sb_loc_signature = sig;
+}
 
+
+void collect_non_ref_ptrns(
+    std::vector<std::string_view>& non_ref_sigs, 
+    Reads& reads,
+    const int target_pos,
+    const double lq_rate_thresh,
+    const int retarget_thersh
+)
+{
+    for (auto& read : reads)
+    {   
+        if (read.sb_ptrn == 'A' && read.nonref_lq_rate < lq_rate_thresh)
+        {
+            annot_loc_variant_siganature(read, target_pos, retarget_thersh);
+            non_ref_sigs.push_back(read.sb_loc_signature);       
+        }
+    }
+}
+
+
+Read find_representative_read(
+    Reads& reads, 
+    const int target_pos,
+    const UserParams& user_params
+)
+{      
+    std::vector<std::string_view> non_ref_sigs;
+    collect_non_ref_ptrns(
+        non_ref_sigs, reads, target_pos, 
+        user_params.lq_rate_thresh, user_params.retarget_thresh);
+
+    if (non_ref_sigs.empty())
+    {
+        collect_non_ref_ptrns(
+            non_ref_sigs, reads, target_pos, 1.1, user_params.retarget_thresh);
+    }
+    
     std::string_view common_sig = find_commonest_str(non_ref_sigs);
+    
     Reads _tmp;
     for (auto& read : reads)
     {
-        if (read.sb_ptrn == 'A' && read.non_ref_signature == common_sig)
+        if (read.sb_ptrn == 'A' && read.sb_loc_signature == common_sig)
         {
             _tmp.push_back(read);
         }
@@ -274,7 +326,6 @@ void make_core_kmers(
     Kmers& kmers
 )
 {
-    
     size_t n = seq.size();
     if (n <= k)
     {
@@ -377,6 +428,7 @@ void has_compatible_trans_gap(
     {
         if (read.sb_ptrn == 'C')
         {
+            
             read.sb_kmer_score = count_kmer_overlap(read.seq, core_kmers);
         } 
     }
@@ -540,7 +592,7 @@ void parse_for_nearest_gap(
         loc_ref.dict, variants, tmp
     ); 
 
-    Variant _gap(-1, "N","N");
+    Variant _gap(-1, "N", "N");
     nearest_gap(variants, target_pos, _gap);
     ++cis_gaps[_gap];
 }
@@ -565,26 +617,13 @@ void match_to_target(
         {                    
             seq = static_cast<std::string>(read.seq);
             
-            /* 
-            //against ref
-            local_alignment(
-                user_params.match_score, user_params.mismatch_penal,
-                user_params.gap_open_penal, user_params.gap_ext_penal,
-                seq, mock_ref, filter, aln
-            );
-            
-            ref_score = aln.sw_score;           
-            
             //against mock
-            */
             local_alignment(
                 user_params.match_score, user_params.mismatch_penal,
                 user_params.gap_open_penal, user_params.gap_ext_penal,
                 seq, mock_seq, filter, aln
             );
             
-            //if (aln.sw_score <= ref_score) continue;
-             
             if (
                 is_target_sb_compatible(aln, target_idx_start, target_idx_end)
             )
@@ -653,10 +692,7 @@ void fill_contig(
 {
     char op = '\0';
     int op_len = 0, curr_pos = aln_start;
-    //curr_pos = read.aln_start;
     size_t ref_idx = 0, seq_idx = 0;
-    //std::string seq = static_cast<std::string>(read.seq);
-    //std::string ref_seq = static_cast<std::string>(read.ref_seq);
     for (const auto& c : cigar_vector)
     {
         op = c.first;
@@ -680,17 +716,22 @@ void fill_contig(
                 }
                 break; 
             case 'I':
-                contig.alt_bases.pop_back();
-                contig.alt_bases.push_back(seq.substr(seq_idx - 1, op_len + 1));
-                contig.base_quals.pop_back();
-                contig.base_quals.push_back(base_quals.substr(seq_idx - 1, op_len + 1));
-
+                if (!contig.alt_bases.empty() && !contig.base_quals.empty())
+                {
+                    contig.alt_bases.pop_back();
+                    contig.alt_bases.push_back(seq.substr(seq_idx - 1, op_len + 1));
+                    contig.base_quals.pop_back();
+                    contig.base_quals.push_back(base_quals.substr(seq_idx - 1, op_len + 1));
+                }
                 seq_idx += op_len;
                 break;
             case 'D':
-                contig.ref_bases.pop_back();
-                contig.ref_bases.push_back(ref_seq.substr(ref_idx - 1, op_len + 1));
-                
+                if (!contig.ref_bases.empty())
+                {
+                    contig.ref_bases.pop_back();
+                    contig.ref_bases.push_back(ref_seq.substr(ref_idx - 1, op_len + 1));
+                }
+                 
                 ref_idx += op_len;
                 curr_pos += op_len;
                 break;
@@ -704,7 +745,7 @@ void fill_contig(
                 break;
             default:
                 break;
-        }    
+        }
     }    
 }
 
@@ -712,12 +753,13 @@ void fill_contig(
 void fill_contig_by_mock(
     Reads& reads, 
     const int mock_start,
+    const int target_pos,
     const std::string& mock_ref,
     const UserParams& user_params,
     Contig& contig
 )
 {
-    Read _rep = find_representative_read(reads);
+    Read _rep = find_representative_read(reads, target_pos, user_params);
     
     Filter filter;
     Alignment aln;
@@ -754,7 +796,7 @@ void retarget_to_indel(
         annot_covering_ptrn(read, target, loc_ref, is_retargeted);
         annot_clip_pattern(read, target);
         eval_read_quality(read, user_params);
-        is_locally_unique(read, loc_ref);
+        eval_loc_uniq(read, user_params, loc_ref);
         substitute_patterns(a_cnt, b_cnt, read, target, user_params);
         
     } 
@@ -780,8 +822,8 @@ void retarget_to_indel(
         // all target substitute reads are not uniquely mapped
         // -> gaps may be mapped as substitutes
         if (!is_loc_uniq)
-        {
-            Read _rep = find_representative_read(reads);
+        {       
+            Read _rep = find_representative_read(reads, target.pos, user_params);
 
             Kmers core_kmers;
             make_core_kmers(
@@ -791,7 +833,7 @@ void retarget_to_indel(
             has_compatible_trans_gap(reads, core_kmers, target, is_retargeted);
             if (is_retargeted) return;
         }
- 
+        
         //no retargetting
         return;
     }
@@ -842,7 +884,8 @@ void retarget_to_indel(
             }
             else if (a_cnt)
             {
-                fill_contig_by_mock(reads, mock_start, mock_ref, user_params, contig);
+                fill_contig_by_mock(
+                    reads, mock_start, target.pos, mock_ref, user_params, contig);
                 is_mocked = true;
                 return;
             }
@@ -862,6 +905,8 @@ void from_target_substitute_reads(
     Reads& reads,
     Reads& targets,
     Reads& non_targets,
+    const int target_pos, 
+    const UserParams& user_params,
     const bool is_mocked
 )
 {
@@ -885,9 +930,9 @@ void from_target_substitute_reads(
     non_targets.shrink_to_fit();
       
     if (!is_mocked)
-    {
-        Read _rep = find_representative_read(targets);
-    
+    { 
+        Read _rep = find_representative_read(targets, target_pos, user_params);
+        
         fill_contig(
             static_cast<std::string>(_rep.seq), 
             _rep.base_quals,

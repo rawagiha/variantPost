@@ -24,6 +24,7 @@ class VariantAlignment(object):
         if not variant.is_normalized:
             variant.normalize(inplace=True)
         
+        self.variant = variant
         self.chrom = variant.chrom
         self.target_pos = variant.pos
         self.target_is_indel = variant.is_indel
@@ -70,7 +71,8 @@ class VariantAlignment(object):
                 variant.unspliced_local_reference_end, 
         )
 
-    
+        self.is_with_target = any([status == 1 for status in self.target_status])
+         
     def count_alleles(self):
         if self.has_second:
             return self._paired_count()
@@ -144,21 +146,30 @@ class VariantAlignment(object):
         if self.is_retargeted:
             self.target_is_indel = True
         
-        phased = _phase(
-            self.contig_dict, 
-            self.skips, 
-            self.target_pos, 
-            self.target_is_indel, 
-            self.local_thresh, 
-            match_penalty_for_phasing, 
-            max_common_substr_len
-        )
+        try:
+            phased = _phase(
+                self.contig_dict, 
+                self.skips, 
+                self.target_pos, 
+                self.target_is_indel, 
+                self.local_thresh, 
+                match_penalty_for_phasing, 
+                max_common_substr_len
+            )
 
-        if phased:
-            return Variant(self.chrom, phased[0], phased[1], phased[2], self.reference).normalize()
-        else:
-            ref_base = self.reference.fetch(self.chrom, self.target_pos - 1, self.target_pos)
-            return Variant(self.chrom, self.target_pos, ref_base, ref_base, self.reference)
+            if phased and self.is_with_target:
+                return Variant(self.chrom, phased[0], phased[1], phased[2], self.reference).normalize()
+            elif self.is_with_target:
+                return self.variant
+            else:
+                ref_base = self.reference.fetch(self.chrom, self.target_pos - 1, self.target_pos)
+                return Variant(self.chrom, self.target_pos, ref_base, ref_base, self.reference)
+        except:
+            if self.is_with_target:
+                return self.variant
+            else:
+                ref_base = self.reference.fetch(self.chrom, self.target_pos - 1, self.target_pos)
+                return Variant(self.chrom, self.target_pos, ref_base, ref_base, self.reference) 
 
 
 def fill_cnt_data(sf, sr, nf, nr, uf, ur):

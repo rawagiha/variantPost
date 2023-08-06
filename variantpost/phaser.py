@@ -22,7 +22,7 @@ def _phase(
     contig_dict, snvs, indels = crop_contig(
         contig_dict, skips, snvs, indels, actual_target.pos
     )
-
+    
     if not snvs and not indels:
         trim_contig(contig_dict, actual_target.pos, actual_target.end_pos)
         return greedy_phasing(contig_dict)
@@ -33,7 +33,7 @@ def _phase(
     rt_min = rt_min_lim(
         actual_target, snvs, indels, phasable_dist, max_common_substr_len, contig_dict
     )
-
+    
     if not indels:
         lt_end = find_peak(
             contig_dict, actual_target, snvs, match_penal, local_thresh, True
@@ -47,6 +47,7 @@ def _phase(
         trim_contig(contig_dict, lt_end, rt_end)
     else:
         remove_common_substrs(contig_dict, actual_target.pos, max_common_substr_len)
+        
         remove_unclustered_snvs(
             contig_dict, actual_target, snvs, match_penal, local_thresh
         )

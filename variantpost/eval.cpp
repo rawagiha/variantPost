@@ -35,12 +35,12 @@ void local_alignment(
     ); 
 }
 
-
+/*
 bool is_gapped_aln(std::string_view cigar_str)
 {
     if (cigar_str.size()) return has_gaps(cigar_str);
     else return false;
-}
+}*/
 
 
 void to_simple_variants(
@@ -641,7 +641,7 @@ void eval_by_variant(
         //right alignment on contig 
         rt_aln_insertions(rslt, augmented, loc_ref);
         
-        // merget I/D*X to complx
+        // merge I/D*X to complx
         std::vector<int> target_idxes 
         = find_mismatches_after_gap(rslt.cigar_vec);
         if (!target_idxes.empty())
@@ -653,14 +653,13 @@ void eval_by_variant(
         }
         
         // test if the expectd ins-seq recovered
-        create_target_ins(rslt, augmented, target.pos, target.alt.size());
+        //create_target_ins(rslt, augmented, target.pos, target.alt.size());
         
         //swap without chaning the number of mapped bases
         swappable_gaps(rslt.variants, augmented, loc_ref);
         
         for (auto& v : augmented)
         {
-            
             if (target.is_equivalent(v, loc_ref))
             {
                  rslt.has_target = true;
@@ -669,6 +668,7 @@ void eval_by_variant(
             }
         }
 
+        /* keep this experimental 
         if (!rslt.has_target)
         {
             //cluster match
@@ -679,7 +679,7 @@ void eval_by_variant(
                 rslt.has_target = true;
                 is_orig_aln = false;
             }
-        }
+        }*/
     }    
     
     if (rslt.has_target)
@@ -858,7 +858,14 @@ void update_contig_layout(Contig& contig, const int pos)
         idx = std::distance(contig.positions.begin(), it);
     } 
 
-    contig.lt_len = 0;
+    int offset = 0;
+    for (size_t i = 0; i < contig.pos_by_seq_idx.size(); ++i)
+    {
+        if (contig.pos_by_seq_idx[i] == -1) ++offset;
+        else break;
+    }
+    
+    contig.lt_len = offset;
     contig.mid_len =0;
     for (size_t i = 0; i <= idx; ++i)
     {
@@ -873,9 +880,126 @@ void update_contig_layout(Contig& contig, const int pos)
             contig.lt_len += contig.alt_bases[i].size();
         }
     }
+    
     contig.lt_end_idx = contig.lt_len - 1;
     contig.rt_start_idx = contig.lt_len + contig.mid_len;
     contig.rt_len = contig.len - contig.rt_start_idx; 
+}
+
+
+bool is_valid_aln(std::string_view cigar_str)
+{
+    //alignment failed
+    if (!cigar_str.size()) return false;
+
+    //some alignments only contains 'S'
+    if (!has_this(cigar_str, "=")) return false; 
+
+    return true;
+}
+
+
+int local_matched_len(
+    const int target_pos,
+    const int aln_start,
+    const CigarVec& cigar_vec
+)
+{
+    char op = '\0';
+    int op_len = 0, curr_pos = aln_start;
+    for (const auto& c : cigar_vec)
+    {
+        op = c.first;
+        op_len = c.second;
+        switch (op)
+        {
+            case '=':
+                if (curr_pos <= target_pos && target_pos < curr_pos + op_len)
+                {
+                    if (target_pos - curr_pos 
+                        > curr_pos + op_len - (target_pos + 1))
+                    {
+                        return curr_pos + op_len - (target_pos + 1); 
+                    }
+                    else
+                    {
+                        return target_pos - curr_pos;
+                    }
+                }
+                curr_pos += op_len;
+                break;
+            case 'N':
+            case 'X':
+                curr_pos += op_len;
+                break;
+            default:
+                break;
+        }
+    }
+
+    return -1;
+}
+
+
+size_t closest_mismatch(
+    const int target_pos, 
+    const int aln_start,
+    const CigarVec& cigar_vec
+)
+{
+    size_t i = 0, idx = 0;
+    
+    char op = '\0';
+    int op_len = 0, curr_pos = aln_start, dist = INT_MAX;
+    for (const auto& c : cigar_vec)
+    {
+        op = c.first;
+        op_len = c.second;
+        switch (op)
+        {
+            case '=':
+            case 'N':
+                curr_pos += op_len;
+                ++i;
+                break;
+            case 'X':
+                if (std::abs(target_pos - curr_pos) < dist) 
+                {
+                    idx = i;
+                }
+                curr_pos += op_len;
+                ++i;
+                break;
+            case 'S':  
+                ++i;
+                break;
+            default:
+                ++i;
+                break;           
+        }
+    }
+    return idx;   
+}
+
+
+bool is_stable_mismatch(
+    const int target_pos,
+    const int aln_start,
+    const CigarVec& cigar_vec,
+    const int local_thresh    
+)
+{
+    bool lt_stable = false, rt_stable = false;
+    size_t idx = closest_mismatch(target_pos, aln_start, cigar_vec);
+    if (idx > 0 && idx < cigar_vec.size() - 1)
+    {
+        if (cigar_vec[idx - 1].first == '=' 
+            && cigar_vec[idx - 1].second > local_thresh) lt_stable = true;
+        if (cigar_vec[idx + 1].first == '='
+        && cigar_vec[idx + 1].second > local_thresh) rt_stable = true;
+    }
+    
+    return (lt_stable && rt_stable);
 }
 
 
@@ -887,13 +1011,6 @@ char eval_by_aln(
     const std::vector<Variant>* p_decomposed
 )
 {
-    /*std::vector<std::pair<int, int>> gap_penals;
-    gap_penal_grid(
-        user_params.gap_open_penal,
-        user_params.gap_ext_penal,
-        gap_penals
-    );*/
-
     size_t basic_sz = 0;
     std::vector<std::vector<int>> penals;
     penal_grid(
@@ -906,7 +1023,6 @@ char eval_by_aln(
     Filter filter;
     Alignment aln;
     std::vector<AlnResult> rslts;
-    //rslts.reserve(gap_penals.size());
     for (const auto& penal : penals)
     { 
         AlnResult rslt;
@@ -916,8 +1032,33 @@ char eval_by_aln(
             contig.seq, contig.ref_seq, filter, aln
         );
         
-        if (!is_gapped_aln(aln.cigar_string)) continue;
+        if (!is_valid_aln(aln.cigar_string)) continue;
         
+        if (!has_gaps(aln.cigar_string))
+        {
+            CigarVec cigar_vec = to_cigar_vector(aln.cigar_string);
+            int loc_len = local_matched_len(
+                target.pos, pos_vec[aln.ref_begin], cigar_vec
+            );
+             
+            if (loc_len > user_params.local_thresh) return 'C';
+             
+            if (has_this(aln.cigar_string, "X"))
+            {
+                if (!has_this(aln.cigar_string, "S") 
+                    && contig.by_kmer_suggestion) return 'C';
+                
+                if (
+                    is_stable_mismatch(
+                        target.pos, pos_vec[aln.ref_begin], 
+                        cigar_vec, user_params.local_thresh
+                    )
+                ) return 'C';
+             }   
+            
+            continue; 
+        }
+
         postprocess_alignment(rslt, pos_vec, contig, loc_ref, aln);
         
         int target_pos = target.pos;

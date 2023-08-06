@@ -392,13 +392,15 @@ void prefilter_candidates(
         read.kmer_score = count_kmer_overlap(read.seq, target_kmers);
         
         // kmer becomes zero for immediate variant clusters
+        /* 
         if (read.kmer_score == 0)
         {
             if (!read.dist_to_non_target || !read.dist_to_clip)
             {
+                std::cout << "get pseudo" << std::endl;
                 read.kmer_score = 1; //pseudo count   
             }    
-        }
+        }*/
               
     }
     
@@ -447,15 +449,13 @@ void prefilter_cplx_candidates(
     LocalReference& loc_ref,
     std::vector<Variant>& decomposed
 )
-{
-    
+{   
     mock_target_seq(contig, target, user_params, loc_ref);
     
     Kmers target_kmers;
     diff_kmers(
         contig.mocked_seq, contig.mocked_ref,  user_params.kmer_size, target_kmers
     );
-
    
     std::vector<Variant> indels;
     to_simple_variants(user_params, contig, loc_ref, decomposed);   
@@ -637,7 +637,8 @@ void suggest_contig(
     
     Seq merged_suggestions = merge_reads(suggestions);
     
-    contig.seq =  merged_suggestions.seq;
+    contig.n_seeds = suggestions.size();
+    contig.seq = merged_suggestions.seq;
     contig.quals = merged_suggestions.base_quals;
     
     extend_ref_coordinate(target, user_params, coord);

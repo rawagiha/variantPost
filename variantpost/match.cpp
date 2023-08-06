@@ -136,7 +136,7 @@ void annot_shiftable_segment(
         to_left(lt_allele, lt_seq);
         ++i;
     }
-    
+
     size_t j = 0;
     do
     {
@@ -145,9 +145,9 @@ void annot_shiftable_segment(
     } while(j < contig.rt_len && is_shiftable(rt_allele));
     --j; //undo once
     
-    ss.start = contig.lt_len - i - 1;
+    ss.start = contig.lt_len < i + 1 ? 0 : contig.lt_len - i - 1;
     ss.end = contig.rt_start_idx + j;
-    
+
     //shiftable seq (with boundary bases (1 each side))
     const size_t region_len = ss.end - ss.start + 1;
     ss.seq = contig.seq.substr(ss.start, region_len);
@@ -243,7 +243,7 @@ char indel_match_pattern(
     const std::string& query, 
     std::string_view base_quals,
     const std::vector<int>& pos_by_idx,
-    const bool is_locally_uniq,
+    const int local_uniqueness,
     const Contig& contig,
     const ShiftableSegment& ss,
     const UserParams& user_params,
@@ -262,7 +262,7 @@ char indel_match_pattern(
     
     if (contig.is_mocked)
     {
-        if (aln.ref_begin <= int(ss.start) && int(ss.end) <= aln.ref_end)
+        if (aln.ref_begin <= int(ss.start) - 5 && int(ss.end) + 5 <= aln.ref_end)
         {
             if (is_exact_match(aln, ss, query.size()))
             {
@@ -278,7 +278,7 @@ char indel_match_pattern(
     if (aln.ref_end <= int(ss.start))
     {
         // due to rt-clip
-        if (aln.query_end != int(contig.len - 1)) return 'F';
+        if (aln.query_end != int(query.size()) - 1) return 'F';
         // too short -> undetermined
         else return 'U';
     }    
@@ -292,7 +292,22 @@ char indel_match_pattern(
         else return 'U'; 
     } 
 
-    //trival case
+    // aln starts between ss_start/ss_end
+    if (int(ss.start) < aln.ref_begin 
+        &&  aln.ref_begin < int(ss.end))
+    {
+        if (aln.query_begin) return 'F';
+        //allow if read starts after ss-start 
+    }
+    else if (int(ss.start) < aln.ref_end 
+        &&  aln.ref_end < int(ss.end))
+    {
+        if (aln.query_end != int(query.size()) - 1) return 'F';  
+        //allow if read ends before ss.end 
+    }  
+
+
+    //trivial case
     // these exact matches may be used for extension
     if (is_exact_match(aln, ss, query.size()))
     {
@@ -302,16 +317,23 @@ char indel_match_pattern(
     }
 
     const double thresh = 1.0;
+    const int  margin = 2;
+    size_t crit_start = 0;
     std::string crit_seq;
     std::string_view quals;
     if (aln.ref_begin <= ss.start)
     {
+        if (int(ss.start) - aln.ref_begin + aln.query_begin >= margin)
+        {   
+            crit_start = ss.start - aln.ref_begin + aln.query_begin - margin;
+        }
+
         crit_seq = query.substr(
-            ss.start - aln.ref_begin + aln.query_begin, ss.seq.size()
+            crit_start, ss.seq.size() + 2 * (margin + 1)
         );
         
         quals = base_quals.substr(
-            ss.start - aln.ref_begin + aln.query_begin, ss.seq.size()   
+            crit_start, ss.seq.size() + 2 * (margin + 1)  
         );   
         
         if (fw_sim_score(crit_seq, quals, ss.seq, user_params) < thresh) return 'F';
@@ -359,11 +381,11 @@ char indel_match_pattern(
     int query_ss_start = aln.query_begin + ss.start - aln.ref_begin;
     int query_ss_end = query_ss_start + ss.end - ss.start;
     
-    if (contig.pos_by_seq_idx.empty()) //extension ase
+    if (contig.pos_by_seq_idx.empty()) //extension case
     {
         if (has_mismatches(aln.cigar_string)) return 'U';       
     }
-    else if (aln.ref_begin < ss.start && ss.end  < aln.ref_end) 
+    else if (aln.ref_begin < ss.start && ss.end < aln.ref_end) 
     {   
         if (pos_by_idx[query_ss_start] == -1 
             && pos_by_idx[query_ss_end] == -1) return 'U';
@@ -373,7 +395,7 @@ char indel_match_pattern(
         if (contig.pos_by_seq_idx[ss.start] == pos_by_idx[query_ss_start] 
             &&  pos_by_idx[query_ss_end] == -1) return 'M';   
         
-        if (is_locally_uniq)
+        if (local_uniqueness == 1)
         {
             if (contig.pos_by_seq_idx[ss.start] != pos_by_idx[query_ss_start]
                 || contig.pos_by_seq_idx[ss.end] != pos_by_idx[query_ss_end]) return 'F';
@@ -385,9 +407,6 @@ char indel_match_pattern(
             if (contig.pos_by_seq_idx[ss.start] <= pos_by_idx[query_ss_start] 
                 && pos_by_idx[query_ss_end] == contig.pos_by_seq_idx[ss.end]) return 'M';
         }  
-        //std::cout << contig.pos_by_seq_idx[ss.start] << " " << pos_by_idx[query_ss_start] << " " << contig.pos_by_seq_idx[ss.end] << " " << pos_by_idx[query_ss_end] << " " << query_ss_end << " " << query.size() - 1 << std::endl;
-        //if (contig.pos_by_seq_idx[ss.start] != pos_by_idx[query_ss_start] 
-       //     || contig.pos_by_seq_idx[ss.end] != pos_by_idx[query_ss_end]) return 'F';
     } 
     
     return 'M';
@@ -433,7 +452,7 @@ void classify_cand_indel_reads(
 
         char match_rlst = indel_match_pattern(
             std::string(candidates[i].seq), candidates[i].base_quals,
-            pos_by_idx, candidates[i].is_loc_uniq, contig, ss, user_params, filter, aligner, aln
+            pos_by_idx, candidates[i].local_uniqueness, contig, ss, user_params, filter, aligner, aln
         );
         
         switch (match_rlst)
@@ -487,7 +506,7 @@ void classify_simplified(
         
         char match_rlst = indel_match_pattern(
             std::string(candidates[i].seq), candidates[i].base_quals,
-            pos_by_idx, candidates[i].is_loc_uniq, contig, ss, user_params, filter, aligner, aln
+            pos_by_idx, candidates[i].local_uniqueness, contig, ss, user_params, filter, aligner, aln
         );
         
         switch (match_rlst)

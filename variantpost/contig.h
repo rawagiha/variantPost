@@ -13,6 +13,7 @@ struct Contig
     Coord coordinates;
     
     bool by_kmer_suggestion = false;
+    size_t n_seeds = 0;
     
     //mocked from input
     bool is_mocked = false;

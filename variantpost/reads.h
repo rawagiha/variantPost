@@ -58,7 +58,7 @@ struct Read
     bool has_target = false;
     bool incomplete_shift= false;
     bool may_be_complex = false; 
-    bool is_loc_uniq = false;
+    int local_uniqueness = 0;
     
     //annotated patterns    
     char covering_ptrn = '\0';
@@ -71,6 +71,7 @@ struct Read
     size_t sb_read_idx = 0; 
     int sb_kmer_score = -1;
     int aln_score = 0;
+    std::string sb_loc_signature;
     
     //metrics   
     double central_score = -1.0;
@@ -115,7 +116,11 @@ void annot_non_ref_signature(Read& read);
 
 void eval_read_quality(Read& read, const UserParams& user_params);
 
-bool is_locally_unique(Read& read, const LocalReference& loc_ref);
+int eval_loc_uniq(
+    Read& read, 
+    const UserParams& user_params, 
+    const LocalReference& loc_ref
+);
 
 void annot_covering_ptrn(
     Read& read, 
