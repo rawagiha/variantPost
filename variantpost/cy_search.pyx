@@ -1,3 +1,4 @@
+import random
 from libcpp.string cimport string
 from libcpp.vector cimport vector
 from libcpp cimport bool as bool_t
@@ -82,17 +83,23 @@ cdef inline bint is_qualified_read(read, bint exclude_duplicates):
     return False
 
 
-cdef object fetch_reads(bam, str chrom, int pos, int chrom_len, int window, bint exclude_duplicates):
-    out = []
+def fetch_reads(bam, chrom, pos, chrom_len, window, exclude_duplicates, fetched_reads, est_cov, is_secondary):
     reads = bam.fetch(
         chrom, max(0, pos - window), min(pos + window, chrom_len), until_eof=False
     )
     
-    return [read for read in reads if is_qualified_read(read, exclude_duplicates)]
+    for read in reads:
+        if is_qualified_read(read, exclude_duplicates):
+            fetched_reads.append((read, is_secondary))
+            
+            if read.reference_start <= pos <= read.reference_end:
+                est_cov += 1 
+    
+    return est_cov
 
 
 cdef inline void pack_to_lists(
-    object read, 
+    tuple read_tuple, 
     vector[string]& read_names, 
     vector[bool_t]& are_reverse, 
     vector[string]& cigar_strings, 
@@ -103,8 +110,8 @@ cdef inline void pack_to_lists(
     vector[vector[int]]& qual_seqs, 
     vector[int]& mapqs, 
     vector[bool_t]& is_primary, 
-    bint is_secondary
 ):
+    cdef object read = read_tuple[0]
     read_names.push_back(read.query_name.encode())
     are_reverse.push_back(read.is_reverse)
     cigar_strings.push_back(read.cigarstring.encode())
@@ -114,7 +121,7 @@ cdef inline void pack_to_lists(
     qual_seqs.push_back(read.query_qualities)
     mapqs.push_back(read.mapping_quality)
     
-    if is_secondary:
+    if read_tuple[1]:
         is_primary.push_back(False)
     else:
         is_primary.push_back(True)
@@ -142,6 +149,7 @@ cdef object search_target(
      int mapping_quality_threshold,
      int base_quality_threshold,
      float low_quality_base_rate_threshold,
+     int downsample_thresh,
      int match_score,
      int mismatch_penalty,
      int gap_open_penalty,
@@ -152,16 +160,42 @@ cdef object search_target(
      int unspliced_local_reference_start,
      int unspliced_local_reference_end,
 ):
-
-    cdef SearchResult rslt
-        
-    cdef int buff_size = 0;
-    first_reads = fetch_reads(bam, chrom, pos, chrom_len, window, exclude_duplicates)
-    buff_size += len(first_reads)
+    cdef SearchResult rslt     
+    cdef int est_cov = 0
+    cdef list fetched_reads = []
+    
+    # read_fetching from first bam
+    est_cov = fetch_reads(
+        bam, 
+        chrom, 
+        pos, 
+        chrom_len, 
+        window, 
+        exclude_duplicates, 
+        fetched_reads, 
+        est_cov, 
+        False
+    )  
     
     if second_bam:
-        second_reads = fetch_reads(second_bam, chrom, pos, chrom_len, window, exclude_duplicates)
-        buff_size += len(second_reads)
+        est_cov = fetch_reads(
+            bam, 
+            chrom, 
+            pos, 
+            chrom_len, 
+            window, 
+            exclude_duplicates, 
+            fetched_reads, 
+            est_cov, 
+            True
+        )  
+    
+    if est_cov > downsample_thresh:
+        n_sample = int(len(fetched_reads) * (downsample_thresh / est_cov))
+        random.seed(123)
+        fetched_reads = random.sample(fetched_reads,  n_sample)
+    
+    cdef int buff_size = len(fetched_reads);
 
     cdef vector[string] read_names 
     read_names.reserve(buff_size)
@@ -183,15 +217,21 @@ cdef object search_target(
     mapqs.reserve(buff_size)
     cdef vector[bool_t] are_first_bam
     are_first_bam.reserve(buff_size)
-
-    for read in first_reads:
-        pack_to_lists(read, read_names, are_reverse, cigar_strings,
-                     aln_starts, aln_ends, read_seqs, ref_seqs, qual_seqs, mapqs, are_first_bam, False)
     
-    if second_bam:
-        for _read in second_reads:
-            pack_to_lists(_read, read_names, are_reverse, cigar_strings,
-                          aln_starts, aln_ends, read_seqs, ref_seqs, qual_seqs, mapqs, are_first_bam, True)
+    for read in fetched_reads:
+        pack_to_lists(
+            read, 
+            read_names, 
+            are_reverse, 
+            cigar_strings,
+            aln_starts, 
+            aln_ends, 
+            read_seqs, 
+            ref_seqs, 
+            qual_seqs, 
+            mapqs, 
+            are_first_bam
+        )
     
     _search_target(
         rslt,

@@ -1,5 +1,5 @@
 class Variant(object):
-    def __init__(self, chrom, pos, ref, alt, reference, window=200):
+    def __init__(self, chrom, pos, ref, alt, reference, window=50):
 
         self.chrom = chrom
         self.pos = pos  # 1-based
@@ -7,7 +7,10 @@ class Variant(object):
         self.alt = alt
         self.reference = reference
 
-        self.window = window
+        if len(ref) < window:
+            self.window = window
+        else:
+            self.window = len(ref) + window
 
         # chrom name chrom end check
         self._chrom = self.chrom
@@ -15,8 +18,8 @@ class Variant(object):
         self.reference_len = reference.get_reference_length(self._chrom)
 
         # 1-based
-        self.unspliced_local_reference_start = max(0, pos - self.window) + 1
-        self.unspliced_local_reference_end = min(pos + self.window, self.reference_len)
+        self.unspliced_local_reference_start = max(0, pos - self.window * 4) + 1
+        self.unspliced_local_reference_end = min(pos + self.window * 4, self.reference_len)
 
         #self.unspliced_local_reference = reference.fetch(
         #    chrom,

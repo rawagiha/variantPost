@@ -16,6 +16,7 @@ cdef object  search_target(
                 int, #map qual
                 int, #base qual 
                 float, #low qual rate
+                int,
                 int, 
                 int, 
                 int, 
