@@ -339,6 +339,7 @@ void _search_target(
             }      
             
             rslt.report(contig, targets, non_targets, undetermined);
+            
             return;
         }
     }
@@ -366,5 +367,5 @@ void _search_target(
         );
     }
     
-    rslt.report(contig, targets, non_targets, undetermined, is_retargeted); 
+    rslt.report(contig, targets, non_targets, undetermined, is_retargeted);
 }   

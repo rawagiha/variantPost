@@ -179,7 +179,7 @@ cdef object search_target(
     
     if second_bam:
         est_cov = fetch_reads(
-            bam, 
+            second_bam, 
             chrom, 
             pos, 
             chrom_len, 
