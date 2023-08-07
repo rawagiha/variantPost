@@ -219,7 +219,7 @@ void is_exact_cis(
          // for 'A' sb_prtn, count reads covering the retarget candidate locus   
          // generally cnt >= cis_gaps.at(_gap) due to sequencing error in inserted seq
          // in candidate
-               
+            
             if (!is_loc_uniq) is_loc_uniq = (read.local_uniqueness != -1);
             
             if (has_no_cis_gaps) continue;
@@ -796,9 +796,8 @@ void retarget_to_indel(
         annot_covering_ptrn(read, target, loc_ref, is_retargeted);
         annot_clip_pattern(read, target);
         eval_read_quality(read, user_params);
-        eval_loc_uniq(read, user_params, loc_ref);
+        read.local_uniqueness = eval_loc_uniq(read, user_params, loc_ref);
         substitute_patterns(a_cnt, b_cnt, read, target, user_params);
-        
     } 
     
     if (a_cnt)

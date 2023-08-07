@@ -560,15 +560,17 @@ int eval_loc_uniq(
     const LocalReference& loc_ref
 )
 {
+    
     if (read.clip_ptrn != 'U' 
         || read.variants.empty() 
         || read.nonref_lq_rate >= user_params.lq_rate_thresh) return 0;
     
+    //spliced reads may have very large lt/rt_len
     int lt_len = read.variants.front().pos - read.aln_start;
     int rt_len = read.aln_end - read.variants.back().variant_end_pos + 1;  
     int read_len = static_cast<int>(read.seq.size());
-    if (lt_len  >= read_len || rt_len >= read_len) return 0;    
- 
+    if (lt_len >= read_len || rt_len >= read_len) return 0;    
+
     // lt fragment
     bool lt_uniq = false;
     int lt_start_pos = -1;
@@ -598,9 +600,15 @@ int eval_loc_uniq(
             //std::cout << "rt pos:" << rt_start_pos << " actual:" <<  read.aln_end - rt_len + 1<< std::endl;
         }
     } 
-
-    if (lt_uniq && rt_uniq) return 1;
-    else return -1;
+    
+    if (lt_uniq && rt_uniq) 
+    {
+        return 1;
+    }
+    else 
+    {     
+        return -1;
+    }
 }
 
 
