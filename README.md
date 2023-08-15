@@ -3,11 +3,11 @@ variantPost supports short-read analysis for SNVs, MNVs, and indels.
 
 ### Installation
 variantPost depends on [cython](https://cython.org/) and [c++17](https://en.cppreference.com/w/cpp/17).
-Please build gcc 7 or higher (tested on gcc 9.1.0).
+Please build with gcc 7 or higher.
 
 
 ### Usage
-The API works with [pysam] (https://github.com/pysam-developers)
+The API works with [pysam](https://github.com/pysam-developers)
 usage is similar to indelPost
 
 ```
