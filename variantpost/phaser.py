@@ -1,4 +1,4 @@
-import numpy as np
+import math
 from difflib import SequenceMatcher
 from collections import OrderedDict, Counter
 
@@ -141,7 +141,7 @@ def rt_aln_pos(non_ref, contig_dict, contig_end):
 
 
 def lt_max_lim(target, indels, max_common_substr_len, contig_dict):
-    min_lim = np.inf
+    min_lim = math.inf
     lt_indels = [indel for indel in indels if indel.pos < target.pos]
 
     if lt_indels:
@@ -156,7 +156,7 @@ def lt_max_lim(target, indels, max_common_substr_len, contig_dict):
 def rt_min_lim(target, snvs, indels, phasable_dist, max_common_substr_len, contig_dict):
     min_lim = -1
 
-    nearest_snv_pos, nearest_indel_pos = np.inf, np.inf
+    nearest_snv_pos, nearest_indel_pos = math.inf, math.inf
     if is_rt_shiftable(target, contig_dict):
 
         contig_end = next(reversed(contig_dict))
@@ -172,7 +172,7 @@ def rt_min_lim(target, snvs, indels, phasable_dist, max_common_substr_len, conti
                 nearest_indel_pos = indel.pos
                 break
 
-        # note: np.inf < np.inf -> False
+        # note: math.inf < math.inf -> False
         if nearest_snv_pos < nearest_indel_pos:
             if nearest_snv_pos - target.pos >= phasable_dist:
                 rt_pos = rt_aln_pos(target, contig_dict, contig_end)
@@ -209,7 +209,7 @@ def parse_contig_for_exons(contig_dict, skips):
 def profile_non_refs(contig_dict, target_pos, is_indel):
     actual_pos = -1
     actual_event = NonReferenceEvent(-1, "N", "N", 0)
-    pos_diff = np.inf
+    pos_diff = math.inf
 
     snvs, indels = [], []
     for pos, v in contig_dict.items():
@@ -290,7 +290,7 @@ def find_peak(contig_dict, target, snvs, match_penal, local_thresh, is_left):
         loci = [pos for pos, _data in contig_dict.items() if pos > target.end_pos]
         snv_loci = [snv.pos for snv in snvs if snv.pos > target.pos]
 
-    peak_locus = -np.inf if is_left else np.inf
+    peak_locus = -math.inf if is_left else math.inf
     if not loci:
         return peak_locus
 
@@ -312,9 +312,9 @@ def find_peak(contig_dict, target, snvs, match_penal, local_thresh, is_left):
         peak_locus = loci[peak_idx]
         score = peak_score
 
-    if peak_locus == -np.inf:
+    if peak_locus == -math.inf:
         peak_locus = target.pos
-    elif peak_locus == np.inf:
+    elif peak_locus == math.inf:
         peak_locus = target.end_pos
 
     return peak_locus
@@ -479,7 +479,7 @@ def remove_unclustered_snvs(contig_dict, target, snvs, match_penal, local_thresh
             contig_dict, lt_far_indel, snvs, match_penal, local_thresh, True
         )
     else:
-        lt_peak_locus = -np.inf
+        lt_peak_locus = -math.inf
 
     # rt process
     rt_far_indel = get_far_indel(contig_dict, False)
@@ -491,6 +491,6 @@ def remove_unclustered_snvs(contig_dict, target, snvs, match_penal, local_thresh
             contig_dict, rt_far_indel, snvs, match_penal, local_thresh, False
         )
     else:
-        rt_peak_locus = np.inf
+        rt_peak_locus = math.inf
 
     trim_contig(contig_dict, lt_peak_locus, rt_peak_locus)

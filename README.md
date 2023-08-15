@@ -2,22 +2,13 @@ variantPost supports short-read analysis for SNVs, MNVs, and indels.
 
 
 ### Installation
-Plese pre-install the followings
-* [cython>=0.29.12](https://cython.org/)
-* [numpy>=1.16.0](https://numpy.org/)
-* [pysam>=0.15.0](https://github.com/pysam-developers)
+variantPost depends on [cython](https://cython.org/) and [c++17](https://en.cppreference.com/w/cpp/17).
+Please build gcc 7 or higher (tested on gcc 9.1.0).
 
-```
-#please use c++17 -> gcc 7 or higher 
-module load gcc/9.1.0 
-
-git clone https://github.com/rawagiha/variantPost.git
-cd variantpost
-python setup.py install    
-```
 
 ### Usage
-API usage is similar to indelPost
+The API works with [pysam] (https://github.com/pysam-developers)
+usage is similar to indelPost
 
 ```
 import pysam
