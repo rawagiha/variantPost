@@ -86,7 +86,7 @@ class VariantAlignment(object):
         sf, sr, nf, nr, uf, ur = ([] for i in range(6))
 
         for read_name, status, is_rv in zip(self.read_names, self.target_status, self.are_reverse):
-            
+                         
             flags = (status, is_rv)
             
             if flags == (1, True):

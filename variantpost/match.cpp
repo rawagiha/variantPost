@@ -292,6 +292,7 @@ char indel_match_pattern(
         else return 'U'; 
     } 
 
+    
     // aln starts between ss_start/ss_end
     if (int(ss.start) < aln.ref_begin 
         &&  aln.ref_begin < int(ss.end))
@@ -317,23 +318,26 @@ char indel_match_pattern(
     }
 
     const double thresh = 1.0;
-    const int  margin = 2;
+    //const int  margin = 2;
     size_t crit_start = 0;
     std::string crit_seq;
     std::string_view quals;
     if (aln.ref_begin <= ss.start)
     {
-        if (int(ss.start) - aln.ref_begin + aln.query_begin >= margin)
+        //if (int(ss.start) - aln.ref_begin + aln.query_begin >= margin)
+        if (int(ss.start) >= aln.ref_begin - aln.query_begin)
         {   
-            crit_start = ss.start - aln.ref_begin + aln.query_begin - margin;
+            crit_start = ss.start - aln.ref_begin + aln.query_begin;
         }
 
         crit_seq = query.substr(
-            crit_start, ss.seq.size() + 2 * (margin + 1)
+            //crit_start, ss.seq.size() + 2 * (margin + 1)
+            crit_start, ss.seq.size()
         );
         
         quals = base_quals.substr(
-            crit_start, ss.seq.size() + 2 * (margin + 1)  
+            //crit_start, ss.seq.size() + 2 * (margin + 1)  
+            crit_start, ss.seq.size()  
         );   
         
         if (fw_sim_score(crit_seq, quals, ss.seq, user_params) < thresh) return 'F';
@@ -454,7 +458,7 @@ void classify_cand_indel_reads(
             std::string(candidates[i].seq), candidates[i].base_quals,
             pos_by_idx, candidates[i].local_uniqueness, contig, ss, user_params, filter, aligner, aln
         );
-        
+
         switch (match_rlst)
         {
             case 'L':
