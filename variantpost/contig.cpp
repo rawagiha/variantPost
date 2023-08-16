@@ -460,15 +460,15 @@ void prefilter_cplx_candidates(
     std::vector<Variant> indels;
     to_simple_variants(user_params, contig, loc_ref, decomposed);   
     
-    extract_indels(indels, decomposed);    
+    //extract_indels(indels, decomposed);    
 
     std::vector<Variant> shared;
     for (auto& read : candidates)
     {
         if (read.may_be_complex && !read.variants.empty())
         {
-            find_shared_variants(shared, read.variants, indels);
-            if (!shared.empty())
+            find_shared_variants(shared, read.variants, decomposed);
+            if (shared == decomposed)
             {
                 read.kmer_score = 255; //pseudo count
             }           
@@ -482,7 +482,7 @@ void prefilter_cplx_candidates(
     } 
     
     sort_by_kmer(candidates);
-
+    
     for (Reads::reverse_iterator i = candidates.rbegin(); 
         i != candidates.rend(); ++i)
     {
@@ -513,12 +513,18 @@ void prioritize_reads_for_contig_construction(
 {
     std::string_view common_spl_ptrn = common_splice_ptrn(candidates);    
     
+    bool is_cplx_gap_matched = (candidates[0].kmer_score == 255);
+     
     prioritized.reserve(candidates.size());
     for (const auto& read : candidates)
     {
         if (static_cast<std::string_view>(read.splice_signature)== common_spl_ptrn)
         {
-            if (read.nonref_lq_rate < user_params.lq_rate_thresh)
+            if (is_cplx_gap_matched)
+            {
+                if (read.kmer_score == 255) prioritized.push_back(read);
+            }
+            else if (read.overall_lq_rate < user_params.lq_rate_thresh)
             {
                 prioritized.push_back(read);
             }
@@ -539,7 +545,7 @@ void concat_top_tens(
     for (auto& tmp : tmps)
     {
         size_t i = 0;
-        const size_t size_thresh = 30;
+        const size_t size_thresh = 5;
         const size_t tmp_range = std::min(size_thresh, tmp.size());
         while (i < tmp_range)
         {
@@ -568,11 +574,11 @@ void suggest_contig(
         candidates, 
         user_params
     );
-
+    
     //Contig remains empty
     if (prioritized.empty()) return;
     
-    const size_t max_size = 30; // for efficiency
+    const size_t max_size = 10; // for efficiency
     const size_t search_size = prioritized.size();
     
     Coord coord;
@@ -581,6 +587,7 @@ void suggest_contig(
     
     if (search_size >= max_size)
     {
+        /*
         Reads lt_tmp, u_tmp, rt_tmp;
         for (size_t i = 0; i < search_size; ++i)
         {
@@ -601,10 +608,17 @@ void suggest_contig(
         sort_by_kmer(lt_tmp);
         sort_by_kmer(rt_tmp);
         sort_by_kmer(u_tmp);
-               
+        */          
         Reads top_tens;       
-        concat_top_tens(lt_tmp, rt_tmp, u_tmp, top_tens);
+        //concat_top_tens(lt_tmp, rt_tmp, u_tmp, top_tens);
         
+        sort_by_kmer(prioritized);
+        for (size_t i= 0; i < max_size; ++i)
+        {
+            transfer_elem(top_tens, prioritized, i);
+        }
+        
+        sort_by_start(top_tens);
         for (const auto& read : top_tens)
         {
             
@@ -619,8 +633,13 @@ void suggest_contig(
     }
     else
     {   
-        sort_by_start(prioritized);
+        sort_by_start(prioritized);   
         
+        if (prioritized.size() < 3)
+        {
+            prioritized.push_back(prioritized[prioritized.size() - 1]);
+        }
+
         for (const auto& read : prioritized)
         {
             suggestions.emplace_back(
@@ -640,7 +659,7 @@ void suggest_contig(
     contig.n_seeds = suggestions.size();
     contig.seq = merged_suggestions.seq;
     contig.quals = merged_suggestions.base_quals;
-    
+   
     extend_ref_coordinate(target, user_params, coord);
     
     set_ref_info(contig, coord, loc_ref); 

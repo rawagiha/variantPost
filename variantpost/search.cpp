@@ -197,7 +197,6 @@ void from_candidate_reads(
             contig, candidates, non_targets, target, 
             user_params, loc_ref, decomposed
         );
-        
     }
     else
     {

@@ -1034,7 +1034,7 @@ char eval_by_aln(
         
         if (!is_valid_aln(aln.cigar_string)) continue;
         
-        if (!has_gaps(aln.cigar_string))
+        if (contig.by_kmer_suggestion && !has_gaps(aln.cigar_string))
         {
             CigarVec cigar_vec = to_cigar_vector(aln.cigar_string);
             int loc_len = local_matched_len(
@@ -1045,8 +1045,7 @@ char eval_by_aln(
              
             if (has_this(aln.cigar_string, "X"))
             {
-                if (!has_this(aln.cigar_string, "S") 
-                    && contig.by_kmer_suggestion) return 'C';
+                if (!has_this(aln.cigar_string, "S")) return 'C';
                 
                 if (
                     is_stable_mismatch(
