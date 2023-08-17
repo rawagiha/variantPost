@@ -135,7 +135,7 @@ class AnnotatedRead(object):
         self.target_status = target_status
 
 
-cdef object search_target(
+cpdef object search_target(
      object bam,
      object second_bam,
      int chrom_len,

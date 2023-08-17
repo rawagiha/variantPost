@@ -1,2 +1,2 @@
-from variantpost.variantalignment import *
 from variantpost.variant import *
+from variantpost.variantalignment import *

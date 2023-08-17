@@ -1,5 +1,5 @@
 from .phaser import _phase, loss
-from variantpost.cy_search cimport search_target
+from variantpost.cy_search import search_target
 from .variant import Variant
 
 from collections import namedtuple

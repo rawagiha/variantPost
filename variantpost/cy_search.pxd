@@ -2,7 +2,7 @@ from libcpp.string cimport string
 from libcpp.vector cimport vector
 from libcpp cimport bool as bool_t
 
-cdef object  search_target(
+cpdef object  search_target(
                 object, 
                 object,
                 int, #chrom_len
