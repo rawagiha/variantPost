@@ -12,17 +12,10 @@ class BuildExt(build_ext):
 
 
 extensions = [
-    #Extension(
-    #    "variantpost.variantalignment",
-    #    ["variantpost/variantalignment.pyx"],
-    #    language="c++",
-    #    extra_compile_args=["-O3", "-std=c++17"],
-    #    extra_link_args=["-O3", "-std=c++17"],
-    #),
     Extension(
-        "variantpost.cy_search",
+        "variantpost.__search",
         [
-            "variantpost/cy_search.pyx",
+            "variantpost/__search.pyx",
             "variantpost/contig.cpp",
             "variantpost/eval.cpp",
             "variantpost/search.cpp",

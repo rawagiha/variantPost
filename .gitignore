@@ -2,8 +2,7 @@
 *.d
 
 #
-variantpost/cy_search.cpp
-variantpost/variantalignment.cpp
+variantpost/__search.cpp
 build/
 dist/
 test/
