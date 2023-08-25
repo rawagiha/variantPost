@@ -10,6 +10,7 @@ class VariantAlignment(object):
         variant,
         bam,
         second_bam=None,
+        chrom_name="",
         exclude_duplicates=True,
         mapping_quality_threshold=1,
         base_quality_threshold=30,
@@ -27,7 +28,7 @@ class VariantAlignment(object):
             variant.normalize(inplace=True)
 
         self.variant = variant
-        self.chrom = variant.chrom
+        self.chrom = chrom_name if chrom_name else variant.chrom 
         self.target_pos = variant.pos
         self.target_is_indel = variant.is_indel
         self.window = variant.window

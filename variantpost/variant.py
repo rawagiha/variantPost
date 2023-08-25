@@ -1,6 +1,7 @@
-BASES = {"A", "C", "G", "T", "N"}
-
+from collections import namedtuple
 from pysam import FastaFile
+
+BASES = {"A", "C", "G", "T", "N"}
 
 
 class Variant(object):
@@ -143,7 +144,7 @@ class Variant(object):
         else:
             return True
 
-    def lt_pos(self):
+    def left_pos(self):
         if not self.is_indel:
             return self.pos
         else:
@@ -161,15 +162,15 @@ class Variant(object):
                     tmp_allele = lt_flank[i] + curr_allele[:-1]
                     i += 1
 
-                    if tmp_alelle[0] != tmp_alelle[-1]:
+                    if tmp_allele[0] != tmp_allele[-1]:
                         break
                     curr_allele = tmp_allele
 
-                return curr_pos - i
+                return curr_pos - i + 1
             else:
                 return self.pos
 
-    def rt_pos(self):
+    def right_pos(self):
         if not self.is_indel:
             return self.pos + len(self.ref) - 1
         else:
@@ -197,11 +198,12 @@ class Variant(object):
             else:
                 return self.pos + len(self.ref) - 1
 
-    def query_vcf(self, vcf, contig_name="", match_by="normalization"):
-        vcf_chrom = contig_name if contig_name else self.chrom
+    def query_vcf(self, vcf, chrom_name="", match_by_equivalence=True):
+        vcf_chrom = chrom_name if chrom_name else self.chrom
 
-        lt_pos, rt_pos = self.lt_pos, self.rt_pos
-        if match_by == "normalization":
+        lt_pos, rt_pos = self.left_pos(), self.right_pos()
+
+        if match_by_equivalence:
             search_start, search_end = lt_pos - 1, rt_pos
         else:
             search_start, search_end = (
@@ -212,33 +214,64 @@ class Variant(object):
         vcf_entries = vcf.fetch(vcf_chrom, search_start, search_end)
 
         hits = []
-        if match_by == "normalization":
+        if match_by_equivalence:
             for _entry in vcf_entries:
                 for _alt in _entry.alts:
                     if self == Variant(
                         self.chrom, _entry.pos, _entry.ref, _alt, self.reference
                     ):
-                        hits.append(_entry)
+                        hits.append(to_tuple(_entry))
                         break
         else:
             for _entry in vcf_entries:
                 ref_len = len(_entry.ref)
                 for _alt in _entry.alts:
-                    if ref_len == len(_aln):
+                    if ref_len == len(_alt):
                         if lt_pos <= _entry.pos <= rt_pos:
-                            hits.append(_entry)
+                            hits.append(to_tuple(_entry))
                             break
                     else:
                         v = Variant(
                             self.chrom, _entry.pos, _entry.ref, _alt, self.reference
                         )
-                        _lt_pos, _rt_pos = v.lt_pos, v.rt_pos
+                        _lt_pos, _rt_pos = v.left_pos(), v.right_pos()
 
                         if lt_pos <= _lt_pos <= rt_pos or lt_pos <= _rt_pos <= rt_pos:
-                            hits.append(_entry)
+                            hits.append(to_tuple(_entry))
                             break
 
         return hits
+
+
+def to_tuple(_entry):
+    MatchedRecord = namedtuple(
+        "MatchedRecord",
+        [
+            "chrom",
+            "pos",
+            "id",
+            "ref",
+            "alts",
+            "qual",
+            "filter",
+            "info",
+            "format",
+            "samples",
+        ],
+    )
+
+    return MatchedRecord(
+        _entry.chrom,
+        _entry.pos,
+        _entry.id,
+        _entry.ref,
+        _entry.alts,
+        _entry.qual,
+        _entry.filter,
+        _entry.info,
+        _entry.format,
+        _entry.samples,
+    )
 
 
 #

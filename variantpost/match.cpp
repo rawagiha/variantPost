@@ -454,12 +454,12 @@ void classify_cand_indel_reads(
             candidates[i].cigar_vector
         );
 
-        char match_rlst = indel_match_pattern(
+        char match_rslt = indel_match_pattern(
             std::string(candidates[i].seq), candidates[i].base_quals,
             pos_by_idx, candidates[i].local_uniqueness, contig, ss, user_params, filter, aligner, aln
         );
-
-        switch (match_rlst)
+        
+        switch (match_rslt)
         {
             case 'L':
                 transfer_elem(lt_matches, candidates, i);
@@ -508,12 +508,12 @@ void classify_simplified(
             candidates[i].aln_start, candidates[i].cigar_vector
         );
         
-        char match_rlst = indel_match_pattern(
+        char match_rslt = indel_match_pattern(
             std::string(candidates[i].seq), candidates[i].base_quals,
             pos_by_idx, candidates[i].local_uniqueness, contig, ss, user_params, filter, aligner, aln
         );
         
-        switch (match_rlst)
+        switch (match_rslt)
         {
             case 'L':
             case 'M':

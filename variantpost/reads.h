@@ -77,6 +77,7 @@ struct Read
     double central_score = -1.0;
     double overall_lq_rate = 0.0;
     double nonref_lq_rate = 0.0;
+    double local_lq_rate = -1.0;
     int kmer_score = -1;
     
     

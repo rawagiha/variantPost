@@ -726,6 +726,62 @@ void annot_local_ptrn(
 }
 
 
+void eval_local_quality(Read& read, const Variant& target, const UserParams& user_params)
+{   
+    const int eval_start = target.lpos - 3, eval_end = target.rpos + int(target.ref.size()) + 2;
+    
+    char op = '\0';
+    double tot_cnt = 0.0;
+    int op_len = 0, read_idx = 0, lq_cnt = 0, curr_pos = read.read_start;
+    for (const auto& c : read.cigar_vector)
+    {
+        op = c.first;
+        op_len = c.second;
+        switch (op)
+        {
+            case 'M':
+            case 'X':
+            case '=':
+            case 'S':
+                for (int i = 0; i < op_len; ++i)
+                {
+                    if (eval_start <= curr_pos && curr_pos <= eval_end) 
+                    {
+                        ++tot_cnt;
+                        if (read.base_quals[read_idx] < user_params.base_q_thresh) ++ lq_cnt;
+                    }
+                    ++read_idx;
+                    ++curr_pos;                              
+                }
+                break;                   
+            case 'D':
+            case 'N':
+                curr_pos += op_len;
+                break;
+            case 'I':
+                if (eval_start <= curr_pos && curr_pos <= eval_end)
+                {
+                    for (int i = 0; i < op_len; ++i)
+                    {
+                         ++tot_cnt;
+                         if (read.base_quals[read_idx] < user_params.base_q_thresh) ++ lq_cnt;   
+                    }
+                    ++read_idx;
+                }
+                else read_idx += op_len;
+                break;
+            default:
+                break;
+        }    
+    }
+    
+    if (tot_cnt)
+    {
+        read.local_lq_rate = lq_cnt / tot_cnt; 
+    }
+}
+
+
 void eval_read_quality(Read& read, const UserParams& user_params)
 {
     if (!read.non_ref_quals.empty())
@@ -771,6 +827,7 @@ void annotate_reads(
         annot_non_ref_signature(read);  
         annot_local_ptrn(read, target, user_params, loc_ref);
         eval_read_quality(read, user_params);
+        //eval_local_quality(read, target, user_params);
     }    
 }
 
