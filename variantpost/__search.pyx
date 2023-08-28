@@ -142,7 +142,8 @@ cpdef object search_target(
      bint exclude_duplicates,
      int window,
      string  fastafile,
-     str  chrom,
+     str chrom,
+     str bam_chrom, 
      int pos,
      string  ref,
      string  alt,
@@ -167,7 +168,7 @@ cpdef object search_target(
     # read_fetching from first bam
     est_cov = fetch_reads(
         bam, 
-        chrom, 
+        bam_chrom, 
         pos, 
         chrom_len, 
         window, 
@@ -180,7 +181,7 @@ cpdef object search_target(
     if second_bam:
         est_cov = fetch_reads(
             second_bam, 
-            chrom, 
+            bam_chrom, 
             pos, 
             chrom_len, 
             window, 
@@ -277,4 +278,4 @@ cpdef object search_target(
     
     skips = [(start, end) for start, end in zip(rslt.skip_starts, rslt.skip_ends)]
     
-    return contig_dict, skips, rslt.read_names,  rslt.are_reverse, rslt.target_statuses, rslt.are_from_first_bam, rslt.is_retargeted
+    return contig_dict, skips, rslt.read_names, rslt.are_reverse, rslt.target_statuses, rslt.are_from_first_bam, rslt.is_retargeted

@@ -5,6 +5,35 @@ BASES = {"A", "C", "G", "T", "N"}
 
 
 class Variant(object):
+    """This class abstracts a variant aligned to a linear reference genome.
+    Equality holds between :class:`~variantpost.Variant` objects
+    if they are identical in the normalized form (equivalent alignments)
+
+    Parameters
+    ----------
+    chrom : string
+        chromosome name.
+
+    pos : integer
+        1-based genomic position .
+
+    ref : string
+        VCF-style reference allele.
+
+    alt : string
+        VCF-style alternative allele.
+
+    reference : pysam.Fasta
+        reference FASTA file supplied as
+        `pysam.FastaFile <https://pysam.readthedocs.io/en/latest/api.html#pysam.FastaFile>`__ object.
+
+    Raises
+    ------
+    ValueError
+        if the input alleles contain letters other than A, C, G, T and N.
+
+    """
+
     def __init__(self, chrom, pos, ref, alt, reference, window=50):
 
         self.chrom = chrom
@@ -33,18 +62,24 @@ class Variant(object):
 
     @property
     def is_indel(self):
+        """True for insertion or deletion."""
         return len(self.ref) != len(self.alt)
 
     @property
     def is_del(self):
+        """True for deletions False for insertion or substitution."""
         return len(self.ref) > len(self.alt)
 
     @property
     def is_ins(self):
+        """True for insetion. False for deletion or substitution."""
         return len(self.ref) < len(self.alt)
 
     @property
     def is_simple_indel(self):
+        """True for indel that is not complex (co-occurrence of insertion and deletion).
+        False for complex indel or substitution.
+        """
         if self.is_indel:
             shorter_allele = self.ref if self.is_ins else self.alt
             longer_allele = self.ref if self.is_del else self.alt
@@ -54,6 +89,7 @@ class Variant(object):
 
     @property
     def is_normalized(self):
+        """True if left-aligened and the allele representations are minimal."""
         if self.ref[-1] != self.alt[-1]:
             if self.ref[0] != self.alt[0]:
                 return True
@@ -63,7 +99,14 @@ class Variant(object):
         return False
 
     def normalize(self, inplace=False):
+        """left-aligns in genomic position and minimize the allele represention.
 
+        Parameters
+        ---------
+            inplace : bool
+                normalizes this (self) :class:`~variantpost.Variant` object if True.
+                Otherwise, returns a normalized copy of the object. Default to False.
+        """
         if inplace:
             i = self
         else:
@@ -145,6 +188,8 @@ class Variant(object):
             return True
 
     def left_pos(self):
+        """returns a left-aligned genomic position."""
+
         if not self.is_indel:
             return self.pos
         else:
@@ -171,6 +216,7 @@ class Variant(object):
                 return self.pos
 
     def right_pos(self):
+        """returns the variant-end position after right-aligned."""
         if not self.is_indel:
             return self.pos + len(self.ref) - 1
         else:
@@ -198,7 +244,22 @@ class Variant(object):
             else:
                 return self.pos + len(self.ref) - 1
 
-    def query_vcf(self, vcf, chrom_name="", match_by_equivalence=True):
+    def query_vcf(self, vcf, chrom_name=None, match_by_equivalence=True):
+        """returns a `list <https://docs.python.org/3/library/stdtypes.html#list>`__ of VCF records matching this :class:`~variantpost.Variant` object. The input VCF file must be indexed.
+
+        Parameters
+        ----------
+            vcf : pysam.VariantFile
+                VCF file to be queried.
+                Supply as `pysam.VariantFile <https://pysam.readthedocs.io/en/latest/api.html#pysam.VariantFile>`__ object.
+
+            chrom_name : string
+                specify an alias chromosome name if the VCF file uses a chromosome nomenclature different from the reference genome in :class:`~variantpost.Variant`.
+                If not specified (default), the nomenclature in the FASTA file in :class:`~variantpost.Variant` will be used.
+
+            match_by_equivalence : bool
+                queries the VCF records by normalization if True (default). Otherwise, positionally overlapping records will be returned.
+        """
         vcf_chrom = chrom_name if chrom_name else self.chrom
 
         lt_pos, rt_pos = self.left_pos(), self.right_pos()
@@ -272,10 +333,3 @@ def to_tuple(_entry):
         _entry.format,
         _entry.samples,
     )
-
-
-#
-#
-#
-#
-#        matchbys = ["normalization", "??"]

@@ -10,6 +10,7 @@ cpdef object  search_target(
                 int, #window
                 string,
                 str,
+                str,
                 int,
                 string,
                 string,

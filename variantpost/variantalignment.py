@@ -1,16 +1,66 @@
 from collections import namedtuple
 
+
+from .variant import Variant
 from .phaser import _phase, loss
 from variantpost.__search import search_target
-from .variant import Variant
+
 
 class VariantAlignment(object):
+    """This class accepts the target variant as :class:`~variantpost.Variant` and the BAM file
+        as `pysam.AlignmentFile <https://pysam.readthedocs.io/en/latest/api.html#pysam.AlignmentFile>`__
+        to process the variant alignment.
+
+
+    Parameters
+    ----------
+    variant : Variant
+         :class:`~variantpost.Variant` object representing the target variant.
+
+    bam : pysam.AlignmentFile
+        BAM file supplied as
+        `pysam.AlignmentFile <https://pysam.readthedocs.io/en/latest/api.html#pysam.AlignmentFile>`__ object.
+
+    second_bam : pysam.AlignmentFile
+        A second BAM file for paired analysis. Default: None.
+
+    chrom_name : string
+        Specify an alias chromosome name if the BAM file uses a chromosome nomenclature different from
+        the reference used in :class:`~variantpost.Variant`. If not specified (default), the nomenclature
+        in the reference will be used.
+
+    mapping_quality_threshold : integer
+        A mininum mapping quality to be analized. Default 1.
+
+    base_quality_threshold : integer
+        Non-reference base-calls with a Phred-scale quality score below the threshold are labeled low quality.
+
+    low_quality_base_rate_threshold : float
+
+    downsample_threshold : integer
+
+    match_score : integer
+
+    mismatch_penalty : integer
+
+    gap_open_penalty : integer
+
+    gap_extension_penalty : integer
+
+    kmer_size : integer
+
+    local_threshold : integer
+
+    match_penalty_for_phasing : float
+
+    """
+
     def __init__(
         self,
         variant,
         bam,
         second_bam=None,
-        chrom_name="",
+        chrom_name=None,
         exclude_duplicates=True,
         mapping_quality_threshold=1,
         base_quality_threshold=30,
@@ -19,7 +69,7 @@ class VariantAlignment(object):
         match_score=3,
         mismatch_penalty=2,
         gap_open_penalty=3,
-        gap_extention_penalty=1,
+        gap_extension_penalty=1,
         kmer_size=32,
         local_threshold=20,
         match_penalty_for_phasing=0.5,
@@ -28,7 +78,8 @@ class VariantAlignment(object):
             variant.normalize(inplace=True)
 
         self.variant = variant
-        self.chrom = chrom_name if chrom_name else variant.chrom 
+        self.chrom = variant.chrom
+        self.bam_chrom = chrom_name if chrom_name else variant.chrom
         self.target_pos = variant.pos
         self.target_is_indel = variant.is_indel
         self.window = variant.window
@@ -56,7 +107,8 @@ class VariantAlignment(object):
             exclude_duplicates,
             self.window,
             variant.reference.filename,
-            variant.chrom,
+            self.chrom,
+            self.bam_chrom,
             variant.pos,
             variant.ref.encode(),
             variant.alt.encode(),
@@ -67,7 +119,7 @@ class VariantAlignment(object):
             match_score,
             mismatch_penalty,
             gap_open_penalty,
-            gap_extention_penalty,
+            gap_extension_penalty,
             kmer_size,
             local_threshold,
             retarget_thresh,
@@ -78,6 +130,26 @@ class VariantAlignment(object):
         self.is_with_target = any([status == 1 for status in self.target_status])
 
     def count_alleles(self):
+        """returns :class:`AlleleCount` as `namedtuple <https://docs.python.org/3/library/collections.html#collections.namedtuple>`__ of read counts.
+       :class:`AlleleCount` has the following fields accessible by attribute:
+       
+        
+        - "s": count of read names supporting the variant.
+        - "n": count of read names not supporting the variant. 
+        - "u": count of read names undetermined to be supporting/non-supporting
+
+        Strand breakdowns are also available by:
+        
+        - "s_fw": count of forward reads supportingt the variant.
+        - "s_rv": count of reverse reads supportingt the variant. 
+        - ...
+
+        For paired analysis, :class:`PairedAlleleCount` is returnd and has the following fields: 
+
+        - "first": :class:`AlleleCount` for the first BAM file.
+        - "second": :class:`AlleleCount` for the second BAM file.
+
+        """
         if self.has_second:
             return self._paired_count()
         else:
