@@ -134,20 +134,20 @@ class VariantAlignment(object):
        :class:`AlleleCount` has the following fields accessible by attribute:
        
         
-        - "s": count of read names supporting the variant.
-        - "n": count of read names not supporting the variant. 
-        - "u": count of read names undetermined to be supporting/non-supporting
+        - **s** - count of read names supporting the variant.
+        - **n** - count of read names not supporting the variant. 
+        - **u** - count of read names undetermined to be supporting/non-supporting
 
         Strand breakdowns are also available by:
         
-        - "s_fw": count of forward reads supportingt the variant.
-        - "s_rv": count of reverse reads supportingt the variant. 
+        - **s_fw** - count of forward reads supportingt the variant.
+        - **s_rv** - count of reverse reads supportingt the variant. 
         - ...
 
         For paired analysis, :class:`PairedAlleleCount` is returnd and has the following fields: 
 
-        - "first": :class:`AlleleCount` for the first BAM file.
-        - "second": :class:`AlleleCount` for the second BAM file.
+        - **first** - :class:`AlleleCount` for the first BAM file.
+        - **second** - :class:`AlleleCount` for the second BAM file.
 
         """
         if self.has_second:
@@ -225,6 +225,15 @@ class VariantAlignment(object):
         return pac
 
     def phase(self, match_penalty_for_phasing=0.5, max_common_substr_len=15):
+        """returns :class:`~variantpost.Variant` representing a phased target variant.
+
+        Parameters
+        ----------
+        max_common_substr_len : int
+            
+        match_penalty_for_phasing : float
+            
+        """
         if self.is_retargeted:
             self.target_is_indel = True
 

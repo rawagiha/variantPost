@@ -5,7 +5,7 @@ BASES = {"A", "C", "G", "T", "N"}
 
 
 class Variant(object):
-    """This class abstracts a variant aligned to a linear reference genome.
+    """This class abstracts a variant relative to a linear reference genome.
     Equality holds between :class:`~variantpost.Variant` objects
     if they are identical in the normalized form (equivalent alignments)
 
@@ -245,13 +245,14 @@ class Variant(object):
                 return self.pos + len(self.ref) - 1
 
     def query_vcf(self, vcf, chrom_name=None, match_by_equivalence=True):
-        """returns a `list <https://docs.python.org/3/library/stdtypes.html#list>`__ of VCF records matching this :class:`~variantpost.Variant` object. The input VCF file must be indexed.
+        """returns a `list <https://docs.python.org/3/library/stdtypes.html#list>`__ of :class:`MatchedRecord`.
+        
 
         Parameters
         ----------
             vcf : pysam.VariantFile
                 VCF file to be queried.
-                Supply as `pysam.VariantFile <https://pysam.readthedocs.io/en/latest/api.html#pysam.VariantFile>`__ object.
+                Supply as `pysam.VariantFile <https://pysam.readthedocs.io/en/latest/api.html#pysam.VariantFile>`__ object. The VCF file muet be indexed.
 
             chrom_name : string
                 specify an alias chromosome name if the VCF file uses a chromosome nomenclature different from the reference genome in :class:`~variantpost.Variant`.
@@ -259,6 +260,22 @@ class Variant(object):
 
             match_by_equivalence : bool
                 queries the VCF records by normalization if True (default). Otherwise, positionally overlapping records will be returned.
+        
+        
+        :class:`MatchedRecord` is a `namedtuple <https://docs.python.org/3/library/collections.html#collections.namedtuple>`__ 
+        with the following fields
+
+        - **chrom** - VCF CHROM field. 
+        - **pos** - VCF POS field.
+        - **id** - VCF ID field.
+        - **ref** - VCF REF field.
+        - **alts** - VCF ALT field as `tuple <https://docs.python.org/3/library/stdtypes.html#tuples>`__. May contain multiple alleles.
+        - **qual** - VCF QUAL field.
+        - **filter** - VCF FILTER field.
+        - **info** - VCF INFO field. Values are accessible by keys defined in the header.
+        - **format** - VCF FORMAT field.
+        - **samples** - VCF genotype field. Genotypes are accessible by using sample names as key.
+        
         """
         vcf_chrom = chrom_name if chrom_name else self.chrom
 
