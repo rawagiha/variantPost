@@ -1,7 +1,22 @@
-from Cython.Build import cythonize
-from Cython.Distutils import build_ext
+import os
 from setuptools import setup, find_packages
 from setuptools.extension import Extension
+
+
+def pip_install(pkg_name)
+    import subprocess
+    subprocess.check_call(
+        ["python", "-m", "pip", "install", pkg_name], stdout=subprocess.DEVNULL
+    )
+
+try:
+    from Cython.Build import cythonize
+    from Cython.Distutils import build_ext
+except ImportError:
+    pip_install("cython")
+
+    from Cython.Build import cythonize
+    from Cython.Distutils import build_ext
 
 
 class BuildExt(build_ext):
