@@ -15,6 +15,13 @@
 import os
 import sys
 
+import subprocess
+pkg_name = "sphinx-rtd-theme"
+subprocess.check_call(
+    ["python", "-m", "pip", "install", pkg_name], stdout=subprocess.DEVNULL
+)
+
+
 sys.path.insert(0, os.path.abspath("."))
 sys.path.insert(0, os.path.abspath("../"))
 
@@ -108,15 +115,7 @@ pygments_style = "sphinx"
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
-try:
-    html_theme = 'sphinx_rtd_theme'
-except:
-    import subprocess
-    pkg_name = "sphinx-rtd-theme"
-    subprocess.check_call(
-        ["python", "-m", "pip", "install", pkg_name], stdout=subprocess.DEVNULL
-    )
-    html_theme = 'sphinx_rtd_theme'
+html_theme = 'sphinx_rtd_theme'
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
