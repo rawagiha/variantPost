@@ -3,11 +3,13 @@ from setuptools import setup, find_packages
 from setuptools.extension import Extension
 
 
-def pip_install(pkg_name)
+def pip_install(pkg_name):
     import subprocess
+
     subprocess.check_call(
         ["python", "-m", "pip", "install", pkg_name], stdout=subprocess.DEVNULL
     )
+
 
 try:
     from Cython.Build import cythonize
