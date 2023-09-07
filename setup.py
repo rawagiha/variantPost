@@ -52,8 +52,14 @@ extensions = [
     ),
 ]
 
+
+version = {}
+with open("variantpost/version.py") as ver:
+    exec(ver.read(), version)
+
 setup(
     name="variantpost",
+    version=version["__version__"],
     packages=find_packages(exclude=["tests"]),
     cmdclass={"build_ext": BuildExt},
     ext_modules=cythonize(extensions, annotate=False, language_level="3"),
