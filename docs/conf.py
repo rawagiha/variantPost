@@ -21,18 +21,6 @@ subprocess.check_call(
     ["python", "-m", "pip", "install", pkg_name], stdout=subprocess.DEVNULL
 )
 
-#_libdir = "./build/lib.%s-%s-%s.%s" % (os.uname()[0].lower(), os.uname()[4], sys.version_info[0], sys.version_info[1])
-#__libdir = "../build/lib.%s-%s-%s.%s" % (os.uname()[0].lower(), os.uname()[4], sys.version_info[0], sys.version_info[1])
-#if os.path.exists(_libdir):
-#    sys.path.insert(0, os.path.abspath(_libdir))
-
-#if os.path.exists(__libdir):
-#    sys.path.insert(0, os.path.abspath(__libdir))
-
-#sys.path.insert(0, os.path.abspath("."))
-#sys.path.insert(0, os.path.abspath("../"))
-#sys.path.insert(0, os.path.abspath("../.."))
-#sys.path.insert(0, os.path.abspath("../variantpost"))
 
 # -- Project information -----------------------------------------------------
 
@@ -170,36 +158,6 @@ latex_elements = {
     #
     # 'figure_align': 'htbp',
 }
-
-# Grouping the document tree into LaTeX files. List of tuples
-# (source start file, target name, title,
-#  author, documentclass [howto, manual, or own class]).
-#latex_documents = [
-#    (master_doc, 'indelPost.tex', 'indelPost Documentation',
-#     'Kohei Hagiwara', 'manual'),
-#]
-
-
-# -- Options for manual page output ------------------------------------------
-
-# One entry per manual page. List of tuples
-# (source start file, name, description, authors, manual section).
-#man_pages = [
-#    (master_doc, 'indelpost', 'indelPost Documentation',
-#     [author], 1)
-#]
-
-
-# -- Options for Texinfo output ----------------------------------------------
-
-# Grouping the document tree into Texinfo files. List of tuples
-# (source start file, target name, title, author,
-#  dir menu entry, description, category)
-#texinfo_documents = [
-#    (master_doc, 'indelPost', 'indelPost Documentation',
-#     author, 'indelPost', 'One line description of project.',
-#     'Miscellaneous'),
-#]
 
 
 # -- Options for Epub output -------------------------------------------------
