@@ -145,7 +145,8 @@ class VariantAlignment(object):
          - **s_rv** - count of reverse reads supporting the variant.
          - ...
 
-         Similarly, read names are available via:
+         To find the read names:
+         
          - **s_names** - list of supporting read names.
          - **s_fw_names** - list of forward supporting read names.
          - **s_rv_names** - list of reverse supporting read names.
@@ -307,7 +308,7 @@ def fill_cnt_data(sf, sr, nf, nr, uf, ur):
         ],
     )
     s = list(set(sf + sr))
-    n = list(set(nf + sr))
+    n = list(set(nf + nr))
     u = list(set(uf + ur))
     ac = AlleleCount(
         len(s),
