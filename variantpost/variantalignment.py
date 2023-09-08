@@ -100,6 +100,7 @@ class VariantAlignment(object):
             self.target_status,
             self.are_first_bam,
             self.is_retargeted,
+            self.retarget_pos,
         ) = search_target(
             bam,
             second_bam,
@@ -131,23 +132,29 @@ class VariantAlignment(object):
 
     def count_alleles(self):
         """returns :class:`AlleleCount` as `namedtuple <https://docs.python.org/3/library/collections.html#collections.namedtuple>`__ of read counts.
-       :class:`AlleleCount` has the following fields accessible by attribute:
-       
-        
-        - **s** - count of read names supporting the variant.
-        - **n** - count of read names not supporting the variant. 
-        - **u** - count of read names undetermined to be supporting/non-supporting
+        :class:`AlleleCount` has the following fields accessible by attribute:
 
-        Strand breakdowns are also available by:
-        
-        - **s_fw** - count of forward reads supportingt the variant.
-        - **s_rv** - count of reverse reads supportingt the variant. 
-        - ...
 
-        For paired analysis, :class:`PairedAlleleCount` is returnd and has the following fields: 
+         - **s** - count of read names supporting the variant.
+         - **n** - count of read names not supporting the variant.
+         - **u** - count of read names undetermined to be supporting/non-supporting
 
-        - **first** - :class:`AlleleCount` for the first BAM file.
-        - **second** - :class:`AlleleCount` for the second BAM file.
+         Strand breakdowns are also available by:
+
+         - **s_fw** - count of forward reads supporting the variant.
+         - **s_rv** - count of reverse reads supporting the variant.
+         - ...
+
+         Similarly, read names are available via:
+         - **s_names** - list of supporting read names.
+         - **s_fw_names** - list of forward supporting read names.
+         - **s_rv_names** - list of reverse supporting read names.
+         - ...
+         
+         For paired analysis, :class:`PairedAlleleCount` is returnd and has the following fields:
+
+         - **first** - :class:`AlleleCount` for the first BAM file.
+         - **second** - :class:`AlleleCount` for the second BAM file.
 
         """
         if self.has_second:
@@ -230,13 +237,15 @@ class VariantAlignment(object):
         Parameters
         ----------
         max_common_substr_len : int
-            
+
         match_penalty_for_phasing : float
-            
+
         """
         if self.is_retargeted:
             self.target_is_indel = True
-
+            print(self.target_pos)
+            self.target_pos = self.retarget_pos
+            print(self.retarget_pos)
         try:
             phased = _phase(
                 self.contig_dict,
@@ -275,18 +284,50 @@ class VariantAlignment(object):
 
 def fill_cnt_data(sf, sr, nf, nr, uf, ur):
     AlleleCount = namedtuple(
-        "AlleleCount", ["s", "s_fw", "s_rv", "n", "n_fw", "n_rv", "u", "u_fw", "u_rv"]
+        "AlleleCount",
+        [
+            "s",
+            "s_names",
+            "s_fw",
+            "s_fw_names",
+            "s_rv",
+            "s_rv_names",
+            "n",
+            "n_names",
+            "n_fw",
+            "n_fw_names",
+            "n_rv",
+            "n_rv_names",
+            "u",
+            "u_names",
+            "u_fw",
+            "u_fw_names",
+            "u_rv",
+            "u_rv_names",
+        ],
     )
+    s = list(set(sf + sr))
+    n = list(set(nf + sr))
+    u = list(set(uf + ur))
     ac = AlleleCount(
-        len(set(sf + sr)),
+        len(s),
+        s,
         len(sf),
+        sf,
         len(sr),
-        len(set(nf + nr)),
+        sr,
+        len(n),
+        n,
         len(nf),
+        nf,
         len(nr),
-        len(set(uf + ur)),
+        nr,
+        len(u),
+        u,
         len(uf),
+        uf,
         len(ur),
+        ur,
     )
 
     return ac
