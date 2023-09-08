@@ -21,18 +21,18 @@ subprocess.check_call(
     ["python", "-m", "pip", "install", pkg_name], stdout=subprocess.DEVNULL
 )
 
-_libdir = "./build/lib.%s-%s-%s.%s" % (os.uname()[0].lower(), os.uname()[4], sys.version_info[0], sys.version_info[1])
-__libdir = "../build/lib.%s-%s-%s.%s" % (os.uname()[0].lower(), os.uname()[4], sys.version_info[0], sys.version_info[1])
-if os.path.exists(_libdir):
-    sys.path.insert(0, os.path.abspath(_libdir))
+#_libdir = "./build/lib.%s-%s-%s.%s" % (os.uname()[0].lower(), os.uname()[4], sys.version_info[0], sys.version_info[1])
+#__libdir = "../build/lib.%s-%s-%s.%s" % (os.uname()[0].lower(), os.uname()[4], sys.version_info[0], sys.version_info[1])
+#if os.path.exists(_libdir):
+#    sys.path.insert(0, os.path.abspath(_libdir))
 
-if os.path.exists(__libdir):
-    sys.path.insert(0, os.path.abspath(__libdir))
+#if os.path.exists(__libdir):
+#    sys.path.insert(0, os.path.abspath(__libdir))
 
-sys.path.insert(0, os.path.abspath("."))
-sys.path.insert(0, os.path.abspath("../"))
-sys.path.insert(0, os.path.abspath("../.."))
-sys.path.insert(0, os.path.abspath("../variantpost"))
+#sys.path.insert(0, os.path.abspath("."))
+#sys.path.insert(0, os.path.abspath("../"))
+#sys.path.insert(0, os.path.abspath("../.."))
+#sys.path.insert(0, os.path.abspath("../variantpost"))
 
 # -- Project information -----------------------------------------------------
 
