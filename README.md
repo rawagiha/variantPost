@@ -21,6 +21,6 @@ will also be installed if not pre-installed.
 [documentation](https://variantpost.readthedocs.io/en/latest/)
 
 ### Acknowledgements
-I thank the developers of following packages that variantPost internally uses.
+I thank the developers of following packages internally used in variantPost.
 - [SSW Library](https://github.com/mengyao/Complete-Striped-Smith-Waterman-Library)
 - [fastahack](https://github.com/ekg/fastahack)
