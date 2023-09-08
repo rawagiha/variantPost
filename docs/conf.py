@@ -32,6 +32,7 @@ if os.path.exists(__libdir):
 sys.path.insert(0, os.path.abspath("."))
 sys.path.insert(0, os.path.abspath("../"))
 sys.path.insert(0, os.path.abspath("../.."))
+sys.path.insert(0, os.path.abspath("../variantpost"))
 
 # -- Project information -----------------------------------------------------
 
@@ -82,8 +83,6 @@ napoleon_use_ivar = False
 napoleon_use_param = True
 napoleon_use_rtype = True
 
-
-ddautodoc_mock_imports = ["pysam"]
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
