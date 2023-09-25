@@ -12,7 +12,7 @@ or from source
 ```
 git clone https://github.com/rawagiha/variantPost.git
 cd variantpost
-pip install *
+pip install .
 ```
 Upon installation, [cython](https://cython.org/) and [pysam](https://github.com/pysam-developers)
 will also be installed if not pre-installed. 
