@@ -31,7 +31,7 @@ cdef extern from "search.h":
         vector[string] base_quals
         vector[int] skip_starts
         vector[int] skip_ends
-        int target_pos
+        int retarget_pos
         string ref, alt
         vector[string] read_names
         vector[bool_t] are_reverse
@@ -74,16 +74,37 @@ cdef extern from "search.h":
 cdef inline bint is_qualified_read(read, bint exclude_duplicates):
     
     if exclude_duplicates:
-        if read.cigarstring and (not read.is_duplicate) and  (not read.is_secondary) and (not read.is_supplementary) and read.reference_end:
+        if (
+            read.cigarstring 
+            and not read.is_duplicate 
+            and not read.is_secondary 
+            and not read.is_supplementary 
+            and read.reference_end
+        ):
             return True
     else:
-        if read.cigarstring and (not read.is_secondary) and (not read.is_supplementary) and read.reference_end:
+        if (
+            read.cigarstring 
+            and not read.is_secondary 
+            and not read.is_supplementary 
+            and read.reference_end
+        ):
             return True
     
     return False
 
 
-def fetch_reads(bam, chrom, pos, chrom_len, window, exclude_duplicates, fetched_reads, est_cov, is_secondary):
+def fetch_reads(
+    bam, 
+    chrom, 
+    pos, 
+    chrom_len, 
+    window, 
+    exclude_duplicates, 
+    fetched_reads, 
+    est_cov, 
+    is_secondary
+):
     reads = bam.fetch(
         chrom, max(0, pos - window), min(pos + window, chrom_len), until_eof=False
     )
@@ -145,8 +166,8 @@ cpdef object search_target(
      str chrom,
      str bam_chrom, 
      int pos,
-     string  ref,
-     string  alt,
+     string ref,
+     string alt,
      int mapping_quality_threshold,
      int base_quality_threshold,
      float low_quality_base_rate_threshold,
@@ -268,14 +289,29 @@ cpdef object search_target(
     for pos, ref_base, alt_base, base_qual in zip(
         rslt.positions, rslt.ref_bases, rslt.alt_bases, rslt.base_quals
     ):
-        contig_dict[pos] = (ref_base.decode("utf-8"), alt_base.decode("utf-8"), base_qual.decode("utf-8"))
+        contig_dict[pos] = (
+            ref_base.decode("utf-8"), 
+            alt_base.decode("utf-8"), 
+            base_qual.decode("utf-8")
+        )
     
     annot_reads = []
     for read_name, is_reverse, target_status, is_first_bam in zip(
         rslt.read_names, rslt.are_reverse, rslt.target_statuses, rslt.are_from_first_bam
     ):
-        annot_reads.append(AnnotatedRead(read_name.decode("utf-8"), is_reverse, is_first_bam, target_status))
+        annot_reads.append(
+            AnnotatedRead(read_name.decode("utf-8"), is_reverse, is_first_bam, target_status)
+        )
     
     skips = [(start, end) for start, end in zip(rslt.skip_starts, rslt.skip_ends)]
     
-    return contig_dict, skips, rslt.read_names, rslt.are_reverse, rslt.target_statuses, rslt.are_from_first_bam, rslt.is_retargeted
+    return (
+        contig_dict, 
+        skips, 
+        rslt.read_names, 
+        rslt.are_reverse, 
+        rslt.target_statuses, 
+        rslt.are_from_first_bam, 
+        rslt.is_retargeted, 
+        rslt.retarget_pos
+    )

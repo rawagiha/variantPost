@@ -84,6 +84,7 @@ void prefilter_cplx_candidates(
     Contig& contig,
     Reads& candidates,
     Reads& non_targets,
+    bool& has_pass_candidates,
     const Variant& target,
     const UserParams& user_params,
     LocalReference& loc_ref,

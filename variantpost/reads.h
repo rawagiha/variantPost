@@ -85,6 +85,7 @@ struct Read
     bool is_ref = false;
     bool is_na_ref = false;
     bool is_tight_covering = false;
+    bool is_deprioritized = false;
     //bool is_contig_member = false;
     
     Read(

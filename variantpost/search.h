@@ -14,7 +14,7 @@ struct SearchResult
     std::vector<std::string> base_quals;
     std::vector<int> skip_starts;
     std::vector<int> skip_ends;
-    int target_pos;
+    int retarget_pos=-1;
     std::string ref;
     std::string alt;
     std::vector<std::string> read_names;
@@ -32,7 +32,7 @@ struct SearchResult
         Reads& targets,
         Reads& non_targets,
         Reads& undetermined,
-        const bool is_retargeted = false
+        const bool is_retargeted=false
     );
 };
 

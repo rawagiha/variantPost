@@ -444,6 +444,7 @@ void prefilter_cplx_candidates(
     Contig& contig,
     Reads& candidates,
     Reads& non_targets,
+    bool& has_pass_candidates,
     const Variant& target,
     const UserParams& user_params,
     LocalReference& loc_ref,
@@ -488,29 +489,39 @@ void prefilter_cplx_candidates(
     {
         if ((*i).kmer_score > 0)
         {
+            has_pass_candidates = true;
             break; //stop if candidate with kmer > 0
         }
         else
         {
+            (*i).is_deprioritized = true;
+            
+            /* judge on kmer = 0 may be too harsh
             non_targets.insert(
                 non_targets.end(), 
                 std::make_move_iterator(candidates.rbegin()), 
                 std::make_move_iterator(candidates.rbegin() + 1)
             );
-            candidates.pop_back();  
+            candidates.pop_back();*/  
         }
     }
     
-    candidates.shrink_to_fit();
+    //candidates.shrink_to_fit();
 }
 
 
 void prioritize_reads_for_contig_construction(
     Reads& prioritized, 
-    const Reads& candidates,
+    const Reads& _candidates,
     const UserParams& user_params
 )
 {
+    Reads candidates;
+    for (auto & read : _candidates)
+    {
+        if (!read.is_deprioritized) candidates.push_back(read);     
+    }
+    
     std::string_view common_spl_ptrn = common_splice_ptrn(candidates);    
     
     bool is_cplx_gap_matched = (candidates[0].kmer_score == 255);

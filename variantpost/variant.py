@@ -15,7 +15,7 @@ class Variant(object):
         chromosome name.
 
     pos : integer
-        1-based genomic position .
+        1-based genomic position.
 
     ref : string
         VCF-style reference allele.
@@ -62,23 +62,24 @@ class Variant(object):
 
     @property
     def is_indel(self):
-        """True for insertion or deletion."""
+        """True for insertions or deletions. False otherwise."""
         return len(self.ref) != len(self.alt)
 
     @property
     def is_del(self):
-        """True for deletions False for insertion or substitution."""
+        """True for deletions. False for insertions or substitutions.   
+        """
         return len(self.ref) > len(self.alt)
 
     @property
     def is_ins(self):
-        """True for insetion. False for deletion or substitution."""
+        """True for insetions. False for deletions or substitutions."""
         return len(self.ref) < len(self.alt)
 
     @property
     def is_simple_indel(self):
         """True for indel that is not complex (co-occurrence of insertion and deletion).
-        False for complex indel or substitution.
+        False for complex indels or substitutions.
         """
         if self.is_indel:
             shorter_allele = self.ref if self.is_ins else self.alt

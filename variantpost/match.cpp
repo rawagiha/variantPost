@@ -512,7 +512,7 @@ void classify_simplified(
             std::string(candidates[i].seq), candidates[i].base_quals,
             pos_by_idx, candidates[i].local_uniqueness, contig, ss, user_params, filter, aligner, aln
         );
-        
+
         switch (match_rslt)
         {
             case 'L':

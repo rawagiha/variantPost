@@ -47,7 +47,7 @@ void SearchResult::report(
     Reads& targets,
     Reads& non_targets,
     Reads& undetermined,
-    const bool _is_retargeted
+    const bool _is_retargeted //default to false in header
 )
 {
     size_t buff_size = (
@@ -193,10 +193,13 @@ void from_candidate_reads(
     std::vector<Variant> decomposed;
     if (target.is_complex)
     {
+        bool has_pass_candidates = false;
         prefilter_cplx_candidates(
-            contig, candidates, non_targets, target, 
-            user_params, loc_ref, decomposed
+            contig, candidates, non_targets, has_pass_candidates, 
+            target, user_params, loc_ref, decomposed
         );
+
+        if (!has_pass_candidates) return;
     }
     else
     {
@@ -367,4 +370,5 @@ void _search_target(
     }
     
     rslt.report(contig, targets, non_targets, undetermined, is_retargeted);
+    if (is_retargeted) rslt.retarget_pos = target.pos;
 }   
