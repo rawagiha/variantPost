@@ -146,12 +146,12 @@ class VariantAlignment(object):
          - ...
 
          To find the read names:
-         
+
          - **s_names** - list of supporting read names.
          - **s_fw_names** - list of forward supporting read names.
          - **s_rv_names** - list of reverse supporting read names.
          - ...
-         
+
          For paired analysis, :class:`PairedAlleleCount` is returnd and has the following fields:
 
          - **first** - :class:`AlleleCount` for the first BAM file.
@@ -244,9 +244,8 @@ class VariantAlignment(object):
         """
         if self.is_retargeted:
             self.target_is_indel = True
-            print(self.target_pos)
             self.target_pos = self.retarget_pos
-            print(self.retarget_pos)
+
         try:
             phased = _phase(
                 self.contig_dict,
