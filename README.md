@@ -6,14 +6,9 @@ variantPost requires a Linux machine with a gcc compiler supporting for [c++17](
 
 To install
 ```
-pip ***** (to do)
+pip install git+https://github.com/rawagiha/variantPost
 ```
-or from source
-```
-git clone https://github.com/rawagiha/variantPost.git
-cd variantpost
-pip install .
-```
+
 Upon installation, [cython](https://cython.org/) and [pysam](https://github.com/pysam-developers)
 will also be installed if not pre-installed. 
 
