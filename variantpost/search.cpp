@@ -189,7 +189,7 @@ void from_candidate_reads(
     LocalReference& loc_ref
 )
 {
-    std::vector<Variant>* p_decomposed = NULL;
+    std::vector<Variant>* p_decomposed = nullptr;
     std::vector<Variant> decomposed;
     if (target.is_complex)
     {

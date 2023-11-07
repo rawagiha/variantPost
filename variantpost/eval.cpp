@@ -1061,7 +1061,7 @@ char eval_by_aln(
         postprocess_alignment(rslt, pos_vec, contig, loc_ref, aln);
         
         int target_pos = target.pos;
-        if (p_decomposed != NULL)
+        if (p_decomposed != nullptr)
         {
             eval_by_variant_lst(rslt, p_decomposed, user_params, loc_ref, target_pos);
         }
