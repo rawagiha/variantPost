@@ -146,7 +146,9 @@ void annot_shiftable_segment(
     --j; //undo once
     
     ss.start = contig.lt_len < i + 1 ? 0 : contig.lt_len - i - 1;
+    ss.start = static_cast<int>(ss.start);
     ss.end = contig.rt_start_idx + j;
+    ss.end = static_cast<int>(ss.end);
 
     //shiftable seq (with boundary bases (1 each side))
     const size_t region_len = ss.end - ss.start + 1;
@@ -242,6 +244,8 @@ double rv_sim_score(
 char indel_match_pattern(
     const std::string& query, 
     std::string_view base_quals,
+    const int lt_mapped_cnt,
+    const int rt_mapped_cnt,
     const std::vector<int>& pos_by_idx,
     const int local_uniqueness,
     const Contig& contig,
@@ -260,14 +264,18 @@ char indel_match_pattern(
         contig.len, filter, &aln, mask_len
     );
     
+    /*std::cout << query << " " << contig.seq << std::endl;
+    std::cout << aln.ref_begin << " " << aln.query_begin << " " << aln.ref_end << " " << aln.query_end << std::endl;
+    std::cout << ss.start << " " << ss.end << std::endl;    
+    */
     if (contig.is_mocked)
     {
-        if (aln.ref_begin <= int(ss.start) - 5 && int(ss.end) + 5 <= aln.ref_end)
+        if (aln.ref_begin <= ss.start - 5 && ss.end + 5 <= aln.ref_end)
         {
             if (is_exact_match(aln, ss, query.size()))
             {
                 if (!aln.ref_begin) return 'L';
-                if (aln.ref_end == int(contig.len) - 1) return 'R';   
+                if (aln.ref_end == static_cast<int>(contig.len) - 1) return 'R';   
                 return 'M';  
             }       
         }
@@ -275,39 +283,45 @@ char indel_match_pattern(
     }
     
     // aln ends before ss
-    if (aln.ref_end <= int(ss.start))
+    if (aln.ref_end <= ss.start)
     {
         // due to rt-clip
-        if (aln.query_end != int(query.size()) - 1) return 'F';
+        if (aln.query_end != static_cast<int>(query.size()) - 1) return 'F';
         // too short -> undetermined
         else return 'U';
     }    
     
     // aln starts after ss
-    if (int(ss.end) <= aln.ref_begin) 
+    if (ss.end <= aln.ref_begin) 
     {    
         // due to lt-clip
         if (aln.query_begin) return 'F'; //lt-clipped
         // too short
         else return 'U'; 
     } 
-
     
     // aln starts between ss_start/ss_end
-    if (int(ss.start) < aln.ref_begin 
-        &&  aln.ref_begin < int(ss.end))
+    if (ss.start < aln.ref_begin 
+        &&  aln.ref_begin < ss.end)
     {
         if (aln.query_begin) return 'F';
         //allow if read starts after ss-start 
     }
-    else if (int(ss.start) < aln.ref_end 
-        &&  aln.ref_end < int(ss.end))
+    // aln ends between ss_start/ss_end
+    else if (ss.start < aln.ref_end 
+             && aln.ref_end < ss.end)
     {
-        if (aln.query_end != int(query.size()) - 1) return 'F';  
+        if (aln.query_end != static_cast<int>(query.size()) - 1) return 'F';  
         //allow if read ends before ss.end 
     }  
-
-
+    // aln covers shiftable but less than the orig mapping
+    else if (aln.ref_begin <= ss.start
+             && ss.end <= aln.ref_end)
+    {
+        if (lt_mapped_cnt > 2 * (ss.start - aln.ref_begin)) return 'F';
+        if (rt_mapped_cnt > 2 * (aln.ref_end - ss.end)) return 'F';
+    }
+    
     //trivial case
     // these exact matches may be used for extension
     if (is_exact_match(aln, ss, query.size()))
@@ -315,8 +329,8 @@ char indel_match_pattern(
          if (!aln.ref_begin) return 'L';
          if (aln.ref_end == int(contig.len) - 1) return 'R';   
          return 'M';  
-    }
-
+    }      
+    
     const double thresh = 1.0;
     //const int  margin = 2;
     size_t crit_start = 0;
@@ -325,7 +339,7 @@ char indel_match_pattern(
     if (aln.ref_begin <= ss.start)
     {
         //if (int(ss.start) - aln.ref_begin + aln.query_begin >= margin)
-        if (int(ss.start) >= aln.ref_begin - aln.query_begin)
+        if (ss.start >= aln.ref_begin - aln.query_begin)
         {   
             crit_start = ss.start - aln.ref_begin + aln.query_begin;
         }
@@ -455,7 +469,8 @@ void classify_cand_indel_reads(
         );
 
         char match_rslt = indel_match_pattern(
-            std::string(candidates[i].seq), candidates[i].base_quals,
+            static_cast<std::string>(candidates[i].seq), candidates[i].base_quals,
+            candidates[i].lt_end_matches, candidates[i].rt_end_matches,
             pos_by_idx, candidates[i].local_uniqueness, contig, ss, user_params, filter, aligner, aln
         );
         
@@ -509,7 +524,8 @@ void classify_simplified(
         );
         
         char match_rslt = indel_match_pattern(
-            std::string(candidates[i].seq), candidates[i].base_quals,
+            static_cast<std::string>(candidates[i].seq), candidates[i].base_quals,
+            candidates[i].lt_end_matches, candidates[i].rt_end_matches,
             pos_by_idx, candidates[i].local_uniqueness, contig, ss, user_params, filter, aligner, aln
         );
 

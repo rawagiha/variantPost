@@ -9,6 +9,7 @@ def _phase(
     target_pos,
     is_indel,
     local_thresh,
+    base_qual_thresh,
     match_penal,
     max_common_substr_len,
 ):
@@ -20,9 +21,9 @@ def _phase(
         return None
 
     contig_dict, snvs, indels = crop_contig(
-        contig_dict, skips, snvs, indels, actual_target.pos
+        contig_dict, skips, snvs, indels, actual_target.pos, base_qual_thresh
     )
-    
+
     if not snvs and not indels:
         trim_contig(contig_dict, actual_target.pos, actual_target.end_pos)
         return greedy_phasing(contig_dict)
@@ -33,7 +34,7 @@ def _phase(
     rt_min = rt_min_lim(
         actual_target, snvs, indels, phasable_dist, max_common_substr_len, contig_dict
     )
-    
+
     if not indels:
         lt_end = find_peak(
             contig_dict, actual_target, snvs, match_penal, local_thresh, True
@@ -47,7 +48,7 @@ def _phase(
         trim_contig(contig_dict, lt_end, rt_end)
     else:
         remove_common_substrs(contig_dict, actual_target.pos, max_common_substr_len)
-        
+
         remove_unclustered_snvs(
             contig_dict, actual_target, snvs, match_penal, local_thresh
         )
@@ -245,9 +246,9 @@ def profile_non_refs(contig_dict, target_pos, is_indel):
     return snvs, indels, actual_event
 
 
-def crop_contig(contig_dict, skips, snvs, indels, target_pos):
+def crop_contig(contig_dict, skips, snvs, indels, target_pos, base_qual_thresh):
     """
-    crop to target exon and trim outmost "N" bases
+    crop to target exon and trim outmost "N" & low-qualbases
     """
 
     lt_lim, rt_lim, exons = parse_contig_for_exons(contig_dict, skips)
@@ -258,7 +259,7 @@ def crop_contig(contig_dict, skips, snvs, indels, target_pos):
 
     lt_disqualified, rt_disqualified = [], []
     for pos, v in contig_dict.items():
-        if "N" in v[0] or "N" in v[1]:
+        if "N" in v[0] or "N" in v[1] or v[2] < base_qual_thresh:
             if pos < target_pos:
                 lt_disqualified.append(pos)
             else:

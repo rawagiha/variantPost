@@ -96,8 +96,10 @@ struct Variant
         bool is_clipped_segment = false
     );
     
+    void _sb_leftmost_pos(const LocalReference& loc_ref);
     void set_leftmost_pos(const LocalReference& loc_ref);
     
+    void _sb_rightmost_pos(const LocalReference& loc_ref);
     void set_rightmost_pos(const LocalReference& loc_ref);
 
     bool is_equivalent(const Variant& v, const LocalReference& loc_ref) const;

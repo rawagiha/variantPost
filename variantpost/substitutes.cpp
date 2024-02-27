@@ -1,8 +1,3 @@
-#include <climits>
-#include <string_view>
-#include <unordered_map>
-#include <unordered_set>
-
 #include "eval.h"
 #include "util.h"
 #include "reads.h"
@@ -44,10 +39,9 @@ void substitute_patterns(
                     if (query == target.alt)
                     {
                         read.sb_ptrn = 'A';
-                        ++a_cnt;
-                        
                         read_idx += (target.pos - curr_pos);
                         read.sb_read_idx = read_idx;
+                        ++a_cnt;
                         return;
                     }
                     else 
@@ -526,6 +520,28 @@ bool has_mapped_bases(std::string_view cigar_str)
 }    
 
 
+bool has_many_un_matches(const std::string& cigar_str)
+{
+    //heuristics to disqualify low confident alignment   
+    std::string::difference_type n_x = std::count(
+        cigar_str.cbegin(), cigar_str.cend(), 'X');
+    
+    if (n_x > 2) return true;
+    
+    std::string::difference_type n_d = std::count(
+        cigar_str.cbegin(), cigar_str.cend(), 'D');
+
+    if (n_d > 1) return true;
+
+    std::string::difference_type n_i = std::count(
+        cigar_str.cbegin(), cigar_str.cend(), 'I');
+
+    if (n_i > 1) return true;
+
+    return false;
+}
+
+
 bool is_target_sb_compatible(
     const Alignment& aln,
     const int target_idx_start,
@@ -533,7 +549,8 @@ bool is_target_sb_compatible(
 ) 
 {
     if (!has_mapped_bases(aln.cigar_string)) return false;
-   
+    if (has_many_un_matches(aln.cigar_string)) return false;
+    
     CigarVec cigar_vec = to_cigar_vector(aln.cigar_string);
         
     char op = '\0';
@@ -624,6 +641,10 @@ void match_to_target(
                 seq, mock_seq, filter, aln
             );
             
+            //rough mapped rate
+            double mapped_bases_rate = aln.sw_score / static_cast<double>(user_params.match_score * mock_seq.size());
+            if (mapped_bases_rate < 0.75) continue;  
+                        
             if (
                 is_target_sb_compatible(aln, target_idx_start, target_idx_end)
             )

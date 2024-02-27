@@ -292,7 +292,7 @@ cpdef object search_target(
         contig_dict[pos] = (
             ref_base.decode("utf-8"), 
             alt_base.decode("utf-8"), 
-            base_qual.decode("utf-8")
+            ord(base_qual.decode("utf-8")) - 33
         )
     
     annot_reads = []

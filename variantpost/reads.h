@@ -1,11 +1,11 @@
 #ifndef READ_H
 #define READ_H
 
-#include <string>
-#include <string_view>
-#include <utility>
+//#include <string>
+//#include <string_view>
+//#include <utility>
 #include <climits>
-#include <unordered_map>
+//#include <unordered_map>
 
 #include "util.h"
 
@@ -59,6 +59,8 @@ struct Read
     bool incomplete_shift= false;
     bool may_be_complex = false; 
     int local_uniqueness = 0;
+    int lt_end_matches = -1;
+    int rt_end_matches = -1;
     
     //annotated patterns    
     char covering_ptrn = '\0';
@@ -79,7 +81,6 @@ struct Read
     double nonref_lq_rate = 0.0;
     double local_lq_rate = -1.0;
     int kmer_score = -1;
-    
     
     //other flags
     bool is_ref = false;

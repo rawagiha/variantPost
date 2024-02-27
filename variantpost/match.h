@@ -41,7 +41,6 @@ void classify_cand_indel_reads(
     const UserParams& user_params
 );
 
-
 void classify_cand_indel_read_2(
     Reads& targets,
     Reads& candidates,

@@ -253,6 +253,7 @@ class VariantAlignment(object):
                 self.target_pos,
                 self.target_is_indel,
                 self.local_thresh,
+                self.base_quality_threshold,
                 match_penalty_for_phasing,
                 max_common_substr_len,
             )

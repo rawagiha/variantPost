@@ -1,11 +1,5 @@
-#include <vector>
-#include <string>
-#include <algorithm>
-#include <string_view>
-
-#include "reads.h"
 #include "util.h"
-
+#include "reads.h"
 
 inline char offset_qual(int q) 
 {
@@ -15,9 +9,10 @@ inline char offset_qual(int q)
 
 std::string to_qual_str (const std::vector<int>& qual_vec) 
 {
-    std::vector<char> res (qual_vec.size());
-    std::transform (qual_vec.begin(), qual_vec.end(), res.begin(), offset_qual);
-    std::string q_str (res.begin(), res.end());
+    std::vector<char> res(qual_vec.size());
+    std::transform(qual_vec.begin(), qual_vec.end(), res.begin(), offset_qual);
+    std::string q_str(res.begin(), res.end());
+    
     return q_str;
 }
 
@@ -115,7 +110,6 @@ std::string_view get_spliced_ref_seq(
     const std::vector<std::pair<char, int>> & cigar_vector
 )
 {
-    
     int curr_pos = aln_start - 1;
     
     char op;
@@ -726,6 +720,50 @@ void annot_local_ptrn(
 }
 
 
+void count_matched_ends(Read& read)
+{
+    if (read.is_ref 
+        || read.covering_ptrn == 'X' 
+        || read.covering_ptrn == 'C') return;
+    
+    const bool has_variants = !read.variants.empty();
+    
+    if (read.cigar_vector.front().first != 'S')
+    {
+        if (has_variants)
+        {
+            read.lt_end_matches = read.variants.cbegin()->pos - read.aln_start;
+        }
+        else
+        {
+            read.lt_end_matches = read.aln_end - read.aln_start;
+        }           
+    }       
+    else
+    {
+         read.lt_end_matches = 0;
+    }
+   
+    
+    if (read.cigar_vector.back().first != 'S')
+    {
+        if (has_variants)
+        {
+            read.rt_end_matches = read.aln_end 
+                                  - read.variants.crbegin()->variant_end_pos;
+        }
+        else
+        {
+            read.rt_end_matches = read.aln_end - read.aln_start;
+        }   
+    }
+    else
+    {
+        read.rt_end_matches = 0;
+    }
+}
+
+
 void eval_local_quality(Read& read, const Variant& target, const UserParams& user_params)
 {   
     const int eval_start = target.lpos - 3, eval_end = target.rpos + int(target.ref.size()) + 2;
@@ -821,11 +859,11 @@ void annotate_reads(
         
         annot_covering_ptrn(read, target, loc_ref, is_retargeted);
         
-
         annot_target_info(read, target, loc_ref);
         annot_clip_pattern(read, target);
         annot_non_ref_signature(read);  
         annot_local_ptrn(read, target, user_params, loc_ref);
+        count_matched_ends(read);
         eval_read_quality(read, user_params);
         //eval_local_quality(read, target, user_params);
     }    

@@ -2,6 +2,7 @@ from collections import namedtuple
 from pysam import FastaFile
 
 BASES = {"A", "C", "G", "T", "N"}
+BASESET = set(BASES)
 
 
 class Variant(object):
@@ -295,7 +296,19 @@ class Variant(object):
         hits = []
         if match_by_equivalence:
             for _entry in vcf_entries:
+                
+                # may be empty (ALT = .)
+                if not _entry.alts:
+                    continue
+
                 for _alt in _entry.alts:
+                    
+                    _bases = set(list(_alt))
+                    
+                    # may contain other than ACTGN
+                    if not _bases <= BASESET:
+                        continue;
+
                     if self == Variant(
                         self.chrom, _entry.pos, _entry.ref, _alt, self.reference
                     ):
@@ -304,7 +317,19 @@ class Variant(object):
         else:
             for _entry in vcf_entries:
                 ref_len = len(_entry.ref)
+                
+                # may be empty (ALT = .)
+                if not _entry.alts:
+                    continue                
+                
                 for _alt in _entry.alts:
+                    
+                    _bases = set(list(_alt))
+                    
+                    # may contain other than ACTGN
+                    if not _bases <= BASESET:
+                        continue;
+                     
                     if ref_len == len(_alt):
                         if lt_pos <= _entry.pos <= rt_pos:
                             hits.append(to_tuple(_entry))

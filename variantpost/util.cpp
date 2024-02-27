@@ -15,7 +15,6 @@
 #include "fasta/Fasta.h"
 
 
-
 UserParams::UserParams(
     const int mapq_thresh,
     const int _base_q_thresh,
@@ -82,8 +81,8 @@ LocalReference::LocalReference(
 
 inline bool contain_n(std::string_view sv1, std::string_view sv2)
 {
-    if (sv1.find('N') == std::string_view::npos) return true;
-    if (sv2.find('N') == std::string_view::npos) return true;
+    if (sv1.find('N') != std::string_view::npos) return true;
+    if (sv2.find('N') != std::string_view::npos) return true;
 
     return false;
 }
@@ -119,15 +118,13 @@ Variant::Variant
 
         indel_len = alt_len - 1;
     }
-    else
+    else if (ref_len > alt_len)
     {
         if (ref.substr(0, alt_len) == alt) is_complex = false;
         else is_complex = true;
 
         indel_len = ref_len - 1;
-    }
-    
-        
+    }   
 }
 
 
@@ -186,16 +183,43 @@ void left_align(
         );
         
         if (is_failed) return;
-
     }
+}
+
+
+void Variant::_sb_leftmost_pos(const LocalReference& loc_ref)
+{
+    const std::string ptrn = (alt_len > 1) ? to_tandem_rep(alt) : alt;
+    const size_t prtn_len = ptrn.size();
+    
+    lpos = pos;
+    int curr_pos = pos - prtn_len;
+    int idx = curr_pos - loc_ref.start;
+    
+    while (loc_ref.start < curr_pos)
+    {
+        if (alt != loc_ref.seq.substr(idx, prtn_len))
+        {
+            lpos = curr_pos + prtn_len;
+            return;
+        }
+        idx -= prtn_len;
+        curr_pos -= prtn_len;
+    }   
 }
 
 
 void Variant::set_leftmost_pos(const LocalReference& loc_ref)
 {
-    if (is_substitute || is_complex || is_clipped_segment || has_n) 
+    if (is_complex || is_clipped_segment || has_n) 
     {    
         lpos = pos;   
+        return;
+    }
+
+    if (is_substitute)
+    {
+        _sb_leftmost_pos(loc_ref);
         return;
     }
     
@@ -288,12 +312,39 @@ void right_align(
 }
 
 
+void Variant::_sb_rightmost_pos(const LocalReference& loc_ref)
+{
+    const std::string ptrn = (alt_len > 1) ? to_tandem_rep(alt) : alt;
+    const size_t prtn_len = ptrn.size();
+    
+    rpos = pos;
+    int curr_pos = pos + prtn_len;
+    int idx = curr_pos - loc_ref.start;
+    
+    while (curr_pos < loc_ref.end)
+    {
+        if (alt != loc_ref.seq.substr(idx, prtn_len))
+        {
+            rpos = curr_pos - prtn_len;
+            return;
+        }
+        idx += prtn_len;
+        curr_pos += prtn_len;
+    }   
+}
+
+
 void Variant::set_rightmost_pos(const LocalReference& loc_ref)
 {
-    //NA: snv, mnv
-    if (is_substitute || is_complex || is_clipped_segment) 
+    if (is_complex || is_clipped_segment) 
     {    
         rpos = pos;
+        return;
+    }
+    
+    if (is_substitute)
+    {
+        _sb_rightmost_pos(loc_ref);
         return;
     }
     
@@ -403,6 +454,7 @@ std::string Variant::minimal_repeat_unit() const
     
     return to_tandem_rep(seq);
 }
+
 
 
 void find_shared_variants(
