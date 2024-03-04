@@ -1,4 +1,5 @@
 import random
+#import statistics
 from libcpp.string cimport string
 from libcpp.vector cimport vector
 from libcpp cimport bool as bool_t
@@ -289,10 +290,18 @@ cpdef object search_target(
     for pos, ref_base, alt_base, base_qual in zip(
         rslt.positions, rslt.ref_bases, rslt.alt_bases, rslt.base_quals
     ):
+        #qual_chars = base_qual.decode("utf-8")
+        #qual = -1
+        #if len(qual_chars) == 1:
+        #    qual = ord(qual_chars) - 33
+        #else:
+        #    quals = [ord(c) - 33 for c in qual_chars]
+        #    qual = statistics.median(quals)
+        
         contig_dict[pos] = (
             ref_base.decode("utf-8"), 
             alt_base.decode("utf-8"), 
-            ord(base_qual.decode("utf-8")) - 33
+            base_qual.decode("utf-8")
         )
     
     annot_reads = []

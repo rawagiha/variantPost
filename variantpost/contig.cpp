@@ -1,11 +1,5 @@
 #include <random>
-#include <string>
-#include <climits>
-#include <utility>
-#include <iostream>
-#include <iterator>
-#include <algorithm>
-#include <string_view>
+//#include <iostream>
 
 #include "eval.h"
 #include "util.h"
@@ -629,7 +623,7 @@ void suggest_contig(
             transfer_elem(top_tens, prioritized, i);
         }
         
-        sort_by_start(top_tens);
+        //sort_by_start(top_tens);
         for (const auto& read : top_tens)
         {
             
@@ -644,7 +638,7 @@ void suggest_contig(
     }
     else
     {   
-        sort_by_start(prioritized);   
+        sort_by_kmer(prioritized);   
         
         if (prioritized.size() < 3)
         {

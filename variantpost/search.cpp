@@ -1,8 +1,3 @@
-#include <vector>
-#include <string>
-#include <chrono>
-#include <algorithm>
-
 #include "eval.h"
 #include "util.h"
 #include "match.h"
@@ -150,9 +145,13 @@ void from_target_reads(
     
     if (_eval == 'C')
     {
-        //NO -> rather make contig with centered most.
-        transfer_vector(non_targets, targets);
+        transfer_vector(undetermined, targets);
         transfer_vector(non_targets, candidates); 
+        
+        std::cerr << "Warning: " << loc_ref.chrom << "_" << target.pos 
+                  << "_" << target.ref << "_" << target.alt
+                  << " may be spurious in the input alignment file." << std::endl; 
+        
         return;      
     }
 
@@ -189,8 +188,9 @@ void from_candidate_reads(
     LocalReference& loc_ref
 )
 {
-    std::vector<Variant>* p_decomposed = nullptr;
+    //preprocessing for complex indel input
     std::vector<Variant> decomposed;
+    std::vector<Variant>* p_decomposed = nullptr;
     if (target.is_complex)
     {
         bool has_pass_candidates = false;
@@ -211,16 +211,19 @@ void from_candidate_reads(
     
     if (candidates.empty()) return;    
     
-    // for complex inputs
+    // if complex, decomposed simple indels 
+    // otherwise, left as null
     if (!decomposed.empty()) p_decomposed = &decomposed;
     
+    // attempts to construct contig from candidate reads
     suggest_contig(target, contig, candidates, user_params, loc_ref);       
     
-    //may happen if all candidates are of low-qual bases
+    // may happen if all candidates are of low-qual bases
     if (contig.seq.empty()) return;
     
+    // check if the suggested contig is compatible with target
     char _eval = eval_by_aln(contig, target, user_params, loc_ref, p_decomposed);
-    
+     
     if (_eval == 'B')
     {
         bool is_mocked = false;

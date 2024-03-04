@@ -282,7 +282,7 @@ void right_align(
     bool is_failed = false;
 
     do {
-        if (ref_dict.find(variant_end_pos) == ref_dict.end()) return;
+        if (ref_dict.find(variant_end_pos) == ref_dict.cend()) return;
 
         to_right(
             variant_end_pos, 
@@ -299,7 +299,7 @@ void right_align(
     while (is_rotatable(longer_allele) && pos < ref_end);
     
     // undo the last right shift
-    if (ref_dict.find(pos - 1) != ref_dict.end())
+    if (ref_dict.find(pos - 1) != ref_dict.cend())
     {
         to_left(
             pos, 
@@ -901,9 +901,10 @@ void parse_variants(
                 }
                 else
                 {   
-                    if (ref_dict.find(pos - 1) != ref_dict.end()) 
+                    auto it = ref_dict.find(pos - 1);
+                    if (it != ref_dict.cend()) 
                     {
-                        ref = ref_dict.at(pos - 1);
+                        ref = it->second;
                     }
                     else ref = "N";        
                 } 
@@ -925,9 +926,10 @@ void parse_variants(
                 }
                 else
                 {
-                    if (ref_dict.find(pos - 1) != ref_dict.end()) 
+                    auto it = ref_dict.find(pos - 1);
+                    if (it != ref_dict.cend()) 
                     {    
-                        alt = ref_dict.at(pos - 1);
+                        alt = it->second;
                     }
                     else alt = "N";
                 }

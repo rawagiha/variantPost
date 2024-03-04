@@ -1,4 +1,5 @@
 import math
+import statistics
 from difflib import SequenceMatcher
 from collections import OrderedDict, Counter
 
@@ -246,6 +247,10 @@ def profile_non_refs(contig_dict, target_pos, is_indel):
     return snvs, indels, actual_event
 
 
+def to_numeric_qual(char_qual):
+    return statistics.median([ord(c) - 33 for c in char_qual])
+
+
 def crop_contig(contig_dict, skips, snvs, indels, target_pos, base_qual_thresh):
     """
     crop to target exon and trim outmost "N" & low-qualbases
@@ -259,7 +264,7 @@ def crop_contig(contig_dict, skips, snvs, indels, target_pos, base_qual_thresh):
 
     lt_disqualified, rt_disqualified = [], []
     for pos, v in contig_dict.items():
-        if "N" in v[0] or "N" in v[1] or v[2] < base_qual_thresh:
+        if "N" in v[0] or "N" in v[1] or to_numeric_qual(v[2]) < base_qual_thresh:
             if pos < target_pos:
                 lt_disqualified.append(pos)
             else:

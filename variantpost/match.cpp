@@ -176,19 +176,27 @@ inline bool has_N(std::string_view seq)
 }
 
 
-inline bool is_exact_match(
+char ss_covered_patterns(
     const Alignment& aln, 
     const ShiftableSegment& ss, 
+    const size_t contig_len,
     const size_t query_len
 )
 {
-    bool is_complete_cover = (aln.ref_begin <= ss.start && ss.end <= aln.ref_end);
-    bool is_end_mapped = (
+    //bool is_complete_cover = (aln.ref_begin <= ss.start && ss.end <= aln.ref_end);
+   /* bool is_end_mapped = (
         aln.query_begin == 0 || aln.query_end == int(query_len - 1)
-    );
-    bool has_no_mismatch = (aln.cigar_string.find('X') == std::string::npos);
+    );*/
+    
+    if (aln.cigar_string.find('X') != std::string::npos) return 'N';
+    
+    const int max_query_end = static_cast<int>(query_len) - 1;
+    const int max_ref_end = static_cast<int>(contig_len) - 1;
 
-    return (is_complete_cover && is_end_mapped && has_no_mismatch);
+    if (!aln.query_begin && aln.ref_end == max_ref_end) return 'R';        
+    if (aln.query_end == max_query_end && !aln.ref_begin) return 'L';
+    
+    return 'M';
 }
 
 
@@ -272,12 +280,18 @@ char indel_match_pattern(
     {
         if (aln.ref_begin <= ss.start - 5 && ss.end + 5 <= aln.ref_end)
         {
+            const char covered_ptrn 
+            = ss_covered_patterns(aln, ss, contig.len, query.size());
+            
+            if (covered_ptrn != 'N') return covered_ptrn;
+            
+            /*
             if (is_exact_match(aln, ss, query.size()))
             {
                 if (!aln.ref_begin) return 'L';
                 if (aln.ref_end == static_cast<int>(contig.len) - 1) return 'R';   
                 return 'M';  
-            }       
+            }*/       
         }
         return 'F';
     }
@@ -318,18 +332,15 @@ char indel_match_pattern(
     else if (aln.ref_begin <= ss.start
              && ss.end <= aln.ref_end)
     {
+        const char covered_ptrn 
+            = ss_covered_patterns(aln, ss, contig.len, query.size());
+
+        //exact matches
+        if (covered_ptrn != 'N') return covered_ptrn;
+        
         if (lt_mapped_cnt > 2 * (ss.start - aln.ref_begin)) return 'F';
         if (rt_mapped_cnt > 2 * (aln.ref_end - ss.end)) return 'F';
     }
-    
-    //trivial case
-    // these exact matches may be used for extension
-    if (is_exact_match(aln, ss, query.size()))
-    {
-         if (!aln.ref_begin) return 'L';
-         if (aln.ref_end == int(contig.len) - 1) return 'R';   
-         return 'M';  
-    }      
     
     const double thresh = 1.0;
     //const int  margin = 2;
