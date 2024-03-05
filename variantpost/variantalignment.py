@@ -34,19 +34,33 @@ class VariantAlignment(object):
 
     base_quality_threshold : integer
         Non-reference base-calls with a Phred-scale quality score below the threshold are labeled low quality.
+        Default to 30.
 
+    low_quality_base_rate_threshold : float
+        Reads are not realigned if bases < `base_quality_threshold` are contained more than this threshold. 
+        Default to 0.1.   
+    
     downsample_threshold : integer
+        Downsample to the threshold if the coverage at the input locus is > threshold. Default to 2000. 
 
     match_score : integer
+        Score for matched bases in realignment. Default to 3.
 
     mismatch_penalty : integer
-
+        Penalty for mismatched bases in realignment. Default to 2.
+         
     gap_open_penalty : integer
+        Penalty to create gaps in realignment. Default to 3.
 
     gap_extension_penalty : integer
+        Penalty to extent gaps in realignment. Default to 1.
 
     kmer_size : integer
-
+        Kmer size used to search reads with input :class:`~variantpost.Variant`. Default to 32.
+    
+    local_threshold : integer
+        Non-reference patterns further than this threshold are not considered as part of the target event.
+        Default to 20.
     """
 
     def __init__(
@@ -65,8 +79,7 @@ class VariantAlignment(object):
         gap_open_penalty=3,
         gap_extension_penalty=1,
         kmer_size=32,
-        local_threshold=20,
-        match_penalty_for_phasing=0.5,
+        local_threshold=20
     ):
         if not variant.is_normalized:
             variant.normalize(inplace=True)
@@ -80,10 +93,8 @@ class VariantAlignment(object):
         self.reference = variant.reference
         self.local_thresh = local_threshold
         self.has_second = second_bam
-
-        retarget_thresh = _retarget_thresh(
-            match_penalty_for_phasing, local_threshold, self.window
-        )
+        
+        retarget_thresh = _retarget_thresh(local_threshold, self.window)
 
         # interact with c++ code
         (
@@ -328,7 +339,7 @@ def fill_cnt_data(sf, sr, nf, nr, uf, ur):
     return ac
 
 
-def _retarget_thresh(match_penal, local_thresh, window):
+def _retarget_thresh(local_thresh, window, match_penal=0.5):
     score = 0
     for i in range(window):
         score += loss(i, match_penal, local_thresh)
