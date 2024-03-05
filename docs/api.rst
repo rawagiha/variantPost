@@ -9,4 +9,6 @@ variant processing on the reference
 variant processing in alignment file
 -------------------------------------
 .. autoclass:: variantpost.VariantAlignment
+   :no-undoc-members:
+
 
