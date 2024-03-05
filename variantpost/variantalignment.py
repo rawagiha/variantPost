@@ -35,8 +35,6 @@ class VariantAlignment(object):
     base_quality_threshold : integer
         Non-reference base-calls with a Phred-scale quality score below the threshold are labeled low quality.
 
-    low_quality_base_rate_threshold : float
-
     downsample_threshold : integer
 
     match_score : integer
@@ -48,10 +46,6 @@ class VariantAlignment(object):
     gap_extension_penalty : integer
 
     kmer_size : integer
-
-    local_threshold : integer
-
-    match_penalty_for_phasing : float
 
     """
 
@@ -65,7 +59,7 @@ class VariantAlignment(object):
         mapping_quality_threshold=1,
         base_quality_threshold=30,
         low_quality_base_rate_threshold=0.1,
-        downsample_threshold=5000,
+        downsample_threshold=2000,
         match_score=3,
         mismatch_penalty=2,
         gap_open_penalty=3,
