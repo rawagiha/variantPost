@@ -44,7 +44,8 @@ struct Read
     //non reference event info
     std::vector<Variant> variants;
     int variants_target_idx = -1;
-    int dist_to_non_target = INT_MAX; //distance to closest non-target 
+    /*dist to closest non-target overlapping target shiftable segment*/
+    int dist_to_non_target = INT_MAX; 
     int dist_to_clip = INT_MAX;
     int target_pos = -1;  //actual pos (may not be normalized)
     std::string target_ref = "N"; //actual alt

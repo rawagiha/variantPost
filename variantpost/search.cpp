@@ -37,14 +37,56 @@ void rescue_sb_target_reads(Reads& targets, Reads& tmp, Reads& src)
 }
 
 
+// heuristic collection of non-targets on trans
+// to be used for exact-cis phasing
+void variants_on_trans(const Reads& non_targets, std::vector<std::string>& trans_vars)
+{
+    double tot_cnt = 0.0;
+    std::unordered_map<Variant, size_t> v_cnt;
+    for (const auto& read : non_targets)
+    {
+        if (read.covering_ptrn == 'A' 
+            && !read.variants.empty() 
+            && read.central_score > 0.34
+            && read.local_lq_rate < 0.05)
+        {
+            ++tot_cnt;
+            for (const auto& v : read.variants)
+            {
+                ++v_cnt[v];
+            }            
+        }
+    }
+
+    if (tot_cnt)
+    {
+        for (const auto& elem : v_cnt)
+        {
+            if (elem.second > 1 && elem.second / tot_cnt > 0.2) 
+            {
+                std::string trans_var = "";
+                trans_var += std::to_string(elem.first.pos);
+                trans_var += "_";
+                trans_var += elem.first.ref;
+                trans_var += "_";
+                trans_var += elem.first.alt;
+
+                trans_vars.push_back(trans_var); 
+            } 
+        }
+    }
+}
+
+
 void SearchResult::report(
     const Contig& contig,
     Reads& targets,
     Reads& non_targets,
-    Reads& undetermined,
+    Reads& undetermined, 
     const bool _is_retargeted //default to false in header
 )
 {
+    
     size_t buff_size = (
         targets.size() + non_targets.size() + undetermined.size()
     );
@@ -62,12 +104,16 @@ void SearchResult::report(
         fill_read_info(targets, 1);
         fill_read_info(tmp_n, 0);
         fill_read_info(tmp_u, -1);
+
+        variants_on_trans(tmp_n, trans_vars);
     }
     else
     {
         fill_read_info(targets, 1);
         fill_read_info(non_targets, 0);
         fill_read_info(undetermined, -1);
+
+        variants_on_trans(non_targets, trans_vars);
     }
      
     positions = contig.positions;

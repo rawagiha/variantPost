@@ -213,11 +213,16 @@ double fw_sim_score(
         //boundary must be exact
         if (i == 0 || i == query.size() - 1)
         {
-            if (query[i] != subject[i]) ++miss;
+            if (query[i] != subject[i]) return 0.0;
         }
+        else
         {
-            if (query[i] != subject[i]
-                && quals[i] > user_params.base_q_thresh) ++miss;
+            if (query[i] != subject[i])
+            {
+                //high quality mismathces -> higher penalty
+                if (quals[i] >= user_params.base_q_thresh) ++miss;
+                else miss += 0.5;
+            }
         }
     }
     return 1.0 - miss/query.size();
@@ -237,12 +242,16 @@ double rv_sim_score(
     {
         if (i == 0)
         {
-            if (query[q_last - i] != subject[s_last - i]) ++miss;
+            if (query[q_last - i] != subject[s_last - i]) return 0.0;
         }
         else
         {        
-            if (query[q_last - i] != subject[s_last - i]
-                && quals[q_last - i] > user_params.base_q_thresh) ++miss;
+            if (query[q_last - i] != subject[s_last - i])
+            {
+                if (quals[q_last - i] >= user_params.base_q_thresh) ++miss;
+                else miss += 0.5;
+            
+            }
         }
     }
     return 1.0 - miss/query.size();
@@ -272,10 +281,6 @@ char indel_match_pattern(
         contig.len, filter, &aln, mask_len
     );
     
-    /*std::cout << query << " " << contig.seq << std::endl;
-    std::cout << aln.ref_begin << " " << aln.query_begin << " " << aln.ref_end << " " << aln.query_end << std::endl;
-    std::cout << ss.start << " " << ss.end << std::endl;    
-    */
     if (contig.is_mocked)
     {
         if (aln.ref_begin <= ss.start - 5 && ss.end + 5 <= aln.ref_end)
@@ -283,6 +288,7 @@ char indel_match_pattern(
             const char covered_ptrn 
             = ss_covered_patterns(aln, ss, contig.len, query.size());
             
+            //exact match
             if (covered_ptrn != 'N') return covered_ptrn;
             
             /*
@@ -334,15 +340,23 @@ char indel_match_pattern(
     {
         const char covered_ptrn 
             = ss_covered_patterns(aln, ss, contig.len, query.size());
-
+        
         //exact matches
         if (covered_ptrn != 'N') return covered_ptrn;
         
-        if (lt_mapped_cnt > 2 * (ss.start - aln.ref_begin)) return 'F';
-        if (rt_mapped_cnt > 2 * (aln.ref_end - ss.end)) return 'F';
+        //short margin
+        if (ss.start - aln.ref_begin < 10)
+        {
+            if (lt_mapped_cnt > 2 * (ss.start - aln.ref_begin)) return 'F';
+        }
+
+        if (aln.ref_end - ss.end < 10)
+        {
+            if (rt_mapped_cnt > 2 * (aln.ref_end - ss.end)) return 'F';
+        }
     }
     
-    const double thresh = 1.0;
+    const double thresh = 0.95;
     //const int  margin = 2;
     size_t crit_start = 0;
     std::string crit_seq;
@@ -364,7 +378,7 @@ char indel_match_pattern(
             //crit_start, ss.seq.size() + 2 * (margin + 1)  
             crit_start, ss.seq.size()  
         );   
-        
+
         if (fw_sim_score(crit_seq, quals, ss.seq, user_params) < thresh) return 'F';
     }
     else

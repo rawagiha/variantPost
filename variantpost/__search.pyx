@@ -10,21 +10,21 @@ cdef extern from "search.h":
     cdef cppclass SearchResult:
 
         SearchResult() except +
-        SearchResult(
-            vector[int]&,
-            vector[string]&,
-            vector[string]&,
-            vector[string]&,
-            vector[int]&,
-            vector[int]&,
-            int,
-            string&,
-            string&,
-            vector[string]&,
-            vector[bool_t]&,
-            vector[int]&,
-            vector[bool_t]&
-        ) except +
+        #SearchResult(
+        #    vector[int]&,
+        #    vector[string]&,
+        #    vector[string]&,
+        #    vector[string]&,
+        #    vector[int]&,
+        #    vector[int]&,
+        #    int,
+        #    string&,
+        #    string&,
+        #    vector[string]&,
+        #    vector[bool_t]&,
+        #    vector[int]&,
+        #    vector[bool_t]&
+        #) except +
 
         vector[int] positions
         vector[string] ref_bases
@@ -38,8 +38,8 @@ cdef extern from "search.h":
         vector[bool_t] are_reverse
         vector[int] target_statuses
         vector[bool_t] are_from_first_bam
+        vector[string] trans_vars
         bool_t is_retargeted
-
 
     void _search_target(
         SearchResult&,
@@ -322,5 +322,6 @@ cpdef object search_target(
         rslt.target_statuses, 
         rslt.are_from_first_bam, 
         rslt.is_retargeted, 
-        rslt.retarget_pos
+        rslt.retarget_pos,
+        rslt.trans_vars
     )

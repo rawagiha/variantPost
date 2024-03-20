@@ -404,21 +404,21 @@ void annot_target_info(
             int event_region_start = variant.lpos;
             int event_region_end = variant.rpos + (variant.ref_len - 1);
 
-            if (event_region_end <= target_start) 
+            if (event_region_end <= target_start
+                || target_end <= event_region_start) 
             {
-                dist.push_back(target_start - event_region_end);
-            }
-            else if (target_end <= event_region_start) 
-            {
-                dist.push_back(event_region_start - target_end);
+                //non-overlap -> pass
+                //dist.push_back(target_start - event_region_end);
             }
             else 
             {
+                //overlap cases   
                 int lt_d = std::abs(target.pos - event_region_start);
                 int rt_d = std::abs(event_region_end - target.pos);
             
                 if (lt_d < rt_d) dist.push_back(lt_d);
                 else dist.push_back(rt_d);
+                
             }
         }
         ++idx;
@@ -679,7 +679,8 @@ void annot_local_ptrn(
         if (read.covering_end < target.pos) 
         {
             if (read.clip_ptrn == 'R' 
-                || read.dist_to_non_target <= user_params.local_thresh) 
+                //|| read.dist_to_non_target <= user_params.local_thresh) 
+                || read.dist_to_non_target <= target.pos - target.lpos) 
             {
                 read.local_ptrn = 'B';
                 return;
@@ -688,7 +689,8 @@ void annot_local_ptrn(
         else if (target.pos < read.covering_start) 
         {
             if (read.clip_ptrn == 'L' 
-                || read.dist_to_non_target <= user_params.local_thresh) 
+                //|| read.dist_to_non_target <= user_params.local_thresh) 
+                || read.dist_to_non_target <= target.variant_end_pos - target.pos ) 
             {
                 read.local_ptrn = 'B';
                 return;

@@ -11,6 +11,7 @@ def _phase(
     is_indel,
     local_thresh,
     base_qual_thresh,
+    trans_vars,
     match_penal,
     max_common_substr_len,
 ):
@@ -22,7 +23,13 @@ def _phase(
         return None
 
     contig_dict, snvs, indels = crop_contig(
-        contig_dict, skips, snvs, indels, actual_target.pos, base_qual_thresh
+        contig_dict,
+        skips,
+        snvs,
+        indels,
+        actual_target.pos,
+        base_qual_thresh,
+        trans_vars,
     )
 
     if not snvs and not indels:
@@ -53,7 +60,7 @@ def _phase(
         remove_unclustered_snvs(
             contig_dict, actual_target, snvs, match_penal, local_thresh
         )
-
+    
     return greedy_phasing(contig_dict)
 
 
@@ -251,7 +258,9 @@ def to_numeric_qual(char_qual):
     return statistics.median([ord(c) - 33 for c in char_qual])
 
 
-def crop_contig(contig_dict, skips, snvs, indels, target_pos, base_qual_thresh):
+def crop_contig(
+    contig_dict, skips, snvs, indels, target_pos, base_qual_thresh, trans_vars
+):
     """
     crop to target exon and trim outmost "N" & low-qualbases
     """
@@ -263,11 +272,24 @@ def crop_contig(contig_dict, skips, snvs, indels, target_pos, base_qual_thresh):
             rt_lim = exon[1] + 1
 
     lt_disqualified, rt_disqualified = [], []
+    if trans_vars:
+        for v_str in trans_vars:
+            v_ = v_str.decode("utf-8").split("_")
+            pos_ = int(v_[0])
+
+            res = contig_dict.get(pos_, None)
+            if res:
+                if v_[2] == res[1]:
+                    if pos_ < target_pos:
+                        lt_disqualified.append(pos_)
+                    else:
+                        rt_disqualified.append(pos_)
+
     for pos, v in contig_dict.items():
         if "N" in v[0] or "N" in v[1] or to_numeric_qual(v[2]) < base_qual_thresh:
             if pos < target_pos:
                 lt_disqualified.append(pos)
-            else:
+            elif target_pos < pos:
                 rt_disqualified.append(pos)
 
     if lt_disqualified:
@@ -328,6 +350,7 @@ def find_peak(contig_dict, target, snvs, match_penal, local_thresh, is_left):
 
 def trim_contig(contig_dict, lt_end, rt_end):
     for pos in contig_dict.copy():
+    #for pos in contig_dict:
         if pos < lt_end:
             del contig_dict[pos]
         elif rt_end < pos:

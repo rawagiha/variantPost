@@ -37,18 +37,18 @@ class VariantAlignment(object):
         Default to 30.
 
     low_quality_base_rate_threshold : float
-        Reads are not realigned if bases < `base_quality_threshold` are contained more than this threshold. 
-        Default to 0.1.   
-    
+        Reads are not realigned if bases < `base_quality_threshold` are contained more than this threshold.
+        Default to 0.1.
+
     downsample_threshold : integer
-        Downsample to the threshold if the coverage at the input locus is > threshold. Default to 2000. 
+        Downsample to the threshold if the coverage at the input locus is > threshold. Default to 2000.
 
     match_score : integer
         Score for matched bases in realignment. Default to 3.
 
     mismatch_penalty : integer
         Penalty for mismatched bases in realignment. Default to 2.
-         
+
     gap_open_penalty : integer
         Penalty to create gaps in realignment. Default to 3.
 
@@ -57,7 +57,7 @@ class VariantAlignment(object):
 
     kmer_size : integer
         Kmer size used to search reads with input :class:`~variantpost.Variant`. Default to 32.
-    
+
     local_threshold : integer
         Non-reference patterns further than this threshold are not considered as part of the target event.
         Default to 20.
@@ -79,7 +79,7 @@ class VariantAlignment(object):
         gap_open_penalty=3,
         gap_extension_penalty=1,
         kmer_size=32,
-        local_threshold=20
+        local_threshold=20,
     ):
         if not variant.is_normalized:
             variant.normalize(inplace=True)
@@ -91,9 +91,10 @@ class VariantAlignment(object):
         self.target_is_indel = variant.is_indel
         self.window = variant.window
         self.reference = variant.reference
+        self.base_quality_thresh = base_quality_threshold
         self.local_thresh = local_threshold
         self.has_second = second_bam
-        
+
         retarget_thresh = _retarget_thresh(local_threshold, self.window)
 
         # interact with c++ code
@@ -106,6 +107,7 @@ class VariantAlignment(object):
             self.are_first_bam,
             self.is_retargeted,
             self.retarget_pos,
+            self.trans_vars,
         ) = search_target(
             bam,
             second_bam,
@@ -237,11 +239,17 @@ class VariantAlignment(object):
 
         return pac
 
-    def phase(self, match_penalty_for_phasing=0.5, max_common_substr_len=15):
+    def phase(
+        self, cis=False, base_quality_threshold=20, match_penalty_for_phasing=0.5, max_common_substr_len=15
+    ):
         """returns :class:`~variantpost.Variant` representing a phased target variant.
 
         Parameters
         ----------
+        cis : bool
+       
+        base_quality_threshold : int
+
         max_common_substr_len : int
 
         match_penalty_for_phasing : float
@@ -252,13 +260,19 @@ class VariantAlignment(object):
             self.target_pos = self.retarget_pos
 
         try:
+            if cis:
+                trans_vars = self.trans_vars
+            else:
+                trans_vars = []
+
             phased = _phase(
                 self.contig_dict,
                 self.skips,
                 self.target_pos,
                 self.target_is_indel,
                 self.local_thresh,
-                self.base_quality_threshold,
+                base_quality_threshold,
+                trans_vars,
                 match_penalty_for_phasing,
                 max_common_substr_len,
             )
