@@ -12,6 +12,9 @@ struct Contig
     std::string ref_seq; 
     Coord coordinates;
     
+    //ref len
+    size_t ref_len;
+    
     bool by_kmer_suggestion = false;
     size_t n_seeds = 0;
     

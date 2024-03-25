@@ -270,7 +270,9 @@ char indel_match_pattern(
     const UserParams& user_params,
     const Filter& filter,
     const Aligner& aligner, 
-    Alignment& aln
+    Alignment& aln,
+    Alignment& raln,
+    const Filter& rfilter
 )          
 {   
     int32_t mask_len = strlen(query.c_str()) / 2;
@@ -355,6 +357,14 @@ char indel_match_pattern(
             if (rt_mapped_cnt > 2 * (aln.ref_end - ss.end)) return 'F';
         }
     }
+    
+    // require better alignment onto contig
+    aligner.Align(
+        query.c_str(), contig.ref_seq.c_str(), 
+        contig.ref_len, rfilter, &raln, mask_len
+    );
+    
+    if (aln.sw_score <= raln.sw_score) return 'F'; 
     
     const double thresh = 0.95;
     //const int  margin = 2;
@@ -471,15 +481,15 @@ void classify_cand_indel_reads(
     const UserParams& user_params
 )
 {
-    Filter filter;
-    Alignment aln;
+    Filter filter, rfilter;
+    Alignment aln, raln;
     Aligner aligner(
         user_params.match_score, 
         user_params.mismatch_penal,
         255, //gap_open_penalty
         255 // gap_extention_penalty
     );
-
+    
     for (size_t i = 0; i < candidates.size(); ++i)
     {         
         /*if (ss.n_reps && candidates[i].incomplete_shift)
@@ -494,9 +504,20 @@ void classify_cand_indel_reads(
         );
 
         char match_rslt = indel_match_pattern(
-            static_cast<std::string>(candidates[i].seq), candidates[i].base_quals,
-            candidates[i].lt_end_matches, candidates[i].rt_end_matches,
-            pos_by_idx, candidates[i].local_uniqueness, contig, ss, user_params, filter, aligner, aln
+            static_cast<std::string>(candidates[i].seq), 
+            candidates[i].base_quals, 
+            candidates[i].lt_end_matches, 
+            candidates[i].rt_end_matches,
+            pos_by_idx, 
+            candidates[i].local_uniqueness, 
+            contig, 
+            ss, 
+            user_params, 
+            filter, 
+            aligner, 
+            aln, 
+            raln, 
+            rfilter
         );
         
         switch (match_rslt)
@@ -533,8 +554,8 @@ void classify_simplified(
     const UserParams& user_params
 )
 {
-    Filter filter;
-    Alignment aln;
+    Filter filter, rfilter;
+    Alignment aln, raln;
     Aligner aligner(
         user_params.match_score, 
         user_params.mismatch_penal,
@@ -544,14 +565,26 @@ void classify_simplified(
 
     for (size_t i = 0; i < candidates.size(); ++i)
     {         
+        
         std::vector<int> pos_by_idx = pos_by_read_idx(
             candidates[i].aln_start, candidates[i].cigar_vector
         );
         
         char match_rslt = indel_match_pattern(
-            static_cast<std::string>(candidates[i].seq), candidates[i].base_quals,
-            candidates[i].lt_end_matches, candidates[i].rt_end_matches,
-            pos_by_idx, candidates[i].local_uniqueness, contig, ss, user_params, filter, aligner, aln
+            static_cast<std::string>(candidates[i].seq), 
+            candidates[i].base_quals,
+            candidates[i].lt_end_matches, 
+            candidates[i].rt_end_matches,
+            pos_by_idx, 
+            candidates[i].local_uniqueness, 
+            contig, 
+            ss, 
+            user_params, 
+            filter, 
+            aligner, 
+            aln, 
+            raln, 
+            rfilter
         );
 
         switch (match_rslt)

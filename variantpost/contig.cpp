@@ -265,6 +265,7 @@ void set_ref_info(
         );
     } 
     contig.ref_seq = ref_seq;
+    contig.ref_len = ref_seq.size();
 }
 
 
