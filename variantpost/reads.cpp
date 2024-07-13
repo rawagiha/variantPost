@@ -220,6 +220,7 @@ void covering_patterns(Read& read, const Variant& target)
             {
                 // this read skips the target locus 
                 read.covering_ptrn = 'X';
+                read.is_na_ref = true;
                 return;
             }
         }
@@ -397,7 +398,7 @@ void annot_target_info(
                 }
                 dist.push_back(0);
             }
-
+            
             variant.set_leftmost_pos(loc_ref);
             variant.set_rightmost_pos(loc_ref);
 
@@ -868,7 +869,7 @@ void annotate_reads(
         count_matched_ends(read);
         eval_read_quality(read, user_params);
         //eval_local_quality(read, target, user_params);
-    }    
+    }
 }
 
 
