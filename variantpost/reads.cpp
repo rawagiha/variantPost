@@ -404,9 +404,22 @@ void annot_target_info(
 
             int event_region_start = variant.lpos;
             int event_region_end = variant.rpos + (variant.ref_len - 1);
-
-            if (event_region_end <= target_start
-                || target_end <= event_region_start) 
+            
+            //overlap with target
+            if (!(event_region_end < target_start
+                || target_end < event_region_start))
+            {
+                /*
+                int lt_d = std::abs(target.pos - event_region_start);
+                int rt_d = std::abs(event_region_end - target.pos);
+                if (lt_d < rt_d) dist.push_back(lt_d);
+                else dist.push_back(rt_d);*/
+                dist.push_back(0);
+            }
+            
+            /*
+            if (event_region_end < target_start
+                || target_end < event_region_start) 
             {
                 //non-overlap -> pass
                 //dist.push_back(target_start - event_region_end);
@@ -420,7 +433,7 @@ void annot_target_info(
                 if (lt_d < rt_d) dist.push_back(lt_d);
                 else dist.push_back(rt_d);
                 
-            }
+            }*/
         }
         ++idx;
     }

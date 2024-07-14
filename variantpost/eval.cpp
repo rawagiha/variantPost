@@ -738,6 +738,7 @@ void eval_by_variant_lst(
          }
     }
     
+    rslt.is_passed = true; 
     if (!total_match) return;
     
     if (total_match == p_decomposed->size())

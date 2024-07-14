@@ -372,7 +372,8 @@ void prefilter_candidates(
     Reads& non_targets,
     const Variant& target,
     const UserParams& user_params,
-    LocalReference& loc_ref
+    LocalReference& loc_ref,
+    bool& pseudo_only
 )
 {
     mock_target_seq(contig, target, user_params, loc_ref);
@@ -382,22 +383,27 @@ void prefilter_candidates(
         contig.mocked_seq, contig.mocked_ref,  user_params.kmer_size, target_kmers
     );
 
+    bool kmer_scored = false, pseudo_scored = false;
     for (auto& read : candidates)
     {
         read.kmer_score = count_kmer_overlap(read.seq, target_kmers);
         
         // kmer becomes zero for immediate variant clusters
-        /* 
         if (read.kmer_score == 0)
         {
-            if (!read.dist_to_non_target || !read.dist_to_clip)
+            if (!read.dist_to_clip || !read.dist_to_non_target)
             {
-                std::cout << "get pseudo" << std::endl;
-                read.kmer_score = 1; //pseudo count   
+                read.kmer_score = 1; //pseudo count 
+                if (!pseudo_scored) pseudo_scored = true;  
             }    
-        }*/
-              
+        }
+        else
+        {
+            if (!kmer_scored) kmer_scored = true;
+        }
     }
+    
+    if (!kmer_scored && pseudo_scored) pseudo_only = true;
     
     sort_by_kmer(candidates);
 
@@ -569,7 +575,8 @@ void suggest_contig(
     Contig& contig,
     Reads& candidates,
     const UserParams& user_params,
-    LocalReference& loc_ref
+    LocalReference& loc_ref,
+    bool pseudo_only
 )
 {
     contig.by_kmer_suggestion = true;   
@@ -584,7 +591,7 @@ void suggest_contig(
     //Contig remains empty
     if (prioritized.empty()) return;
     
-    const size_t max_size = 10; // for efficiency
+    const size_t max_size = (pseudo_only) ? 20 : 10; // for efficiency
     const size_t search_size = prioritized.size();
     
     Coord coord;
@@ -593,7 +600,6 @@ void suggest_contig(
     
     if (search_size >= max_size)
     {
-        /*
         Reads lt_tmp, u_tmp, rt_tmp;
         for (size_t i = 0; i < search_size; ++i)
         {
@@ -614,20 +620,21 @@ void suggest_contig(
         sort_by_kmer(lt_tmp);
         sort_by_kmer(rt_tmp);
         sort_by_kmer(u_tmp);
-        */          
-        Reads top_tens;       
-        //concat_top_tens(lt_tmp, rt_tmp, u_tmp, top_tens);
         
-        sort_by_kmer(prioritized);
+        Reads top_tens;       
+        concat_top_tens(lt_tmp, rt_tmp, u_tmp, top_tens);
+        
+        if (!pseudo_only) sort_by_kmer(prioritized);
+       
+        /*
         for (size_t i= 0; i < max_size; ++i)
         {
             transfer_elem(top_tens, prioritized, i);
-        }
+        }*/
         
-        //sort_by_start(top_tens);
+        sort_by_start(top_tens);
         for (const auto& read : top_tens)
         {
-            
             suggestions.emplace_back(
                 std::string(read.seq), 
                 std::string(read.base_quals), 

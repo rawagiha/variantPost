@@ -234,6 +234,10 @@ void from_candidate_reads(
     LocalReference& loc_ref
 )
 {
+    
+    //pseudo kmer count case
+    bool pseudo_only = false;
+
     //preprocessing for complex indel input
     std::vector<Variant> decomposed;
     std::vector<Variant>* p_decomposed = nullptr;
@@ -251,7 +255,7 @@ void from_candidate_reads(
     {
         prefilter_candidates(
             contig, candidates, non_targets, target, 
-            user_params, loc_ref
+            user_params, loc_ref, pseudo_only
         );
     }
     
@@ -262,7 +266,7 @@ void from_candidate_reads(
     if (!decomposed.empty()) p_decomposed = &decomposed;
     
     // attempts to construct contig from candidate reads
-    suggest_contig(target, contig, candidates, user_params, loc_ref);       
+    suggest_contig(target, contig, candidates, user_params, loc_ref, pseudo_only);       
     
     // may happen if all candidates are of low-qual bases
     if (contig.seq.empty()) return;

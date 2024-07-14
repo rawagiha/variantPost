@@ -79,7 +79,8 @@ void prefilter_candidates(
     Reads& non_targets,
     const Variant& target,
     const UserParams& user_params,
-    LocalReference& loc_ref
+    LocalReference& loc_ref,
+    bool& pseudo_only
 );
 
 
@@ -100,7 +101,8 @@ void suggest_contig(
     Contig& contig,
     Reads& candidates,
     const UserParams& user_params,
-    LocalReference& loc_ref
+    LocalReference& loc_ref,
+    bool pseudo_only
 );
 
 
