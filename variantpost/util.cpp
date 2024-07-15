@@ -211,7 +211,11 @@ void Variant::_sb_leftmost_pos(const LocalReference& loc_ref)
 
 void Variant::set_leftmost_pos(const LocalReference& loc_ref)
 {
-    if (is_complex || is_clipped_segment || has_n) 
+    if (is_complex 
+        || is_clipped_segment 
+        || has_n
+        || pos <= loc_ref.start
+        || loc_ref.end <= pos) 
     {    
         lpos = pos;   
         return;
@@ -336,7 +340,10 @@ void Variant::_sb_rightmost_pos(const LocalReference& loc_ref)
 
 void Variant::set_rightmost_pos(const LocalReference& loc_ref)
 {
-    if (is_complex || is_clipped_segment) 
+    if (is_complex 
+        || is_clipped_segment
+        || loc_ref.start <= pos
+        || loc_ref.end >= pos) 
     {    
         rpos = pos;
         return;

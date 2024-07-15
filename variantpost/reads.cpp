@@ -874,7 +874,6 @@ void annotate_reads(
         }
         
         annot_covering_ptrn(read, target, loc_ref, is_retargeted);
-        
         annot_target_info(read, target, loc_ref);
         annot_clip_pattern(read, target);
         annot_non_ref_signature(read);  
