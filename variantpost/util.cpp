@@ -419,6 +419,31 @@ bool Variant::is_equivalent(
 } 
 
 
+bool operator == (const Variant& lhs, const Variant& rhs)
+{
+    return (lhs.pos == rhs.pos && lhs.ref == rhs.ref && lhs.alt == rhs.alt);
+}
+
+
+bool operator != (const Variant& lhs, const Variant& rhs)
+{
+    return !(lhs == rhs);
+}
+
+
+bool operator < (const Variant& lhs, const Variant& rhs)
+{
+    if (lhs.pos < rhs.pos) return true;
+    else if (rhs.pos < lhs. pos) return false;
+    else // lhs.pos == rhs.pos
+    {
+        if (lhs.ref.size() < rhs.ref.size()) return true;
+        else if (rhs.ref.size() < lhs.ref.size()) return false;
+        else return (lhs.alt < rhs.alt); //same ref deleted
+    }
+}
+
+
 std::string to_tandem_rep(std::string_view seq)
 {
     int seq_size = seq.size();

@@ -196,7 +196,7 @@ char ss_covered_patterns(
     if (!aln.query_begin && aln.ref_end == max_ref_end) return 'R';        
     if (aln.query_end == max_query_end && !aln.ref_begin) return 'L';
     
-    return 'M';
+    return 'N';
 }
 
 
@@ -282,7 +282,7 @@ char indel_match_pattern(
         query.c_str(), contig.seq.c_str(), 
         contig.len, filter, &aln, mask_len
     );
-    
+
     if (contig.is_mocked)
     {
         if (aln.ref_begin <= ss.start - 5 && ss.end + 5 <= aln.ref_end)

@@ -19,7 +19,8 @@ typedef std::vector<std::pair<int, int>> Coord;
 typedef std::vector<std::pair<char, int>> CigarVec;
 
 
-struct UserParams{ 
+struct UserParams
+{ 
     int mapq_thresh;
     char base_q_thresh;
     double lq_rate_thresh;
@@ -31,7 +32,8 @@ struct UserParams{
     int local_thresh;
     int retarget_thresh;
 
-    UserParams(
+    UserParams
+    (
         const int mapq_thresh,
         const int base_q_thresh,
         const double lq_rate_thresh,
@@ -46,29 +48,32 @@ struct UserParams{
 }; 
 
 
-struct LocalReference{ 
-    private:
-        std::string _seq; 
-    
-    public:
-        FastaReference fasta;
-        std::string chrom;
-        int start;
-        int end;
-        std::string_view seq;
-        std::unordered_map<int, std::string_view> dict;
-
+struct LocalReference
+{ 
     LocalReference(
-        const string& fastafile,
-        const std::string& chrom,
-        const int start,
-        const int end
-    );     
+        const string& fastafile,  
+        const std::string& chrom, const int start, const int end
+    );
+    
+    FastaReference fasta;
+    std::string chrom;
+    int start;
+    int end;
+    std::string_view seq;
+    std::unordered_map<int, std::string_view> dict;
+
+private:
+    std::string _seq;    
 };
 
 
 struct Variant
 {
+    Variant(
+        const int pos, const std::string& ref, const std::string& alt,
+        bool is_clipped_segment = false
+    );
+
     int pos;
     std::string ref;
     std::string alt;
@@ -89,13 +94,6 @@ struct Variant
     bool is_complex;
     bool is_shiftable;
     
-    Variant(
-        const int pos, 
-        const std::string& ref, 
-        const std::string& alt, 
-        bool is_clipped_segment = false
-    );
-    
     void _sb_leftmost_pos(const LocalReference& loc_ref);
     void set_leftmost_pos(const LocalReference& loc_ref);
     
@@ -106,11 +104,13 @@ struct Variant
     
     std::string minimal_repeat_unit() const;
 
+    /*
     bool operator == (const Variant& rhs) const
     {
         return (pos == rhs.pos && ref == rhs.ref && alt == rhs.alt);
-    }
+    }*/
 
+    /*
     bool operator < (const Variant& rhs) const
     {
         if (pos < rhs.pos) 
@@ -136,13 +136,13 @@ struct Variant
                 return (alt < rhs.alt);
             }
         }
-    }
+    }*/
 };
 
 
 template<> struct std::hash<Variant>
 {
-    size_t operator() (const Variant& v) const noexcept
+    size_t operator () (const Variant& v) const noexcept
     {
         size_t h1 = std::hash<int>()(v.pos);
         size_t h2 = std::hash<std::string>()(v.ref);
@@ -150,6 +150,15 @@ template<> struct std::hash<Variant>
         return h1 ^ h2 ^ h3;
     }
 };
+
+
+bool operator == (const Variant& lhs, const Variant& rhs); 
+
+
+bool operator != (const Variant& lhs, const Variant& rhs);
+
+
+bool operator < (const Variant& lhs, const Variant& rhs);
 
 
 void find_shared_variants(
@@ -174,7 +183,6 @@ void splice_cigar(
     const std::vector<int>& genomic_positions,
     const Coord& coordinates
 );
-
 
 
 void parse_to_cplx_gaps(
@@ -260,7 +268,6 @@ int find_split_idx(
     const int target_pos,
     const std::vector<std::pair<char, int>>& cigar_vector
 );
-
 
 
 #endif 

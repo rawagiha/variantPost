@@ -34,7 +34,34 @@ void substitute_patterns(
                 if (curr_pos <= target.pos && target.pos < curr_pos + op_len)
                 {
                     std::string_view query = read.seq.substr(
-                        read_idx + (target.pos - curr_pos), target.alt.size()); 
+                        read_idx + (target.pos - curr_pos), target.alt.size());
+                    
+                    if (query == target.ref)
+                    {
+                        read.sb_ptrn = 'C';
+                        return;
+                    }
+
+                    std::string quals = read.base_quals.substr(
+                        read_idx + (target.pos - curr_pos), target.alt.size());
+                    
+                    size_t lq_base_n = 0;
+                    for (size_t i = 0; i < quals.size(); ++i)
+                    {
+                         if (quals[i] < user_params.base_q_thresh)
+                         {
+                            ++lq_base_n;
+                         }
+                    }
+
+                    if (lq_base_n == quals.size())
+                    {
+                        read.sb_ptrn = 'U';
+                        return; 
+                    }
+                    
+                    //std::string_view query = read.seq.substr(
+                    //    read_idx + (target.pos - curr_pos), target.alt.size()); 
                       
                     if (query == target.alt)
                     {
@@ -44,8 +71,10 @@ void substitute_patterns(
                         ++a_cnt;
                         return;
                     }
-                    else 
-                    {    
+                    else read.sb_ptrn = 'C';
+                        
+                    return; 
+                    /*{    
                         std::string quals = read.base_quals.substr(
                             read_idx + (target.pos - curr_pos), target.alt.size());
                         
@@ -68,7 +97,7 @@ void substitute_patterns(
                             read.sb_ptrn = 'U';
                         }
                         return;
-                    }
+                    }*/
                 }
                 
                 ref_idx += op_len;
