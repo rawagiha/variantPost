@@ -28,7 +28,6 @@ void local_alignment(
        
     int32_t mask_len = strlen(seq.c_str()) / 2;
     mask_len = mask_len < 15 ? 15 : mask_len;
-
     aligner.Align(
         seq.c_str(), ref_seq.c_str(), ref_seq.size(),
         filter, &alignment, mask_len
@@ -1020,24 +1019,27 @@ char eval_by_aln(
     );
 
     std::vector<int> pos_vec = expand_coordinates(contig.coordinates);
-
+    
     Filter filter;
     Alignment aln;
     std::vector<AlnResult> rslts;
     for (const auto& penal : penals)
     { 
+        //if ( penal[1] > 3) continue;
+        
         AlnResult rslt;
         
         local_alignment(
             user_params.match_score, penal[0], penal[1], penal[2], 
             contig.seq, contig.ref_seq, filter, aln
         );
-        
+
         if (!is_valid_aln(aln.cigar_string)) continue;
         
         if (contig.by_kmer_suggestion && !has_gaps(aln.cigar_string))
         {
-            CigarVec cigar_vec = to_cigar_vector(aln.cigar_string);
+            //CigarVec cigar_vec = to_cigar_vector(aln.cigar_string);
+            CigarVec cigar_vec = to_cigar_vector(aln.cigar);
             int loc_len = local_matched_len(
                 target.pos, pos_vec[aln.ref_begin], cigar_vec
             );
@@ -1058,9 +1060,9 @@ char eval_by_aln(
             
             continue; 
         }
-
-        postprocess_alignment(rslt, pos_vec, contig, loc_ref, aln);
         
+        postprocess_alignment(rslt, pos_vec, contig, loc_ref, aln);
+
         int target_pos = target.pos;
         if (p_decomposed != nullptr)
         {

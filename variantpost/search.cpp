@@ -188,7 +188,7 @@ void from_target_reads(
     );
     
     char _eval = eval_by_aln(contig, target, user_params, loc_ref);
-    
+
     if (_eval == 'C')
     {
         transfer_vector(undetermined, targets);
@@ -202,7 +202,7 @@ void from_target_reads(
     }
 
     ShiftableSegment ss;
-    annot_shiftable_segment(ss, target, contig);   
+    annot_shiftable_segment(ss, target, contig); 
 
     Reads lt_matches, mid_matches, rt_matches;    
     classify_cand_indel_reads(
@@ -280,6 +280,7 @@ void from_candidate_reads(
         switch_to_mock(
             contig, target, user_params, loc_ref, is_mocked, p_decomposed
         );
+        
         if (!is_mocked)
         {
             transfer_vector(non_targets, candidates);
@@ -365,7 +366,7 @@ void _search_target(
         reads, read_names, are_reverse, cigar_strs,
         aln_starts, aln_ends, read_seqs, quals, mapqs, are_from_first_bam
     ); 
-       
+    
     Contig contig;
     bool is_retargeted = false, is_non_supporting = false, is_mocked = false;
     if (target.is_substitute)
@@ -401,7 +402,6 @@ void _search_target(
     
     // indel read annotation
     annotate_reads(reads, target, user_params, loc_ref, is_retargeted);  
-    
     classify_reads(reads, targets, candidates, non_targets, user_params);
     
     // indel contig processing

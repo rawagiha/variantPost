@@ -15,6 +15,12 @@
 #include "fasta/Fasta.h"
 
 
+#define MAPSTR "MIDNSHP=X"
+#ifndef BAM_CIGAR_SHIFT
+#define BAM_CIGAR_SHIFT 4u
+#endif
+
+
 UserParams::UserParams(
     const int mapq_thresh,
     const int _base_q_thresh,
@@ -511,9 +517,9 @@ inline std::pair<char, int> split_cigar(const std::string& cigar)
   return std::make_pair(cigar.substr(last_idx, 1)[0], std::stoi(cigar.substr(0, last_idx)));
 }
 
-std::vector<std::pair<char, int>> to_cigar_vector(std::string_view cigar_str) 
+CigarVec to_cigar_vector(std::string_view cigar_str) 
 {
-  std::vector<std::pair<char, int>> cigar_vec;
+  CigarVec cigar_vec;
 
   size_t pos = 0;
   size_t new_pos;
@@ -521,7 +527,7 @@ std::vector<std::pair<char, int>> to_cigar_vector(std::string_view cigar_str)
 
   while (pos < len) 
   {
-    new_pos = cigar_str.find_first_of("MIDNSHPX=", pos) + 1;
+    new_pos = cigar_str.find_first_of(MAPSTR, pos) + 1;
     cigar_vec.emplace_back(
         split_cigar(
             std::string{cigar_str.substr(pos, new_pos - pos)}
@@ -534,7 +540,22 @@ std::vector<std::pair<char, int>> to_cigar_vector(std::string_view cigar_str)
 }
 
 
-std::pair<char, int> concat_gaps(const std::vector<std::pair<char, int>>& cigar_sub_vector)
+CigarVec to_cigar_vector(std::vector<uint32_t>& cigar)
+{
+    CigarVec cigar_vec;
+    
+    for (uint32_t c : cigar)
+    {
+        cigar_vec.emplace_back(
+             MAPSTR[c & ((static_cast<uint32_t>(1) << BAM_CIGAR_SHIFT) - 1)],
+             c >> BAM_CIGAR_SHIFT);
+    }
+    
+    return cigar_vec;
+}
+
+
+std::pair<char, int> concat_gaps(const CigarVec& cigar_sub_vector)
 {
     int tot_gap_len = 0;
     if (!cigar_sub_vector.empty())
@@ -898,7 +919,6 @@ void parse_variants(
     {
         op = cigar.first;
         op_len = cigar.second;
-
         switch (op)
         {
             case 'M':
@@ -1135,15 +1155,12 @@ int count_kmer_overlap(std::string_view seq, const Kmers& kmer_set)
 }
 
 
-//split at cplx variant start index
-int find_split_idx(
-    const int read_start, 
-    const int target_pos,
-    const std::vector<std::pair<char, int>>& cigar_vector
+int to_idx(
+    const int aln_start, const int target_pos, const CigarVec& cigar_vector
 )
 {
     char op = '\0';
-    int i = 0, op_len = 0, curr_pos = read_start - 1;
+    int i = 0, op_len = 0, curr_pos = aln_start;
     for (const auto& c: cigar_vector)
     {
         op = c.first;
@@ -1151,8 +1168,8 @@ int find_split_idx(
         switch (op)
         {
             case 'M':
+            case '=':
             case 'X':
-            case 'S':
                 if (curr_pos + op_len < target_pos)
                 {    
                     curr_pos += op_len;
@@ -1165,8 +1182,9 @@ int find_split_idx(
                 }
                 break;
             case 'I':
+            case 'S':
                 i += op_len;
-                curr_pos += 1;
+                //curr_pos += 1;
                 break;
             case 'D':
             case 'N':

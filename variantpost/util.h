@@ -170,6 +170,9 @@ void find_shared_variants(
 
 CigarVec to_cigar_vector(std::string_view cigar_string);
 
+//overloading
+CigarVec to_cigar_vector(std::vector<uint32_t>& cigar);
+
 
 void move_up_insertion(std::vector<std::pair<char, int>>& cigar_vector);
 
@@ -263,10 +266,8 @@ void diff_kmers(
 int count_kmer_overlap(std::string_view seq, const Kmers& kmer_set);
 
 
-int find_split_idx(
-    const int read_start,
-    const int target_pos,
-    const std::vector<std::pair<char, int>>& cigar_vector
+int to_idx( 
+    const int aln_start, const int target_pos, const CigarVec& cigar_vector
 );
 
 

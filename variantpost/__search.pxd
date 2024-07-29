@@ -27,5 +27,6 @@ cpdef object search_target(
     int retarget_thresh,
     int unspliced_local_reference_start,
     int unspliced_local_reference_start, 
+    int k,
 )
 

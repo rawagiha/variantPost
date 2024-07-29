@@ -133,6 +133,7 @@ class VariantAlignment(object):
             retarget_thresh,
             variant.unspliced_local_reference_start,
             variant.unspliced_local_reference_end,
+            variant.k
         )
 
         self.is_with_target = any([status == 1 for status in self.target_status])

@@ -4,7 +4,6 @@ from pysam import FastaFile
 BASES = {"A", "C", "G", "T", "N"}
 BASESET = set(BASES)
 
-
 class Variant(object):
     """This class abstracts a variant relative to a linear reference genome.
     Equality holds between :class:`~variantpost.Variant` objects
@@ -48,17 +47,23 @@ class Variant(object):
 
         self.reference = reference
 
-        if len(ref) < window:
+        ref_len = len(ref)
+        if ref_len < window:
             self.window = window
         else:
-            self.window = len(ref) + window
+            self.window = ref_len + window
 
         self.reference_len = reference.get_reference_length(self.chrom)
 
+        self.k = 1 if ref_len > window * 4  else 4
+
         # 1-based
-        self.unspliced_local_reference_start = max(0, pos - self.window * 4) + 1
+        self.unspliced_local_reference_start = max(
+            0, pos - max(150, window * self.k)
+        ) + 1
+        
         self.unspliced_local_reference_end = min(
-            pos + self.window * 4, self.reference_len
+            pos + self.window * self.k, self.reference_len
         )
 
     @property

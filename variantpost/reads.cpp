@@ -690,7 +690,7 @@ void annot_local_ptrn(
 
     if (read.covering_ptrn == 'D') 
     {
-        if (read.covering_end < target.pos) 
+        if (read.covering_end <= target.pos) 
         {
             if (read.clip_ptrn == 'R' 
                 //|| read.dist_to_non_target <= user_params.local_thresh) 
@@ -700,7 +700,7 @@ void annot_local_ptrn(
                 return;
             }
         }
-        else if (target.pos < read.covering_start) 
+        else if (target.pos <= read.covering_start) 
         {
             if (read.clip_ptrn == 'L' 
                 //|| read.dist_to_non_target <= user_params.local_thresh) 
@@ -710,6 +710,7 @@ void annot_local_ptrn(
                 return;
             }
         }
+        
         read.local_ptrn = 'N';
         return;
     }

@@ -5,26 +5,13 @@ from libcpp.vector cimport vector
 from libcpp cimport bool as bool_t
 from collections import OrderedDict
 
+from .long_reads import shorten_read
+
 cdef extern from "search.h":
 
     cdef cppclass SearchResult:
 
         SearchResult() except +
-        #SearchResult(
-        #    vector[int]&,
-        #    vector[string]&,
-        #    vector[string]&,
-        #    vector[string]&,
-        #    vector[int]&,
-        #    vector[int]&,
-        #    int,
-        #    string&,
-        #    string&,
-        #    vector[string]&,
-        #    vector[bool_t]&,
-        #    vector[int]&,
-        #    vector[bool_t]&
-        #) except +
 
         vector[int] positions
         vector[string] ref_bases
@@ -128,25 +115,53 @@ cdef inline void pack_to_lists(
     vector[int]& aln_starts, 
     vector[int]& aln_ends, 
     vector[string]& read_seqs, 
-    vector[string]& ref_seqs, 
+    #vector[string]& ref_seqs, 
     vector[vector[int]]& qual_seqs, 
     vector[int]& mapqs, 
-    vector[bool_t]& is_primary, 
+    vector[bool_t]& is_primary,
+    int unspliced_local_reference_start,
+    unspliced_local_reference_end,
+    int window_len,
+    int k
 ):
     cdef object read = read_tuple[0]
-    read_names.push_back(read.query_name.encode())
-    are_reverse.push_back(read.is_reverse)
-    cigar_strings.push_back(read.cigarstring.encode())
-    aln_starts.push_back(read.reference_start + 1)
-    aln_ends.push_back(read.reference_end)
-    read_seqs.push_back(read.query_sequence.encode())
-    qual_seqs.push_back(read.query_qualities)
-    mapqs.push_back(read.mapping_quality)
     
-    if read_tuple[1]:
-        is_primary.push_back(False)
+    if len(read.query_sequence) < window_len:
+        read_names.push_back(read.query_name.encode())
+        are_reverse.push_back(read.is_reverse)
+        cigar_strings.push_back(read.cigarstring.encode())
+        aln_starts.push_back(read.reference_start + 1)
+        aln_ends.push_back(read.reference_end)
+        read_seqs.push_back(read.query_sequence.encode())
+        qual_seqs.push_back(read.query_qualities)
+        mapqs.push_back(read.mapping_quality)
+    
+        if read_tuple[1]:
+            is_primary.push_back(False)
+        else:
+            is_primary.push_back(True)
     else:
-        is_primary.push_back(True)
+        res = shorten_read(
+            read, 
+            unspliced_local_reference_start, 
+            unspliced_local_reference_end,
+            k
+        )
+       
+        if res:
+            read_names.push_back(read.query_name.encode())
+            are_reverse.push_back(read.is_reverse)
+            cigar_strings.push_back(res[2].encode())
+            aln_starts.push_back(res[3])
+            aln_ends.push_back(res[4])
+            read_seqs.push_back(res[0].encode())
+            qual_seqs.push_back(res[1])
+            mapqs.push_back(read.mapping_quality)
+
+            if read_tuple[1]:
+                is_primary.push_back(False)
+            else:
+                is_primary.push_back(True)
 
 
 class AnnotatedRead(object):
@@ -182,6 +197,7 @@ cpdef object search_target(
      int retarget_threshold,
      int unspliced_local_reference_start,
      int unspliced_local_reference_end,
+     int k,
 ):
     cdef SearchResult rslt     
     cdef int est_cov = 0
@@ -232,8 +248,8 @@ cpdef object search_target(
     aln_ends.reserve(buff_size)
     cdef vector[string] read_seqs
     read_seqs.reserve(buff_size) 
-    cdef vector[string] ref_seqs
-    ref_seqs.reserve(buff_size) 
+    #cdef vector[string] ref_seqs
+    #ref_seqs.reserve(buff_size) 
     cdef vector[vector[int]] qual_seqs
     qual_seqs.reserve(buff_size) 
     cdef vector[int] mapqs 
@@ -241,7 +257,12 @@ cpdef object search_target(
     cdef vector[bool_t] are_first_bam
     are_first_bam.reserve(buff_size)
     
+    cdef int widow_len = unspliced_local_reference_end - unspliced_local_reference_start
     for read in fetched_reads:
+        
+        if read[0].mapping_quality < mapping_quality_threshold:
+            continue
+        
         pack_to_lists(
             read, 
             read_names, 
@@ -250,10 +271,14 @@ cpdef object search_target(
             aln_starts, 
             aln_ends, 
             read_seqs, 
-            ref_seqs, 
+            #ref_seqs, 
             qual_seqs, 
             mapqs, 
-            are_first_bam
+            are_first_bam,
+            unspliced_local_reference_start,
+            unspliced_local_reference_end,
+            widow_len,
+            k,
         )
     
     _search_target(
@@ -263,7 +288,7 @@ cpdef object search_target(
         pos,
         ref,
         alt,
-        mapping_quality_threshold,
+        mapping_quality_threshold,  #check if this is still meaningful
         base_quality_threshold,
         low_quality_base_rate_threshold,
         match_score,

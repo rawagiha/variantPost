@@ -9,6 +9,7 @@
 #include "merge.h"
 #include "match.h"
 #include "contig.h"
+#include "similarity.h"
 #include "ssw/ssw_cpp.h"
 
 
@@ -257,7 +258,7 @@ double rv_sim_score(
     return 1.0 - miss/query.size();
 }
 
-
+  
 char indel_match_pattern(
     const std::string& query, 
     std::string_view base_quals,
@@ -268,155 +269,136 @@ char indel_match_pattern(
     const Contig& contig,
     const ShiftableSegment& ss,
     const UserParams& user_params,
-    const Filter& filter,
     const Aligner& aligner, 
+    const Aligner& raligner,
     Alignment& aln,
     Alignment& raln,
+    const Filter& filter,
     const Filter& rfilter
 )          
 {   
+    /*TODO*/
+    const int sim_thresh = 95;
+    const int fuzzy_match_len_thresh = 20; 
+
     int32_t mask_len = strlen(query.c_str()) / 2;
     mask_len = mask_len < 15 ? 15 : mask_len;
             
-    aligner.Align(
-        query.c_str(), contig.seq.c_str(), 
-        contig.len, filter, &aln, mask_len
-    );
-
-    if (contig.is_mocked)
-    {
-        if (aln.ref_begin <= ss.start - 5 && ss.end + 5 <= aln.ref_end)
-        {
-            const char covered_ptrn 
-            = ss_covered_patterns(aln, ss, contig.len, query.size());
-            
-            //exact match
-            if (covered_ptrn != 'N') return covered_ptrn;
-            
-            /*
-            if (is_exact_match(aln, ss, query.size()))
-            {
-                if (!aln.ref_begin) return 'L';
-                if (aln.ref_end == static_cast<int>(contig.len) - 1) return 'R';   
-                return 'M';  
-            }*/       
-        }
-        return 'F';
-    }
+    aligner.Align(query.c_str(), filter, &aln, mask_len);
     
-    // aln ends before ss
-    if (aln.ref_end <= ss.start)
-    {
-        // due to rt-clip
-        if (aln.query_end != static_cast<int>(query.size()) - 1) return 'F';
-        // too short -> undetermined
+    if (aln.cigar.empty()) return 'U'; //may happen... 
+    CigarVec cigar_vec = to_cigar_vector(aln.cigar);
+
+    const bool starts_with_clip = (cigar_vec.front().first == 'S');
+    const bool ends_with_clip = (cigar_vec.back().first == 'S');
+    
+    //Not overlapping with shiftable segment (ss)
+    if (aln.ref_end <= ss.start) //query aln ends before ss  
+    {   
+        if (ends_with_clip) return 'F'; 
         else return 'U';
     }    
-    
-    // aln starts after ss
-    if (ss.end <= aln.ref_begin) 
-    {    
-        // due to lt-clip
-        if (aln.query_begin) return 'F'; //lt-clipped
-        // too short
+    if (ss.end <= aln.ref_begin)  //query aln starts after ss
+    {
+        if (starts_with_clip) return 'F';
         else return 'U'; 
+    }
+    
+    //Partial overlapping with shitable segment 
+    if (ss.start < aln.ref_begin) //query aln starts after ss_start but befor ss_end
+    {
+        const int q_ss_end = to_idx(aln.ref_begin, ss.end, cigar_vec);
+        if (q_ss_end == -1) return 'U';
+        
+        const std::string partial_q_seq 
+            = query.substr(aln.query_begin, q_ss_end - aln.query_begin + 1);
+        const std::string partial_ref_seq 
+            = contig.seq.substr(aln.ref_begin, ss.end - aln.ref_begin + 1); 
+        
+        if (!ss.n_reps && (partial_q_seq == partial_ref_seq)) return 'M';
+        
+        const int sim_score = similarity_score(partial_q_seq, partial_ref_seq);
+        if (sim_score > sim_thresh) return 'M';
+        
+        return 'U';
+    }
+    if (aln.ref_end < ss.end) //query aln ends before ss_end but after ss_start
+    {
+        const int q_ss_start = to_idx(aln.ref_begin, ss.start, cigar_vec);
+        if (q_ss_start == -1) return 'U';
+
+        const std::string partial_q_seq 
+            = query.substr(q_ss_start, aln.query_begin - q_ss_start +1);
+        const std::string partial_ref_seq
+            = contig.seq.substr(ss.start, aln.ref_end - ss.start + 1);
+
+        if (!ss.n_reps && (partial_q_seq == partial_ref_seq)) return 'M';
+        
+        const int sim_score = similarity_score(partial_q_seq, partial_ref_seq);
+        if (sim_score > sim_thresh) return 'M';
+
+        return 'U';
+    }
+
+    /***************************************************************
+     *** Hereafter, query seq completely covers shiftable segment***
+     **************************************************************/
+
+    //exact match
+    if (cigar_vec.size() == 1) //all '='
+    {
+        const int max_q_end = static_cast<int>(query.size()) - 1;
+        const int max_ref_end = static_cast<int>(contig.len) - 1;
+        
+        if (!aln.query_begin && aln.ref_end == max_ref_end) return 'R';
+        if (aln.query_end == max_q_end && !aln.ref_begin) return 'L';
+        
+        return 'M';
     } 
-    
-    // aln starts between ss_start/ss_end
-    if (ss.start < aln.ref_begin 
-        &&  aln.ref_begin < ss.end)
-    {
-        if (aln.query_begin) return 'F';
-        //allow if read starts after ss-start 
-    }
-    // aln ends between ss_start/ss_end
-    else if (ss.start < aln.ref_end 
-             && aln.ref_end < ss.end)
-    {
-        if (aln.query_end != static_cast<int>(query.size()) - 1) return 'F';  
-        //allow if read ends before ss.end 
-    }  
-    // aln covers shiftable but less than the orig mapping
-    else if (aln.ref_begin <= ss.start
-             && ss.end <= aln.ref_end)
-    {
-        const char covered_ptrn 
-            = ss_covered_patterns(aln, ss, contig.len, query.size());
-        
-        //exact matches
-        if (covered_ptrn != 'N') return covered_ptrn;
-        
-        //short margin
-        if (ss.start - aln.ref_begin < 10)
-        {
-            if (lt_mapped_cnt > 2 * (ss.start - aln.ref_begin)) return 'F';
-        }
 
-        if (aln.ref_end - ss.end < 10)
-        {
-            if (rt_mapped_cnt > 2 * (aln.ref_end - ss.end)) return 'F';
-        }
+    //reject fewer mapped bases than orignal mappings
+    //such as immediately clipped before/after ss
+    //HEURISTIC: apply this rule if the margin is short (<10-nt) 
+    if (ss.start - aln.ref_begin < 10)
+    {
+        //if (lt_mapped_cnt > 2 * (ss.start - aln.ref_begin)) return 'F';
+        if (lt_mapped_cnt > (ss.start - aln.ref_begin)) return 'F';
+    }
+    if (aln.ref_end - ss.end < 10)
+    {  
+        //if (rt_mapped_cnt > 2 * (aln.ref_end - ss.end)) return 'F'; 
+        if (rt_mapped_cnt > (aln.ref_end - ss.end)) return 'F'; 
     }
     
-    // require better alignment onto contig
-    aligner.Align(
-        query.c_str(), contig.ref_seq.c_str(), 
-        contig.ref_len, rfilter, &raln, mask_len
-    );
+    const int q_ss_start = to_idx(aln.ref_begin, ss.start, cigar_vec); 
+    const int q_ss_end = to_idx(aln.ref_begin, ss.end, cigar_vec);
+    if (q_ss_start == -1 || q_ss_end == -1) return 'U';
     
-    if (aln.sw_score <= raln.sw_score) return 'F'; 
-    
-    const double thresh = 0.95;
-    //const int  margin = 2;
-    size_t crit_start = 0;
-    std::string crit_seq;
-    std::string_view quals;
-    if (aln.ref_begin <= ss.start)
+    //fuzzy match for long shiftable segment (but not repetitive)
+    if (!ss.n_reps && ss.seq.size() > fuzzy_match_len_thresh)
     {
-        //if (int(ss.start) - aln.ref_begin + aln.query_begin >= margin)
-        if (ss.start >= aln.ref_begin - aln.query_begin)
-        {   
-            crit_start = ss.start - aln.ref_begin + aln.query_begin;
-        }
-
-        crit_seq = query.substr(
-            //crit_start, ss.seq.size() + 2 * (margin + 1)
-            crit_start, ss.seq.size()
-        );
+        const std::string q_ss_seq
+            = query.substr(q_ss_start, q_ss_end - q_ss_start + 1);
         
-        quals = base_quals.substr(
-            //crit_start, ss.seq.size() + 2 * (margin + 1)  
-            crit_start, ss.seq.size()  
-        );   
-
-        if (fw_sim_score(crit_seq, quals, ss.seq, user_params) < thresh) return 'F';
-    }
-    else
-    { 
-        if (ss.n_reps) 
-        {    
-            if (!aln.query_begin) return 'U';
-            else return 'F';
-        }
-        else
+        const int sim_score = similarity_score(q_ss_seq, ss.seq);
+        if (sim_score > sim_thresh) 
         {
-            crit_seq = query.substr(aln.query_begin, ss.end - aln.ref_begin + 1);
-            
-            quals = base_quals.substr(aln.query_begin, ss.end - aln.ref_begin);
-            
-            if (rv_sim_score(crit_seq, quals, ss.seq, user_params) < thresh) return 'F'; 
+            //reject if better aln against reference
+            raligner.Align(query.c_str(), rfilter, &raln, mask_len);
+            if (aln.sw_score <= raln.sw_score) return 'F';
+            else return 'M';    
         }
-    } 
- 
-    int observed_reps = 0;
+        else return 'F';
+    }
+    
+    //short repeats -> exact repeat-count match
     if (ss.n_reps && ss.unit_len < 4) 
     { 
-        if (aln.ref_end <= ss.end) return 'U';
-        
+        int observed_reps = 0;
         const int query_lt_len = ss.start - aln.ref_begin + aln.query_begin + 1;
         
         //mid + rt
-        std::string non_lt_fgmt = query.substr(query_lt_len);
+        std::string non_lt_fgmt = query.substr(q_ss_start + 1);
         observed_reps = count_repeats(ss.rep_unit, non_lt_fgmt);
 
         if (contig.mid_len)
@@ -431,38 +413,26 @@ char indel_match_pattern(
         if (ss.n_reps !=  observed_reps) return 'F';  
     }
     
-    int query_ss_start = aln.query_begin + ss.start - aln.ref_begin;
-    int query_ss_end = query_ss_start + ss.end - ss.start;
-    
+    //edge cases where flanking low complex seq introducing ambiguity 
     if (contig.pos_by_seq_idx.empty()) //extension case
     {
-        if (has_mismatches(aln.cigar_string)) return 'U';       
+        if (!aln.mismatches) return 'U';       
     }
-    else if (aln.ref_begin < ss.start && ss.end < aln.ref_end) 
+    else
     {   
-        if (pos_by_idx[query_ss_start] == -1 
-            && pos_by_idx[query_ss_end] == -1) return 'U';
-        
-        if (pos_by_idx[query_ss_start] == -1 
-            &&  contig.pos_by_seq_idx[ss.end] == pos_by_idx[query_ss_end]) return 'M';
-        if (contig.pos_by_seq_idx[ss.start] == pos_by_idx[query_ss_start] 
-            &&  pos_by_idx[query_ss_end] == -1) return 'M';   
+        if (pos_by_idx[q_ss_start] == -1 && pos_by_idx[q_ss_end] == -1) return 'U';
         
         if (local_uniqueness == 1)
         {
-            if (contig.pos_by_seq_idx[ss.start] != pos_by_idx[query_ss_start]
-                || contig.pos_by_seq_idx[ss.end] != pos_by_idx[query_ss_end]) return 'F';
+            if (contig.pos_by_seq_idx[ss.start] != pos_by_idx[q_ss_start]
+                || contig.pos_by_seq_idx[ss.end] != pos_by_idx[q_ss_end]) return 'F';
         }
-        else
-        {
-            if (contig.pos_by_seq_idx[ss.start] == pos_by_idx[query_ss_start] 
-                && pos_by_idx[query_ss_end] <= contig.pos_by_seq_idx[ss.end]) return 'M';
-            if (contig.pos_by_seq_idx[ss.start] <= pos_by_idx[query_ss_start] 
-                && pos_by_idx[query_ss_end] == contig.pos_by_seq_idx[ss.end]) return 'M';
-        }  
     } 
     
-    return 'M';
+    //reject if better aln against reference
+    raligner.Align(query.c_str(), rfilter, &raln, mask_len);
+    if (aln.sw_score <= raln.sw_score) return 'F';
+    else return 'M';    
 }
 
 
@@ -481,44 +451,34 @@ void classify_cand_indel_reads(
     const UserParams& user_params
 )
 {
-    Filter filter, rfilter;
-    Alignment aln, raln;
     Aligner aligner(
-        user_params.match_score, 
-        user_params.mismatch_penal,
-        255, //gap_open_penalty
-        255 // gap_extention_penalty
-    );
+        user_params.match_score, user_params.mismatch_penal, 255, 255);
+    aligner.SetReferenceSequence(contig.seq.c_str(), contig.len);
+
+    Aligner raligner(
+        user_params.match_score, user_params.mismatch_penal, 255, 255);
     
+    if (contig.ref_len > 2 * contig.len) //very long deletion
+    {
+        raligner.SetReferenceSequence(
+            contig.ref_seq.substr(0, contig.len).c_str(), contig.len);
+    }
+    else raligner.SetReferenceSequence(contig.ref_seq.c_str(), contig.ref_len);
+    
+    Alignment aln, raln;
+    Filter filter, rfilter;
+       
     for (size_t i = 0; i < candidates.size(); ++i)
     {         
-        /*if (ss.n_reps && candidates[i].incomplete_shift)
-        {
-            transfer_elem(non_targets, candidates, i);
-            continue;   
-        }*/
-        
         std::vector<int> pos_by_idx = pos_by_read_idx(
-            candidates[i].aln_start, 
-            candidates[i].cigar_vector
-        );
-
+            candidates[i].aln_start, candidates[i].cigar_vector);
+        
         char match_rslt = indel_match_pattern(
             static_cast<std::string>(candidates[i].seq), 
-            candidates[i].base_quals, 
-            candidates[i].lt_end_matches, 
-            candidates[i].rt_end_matches,
-            pos_by_idx, 
-            candidates[i].local_uniqueness, 
-            contig, 
-            ss, 
-            user_params, 
-            filter, 
-            aligner, 
-            aln, 
-            raln, 
-            rfilter
-        );
+            candidates[i].base_quals, candidates[i].lt_end_matches, 
+            candidates[i].rt_end_matches, pos_by_idx, 
+            candidates[i].local_uniqueness, contig, 
+            ss, user_params, aligner, raligner, aln, raln, filter, rfilter);
         
         switch (match_rslt)
         {
@@ -543,8 +503,9 @@ void classify_cand_indel_reads(
     candidates.shrink_to_fit();
 }
 
-
-void classify_simplified(
+/*
+//simplified destinations
+void classify_cand_indel_read2(
     Reads& candidates,
     Reads& targets,
     Reads& non_targets,
@@ -554,39 +515,29 @@ void classify_simplified(
     const UserParams& user_params
 )
 {
-    Filter filter, rfilter;
-    Alignment aln, raln;
     Aligner aligner(
-        user_params.match_score, 
-        user_params.mismatch_penal,
-        255, //gap_open_penalty
-        255 // gap_extention_penalty
-    );
+        user_params.match_score, user_params.mismatch_penal, 255, 255);
+    aligner.SetReferenceSequence(contig.seq.c_str(), contig.len);
 
+    Aligner ralinger(
+        user_params.match_score, user_params.mismatch_penal, 255, 255);
+    ralinger.SetReferenceSequence(contig.ref_seq.c_str(), contig.ref_len);
+    
+    Alignment aln, raln;
+    Filter filter, rfilter;
+    
     for (size_t i = 0; i < candidates.size(); ++i)
     {         
-        
         std::vector<int> pos_by_idx = pos_by_read_idx(
-            candidates[i].aln_start, candidates[i].cigar_vector
-        );
-        
+            candidates[i].aln_start, candidates[i].cigar_vector);
+         
         char match_rslt = indel_match_pattern(
             static_cast<std::string>(candidates[i].seq), 
-            candidates[i].base_quals,
-            candidates[i].lt_end_matches, 
-            candidates[i].rt_end_matches,
-            pos_by_idx, 
-            candidates[i].local_uniqueness, 
-            contig, 
-            ss, 
-            user_params, 
-            filter, 
-            aligner, 
-            aln, 
-            raln, 
-            rfilter
-        );
-
+            candidates[i].base_quals, candidates[i].lt_end_matches, 
+            candidates[i].rt_end_matches, pos_by_idx, 
+            candidates[i].local_uniqueness, contig, 
+            ss, user_params, aligner, raligner, aln, raln, filter, rfilter);
+        
         switch (match_rslt)
         {
             case 'L':
@@ -605,7 +556,7 @@ void classify_simplified(
     
     candidates.clear();
     candidates.shrink_to_fit();
-}
+}*/
 
 
 void classify_cand_indel_read_2(
@@ -643,11 +594,63 @@ void classify_cand_indel_read_2(
     
     if (candidates.empty()) return;
     
-    ShiftableSegment ss;
-    annot_shiftable_segment(ss, target, contig);
+    //ShiftableSegment ss;
+    //annot_shiftable_segment(ss, target, contig);
     
-    classify_simplified(
+    /*classify_simplified(
         candidates, targets, non_targets, undetermined,
         contig, ss, user_params
-    );   
+    );*/
+      
+    
+    ShiftableSegment ss;
+    annot_shiftable_segment(ss, target, contig);
+
+    Aligner aligner(
+        user_params.match_score, user_params.mismatch_penal, 255, 255);
+    aligner.SetReferenceSequence(contig.seq.c_str(), contig.len);
+
+    Aligner raligner(
+        user_params.match_score, user_params.mismatch_penal, 255, 255);
+    
+    if (contig.ref_len > 2 * contig.len) //very long deletion
+    {
+        raligner.SetReferenceSequence(
+            contig.ref_seq.substr(0, contig.len).c_str(), contig.len);
+    }
+    else raligner.SetReferenceSequence(contig.ref_seq.c_str(), contig.ref_len);
+    
+    Alignment aln, raln;
+    Filter filter, rfilter;
+  
+    for (size_t i = 0; i < candidates.size(); ++i)
+    {         
+        std::vector<int> pos_by_idx = pos_by_read_idx(
+            candidates[i].aln_start, candidates[i].cigar_vector);
+         
+        char match_rslt = indel_match_pattern(
+            static_cast<std::string>(candidates[i].seq), 
+            candidates[i].base_quals, candidates[i].lt_end_matches, 
+            candidates[i].rt_end_matches, pos_by_idx, 
+            candidates[i].local_uniqueness, contig, 
+            ss, user_params, aligner, raligner, aln, raln, filter, rfilter);
+        
+        switch (match_rslt)
+        {
+            case 'L':
+            case 'M':
+            case 'R':
+                transfer_elem(targets, candidates, i);
+                break;
+            case 'F':
+                transfer_elem(non_targets, candidates, i);
+                break;
+            case 'U':
+                transfer_elem(undetermined, candidates, i);
+                break;
+        }                
+    } 
+    
+    candidates.clear();
+    candidates.shrink_to_fit();
 }
