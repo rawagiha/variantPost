@@ -31,3 +31,4 @@ will also be installed if not pre-installed.
 variantPost internally uses the following packages. I thank the developers for making them freely available. 
 - [SSW Library](https://github.com/mengyao/Complete-Striped-Smith-Waterman-Library)
 - [fastahack](https://github.com/ekg/fastahack)
+- [Ratcliff-Obershelp algorithm](https://github.com/wernsey/miscsrc)
