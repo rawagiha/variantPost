@@ -2,44 +2,50 @@
 #define READ_H
 
 #include <climits>
-
 #include "util.h"
 
 struct Read
-{
+{   
+    //-------------------------------------------------------------
+    // constructor from inputs passed by Cython
+    Read(std::string_view name, const bool is_reverse, std::string_view cigar_str,
+        const int aln_start, const int aln_end, std::string_view seq,
+        const std::vector<int>& quals, const int mapq, const bool is_from_first_bam);
     
-    //basic info
-    std::string_view name;
-    bool is_reverse;
-    bool is_from_first_bam;
+    //-------------------------------------------------------------
+    // basic attributes 
+    std::string_view name;  // read identifier 
+    bool is_reverse;        // true if read is aligned to the complementary strand  
+    bool is_from_first_bam; // true if read is from the first BAM file 
 
-    //qualities
-    int mapq;
-    std::string base_quals;
-    std::string non_ref_quals; //base qual for non reference events incl. clips
+    //-------------------------------------------------------------
+    // quality scores 
+    int mapq;  // mapping quality 
+    std::string base_quals; // base quality string 
+    std::string non_ref_quals; // base quality for non-ref bases including softclippings
 
-    //coordinates
-    int aln_start;
-    int aln_end;
-    int read_start;
-    int read_end;
-    int start_offset;
-    int end_offset;
-    int covering_start;
-    int covering_end;
-   
-    //sequences 
-    std::string_view seq;
-    std::string spliced_ref_seq; 
-    std::string_view ref_seq;
+    //-------------------------------------------------------------
+    // genome coordinates (1-based) 
+    int aln_start; int aln_end; // alignment start/end 
+    int start_offset; int end_offset; // softclip len 
+    int read_start; int read_end; // alignmet start/end extented by softclip len
+    Coord aligned_segments = {}; // vector<pair<int, int>> start/end of aligned segments 
+    Coord skipped_segments= {}; // vector<pair<int, int>> start/end of skipped segments
+    int covering_start; int covering_end; // start/end of aligned segment covering the target locus
+                                          // may differ from aln_start/aln_end if spliced
+
+    //-------------------------------------------------------------
+    // sequences 
+    std::string_view seq; // reference to read seq data (std::string) from input
+    std::string_view ref_seq; // reference to refseq data 
+    std::string spliced_ref_seq; // store refseq data if spliced.  
+                                 // if unspliced, stored in LocalReference in util.h
+                                    
+    //-------------------------------------------------------------
+    // cigar 
+    std::string_view cigar_str; // reference to cigar string from input
+    CigarVec cigar_vector; // CigarVec vector<pair<char, int>>
     
-    //CIGARs
-    std::string_view cigar_str;
-    std::vector<std::pair<char, int>> cigar_vector;
-    
-    //maps/skips(splice)
-    Coord aligned_segments = {};
-    Coord skipped_segments= {};
 
     //non reference event info
     std::vector<Variant> variants;
@@ -86,17 +92,6 @@ struct Read
     bool is_deprioritized = false;
     //bool is_contig_member = false;
     
-    Read(
-        std::string_view name,
-        const bool is_reverse,
-        std::string_view cigar_str,
-        const int aln_start,
-        const int aln_end,
-        std::string_view seq,
-        const std::vector<int>& quals,
-        const int mapq,
-        const bool is_from_first_bam
-    );
 };
 
 
