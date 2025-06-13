@@ -7,10 +7,10 @@
 struct Read
 {   
     //-------------------------------------------------------------
-    // constructor from inputs passed by Cython
+    // constructor from inputs passed by Cython wrapper
     Read(std::string_view name, const bool is_reverse, std::string_view cigar_str,
-        const int aln_start, const int aln_end, std::string_view seq,
-        const std::vector<int>& quals, const int mapq, const bool is_from_first_bam);
+         const int aln_start, const int aln_end, std::string_view seq,
+         const std::vector<int>& quals, const int mapq, const bool is_from_first_bam);
     
     //-------------------------------------------------------------
     // basic attributes 
@@ -36,17 +36,27 @@ struct Read
 
     //-------------------------------------------------------------
     // sequences 
-    std::string_view seq; // reference to read seq data (std::string) from input
-    std::string_view ref_seq; // reference to refseq data 
+    std::string_view seq = ""; // reference to read seq data (std::string) from input
+    std::string_view ref_seq = ""; // reference to refseq data
     std::string spliced_ref_seq; // store refseq data if spliced.  
                                  // if unspliced, stored in LocalReference in util.h
                                     
     //-------------------------------------------------------------
     // cigar 
-    std::string_view cigar_str; // reference to cigar string from input
+    std::string_view cigar_str = ""; // reference to cigar string from input
     CigarVec cigar_vector; // CigarVec vector<pair<char, int>>
     
+    //------------------------------------------------------------- 
+    // flags for reference-seq related info
+    bool is_na_ref = false; // true if no ref_seq is available for this read
+    bool is_ref = false; // true if seq is identical to ref_seq 
 
+    
+    
+    
+    
+    
+    
     //non reference event info
     std::vector<Variant> variants;
     int variants_target_idx = -1;
@@ -86,12 +96,14 @@ struct Read
     int kmer_score = -1;
     
     //other flags
-    bool is_ref = false;
-    bool is_na_ref = false;
+    /*bool is_ref = false;*/
+    /*bool is_na_ref = false;*/
     bool is_tight_covering = false;
     bool is_deprioritized = false;
     //bool is_contig_member = false;
-    
+   
+    //-------------------------------------------------------------
+    void setRefSeq(LocalReference& loc_ref); 
 };
 
 

@@ -17,38 +17,6 @@ std::string to_qual_str (const std::vector<int>& qual_vec)
 }
 
 
-Read::Read(
-    std::string_view name, 
-    const bool is_reverse,
-    std::string_view cigar_str,
-    const int aln_start,
-    const int aln_end,
-    std::string_view seq,
-    const std::vector<int>& quals,
-    const int mapq,
-    const bool is_from_first_bam
-) : name(name),
-    is_reverse(is_reverse), 
-    is_from_first_bam(is_from_first_bam),
-    mapq(mapq), 
-    aln_start(aln_start), 
-    aln_end(aln_end), 
-    seq(seq),
-    cigar_str(cigar_str) 
-{
-    base_quals = to_qual_str(quals);
-    
-    cigar_vector = to_cigar_vector(cigar_str);
-    start_offset 
-        = cigar_vector.front().first == 'S' ? cigar_vector.front().second : 0;
-    end_offset 
-        = cigar_vector.back().first == 'S' ? cigar_vector.back().second : 0;
-
-    read_start = aln_start - start_offset;
-    read_end = aln_end + end_offset;
-}
-
-
 void sort_by_start(Reads& reads)
 {
     std::sort(
@@ -75,6 +43,73 @@ void sort_by_kmer(Reads& reads)
             return a.kmer_score >  b.kmer_score ? true : false;
         }
     ); 
+}
+
+//-----------------------------------------------------------------
+// %initilizer list reordered to suppress warning
+Read::Read(std::string_view name_, const bool is_reverse_, 
+           std::string_view cigar_str_, const int aln_start_, const int aln_end_, 
+           std::string_view seq_, const std::vector<int>& quals_, const int mapq_, 
+           const bool is_from_first_bam_) 
+    : name(name_), is_reverse(is_reverse_), is_from_first_bam(is_from_first_bam_),
+      mapq(mapq_), aln_start(aln_start_), aln_end(aln_end_), seq(seq_), cigar_str(cigar_str_)
+{
+    base_quals = to_qual_str(quals_);
+    
+    cigar_vector = to_cigar_vector(cigar_str_);
+    
+    start_offset 
+        = cigar_vector.front().first == 'S' ? cigar_vector.front().second : 0;
+    end_offset 
+        = cigar_vector.back().first == 'S' ? cigar_vector.back().second : 0;
+
+    read_start = aln_start - start_offset;
+    read_end = aln_end + end_offset;
+}
+
+
+void Read::setRefSeq(LocalReference& loc_ref)
+{
+    int loc_ref_len = static_cast<int>(loc_ref.seq.size());
+
+    if (cigar_str.find('N') == std::string::npos)
+    {
+        int _idx = aln_start - loc_ref.start; // idx on local reference 
+        int _ref_len = aln_end - aln_start + 1; // expected refseq len
+        if (_idx >= 0 && _idx + _ref_len <= loc_ref_len)
+            ref_seq = loc_ref.seq.substr(_idx, _ref_len);
+    }          
+    else//spliced reference 
+    {   
+        const std::string chrom = loc_ref.chrom;
+
+        int curr_pos = aln_start - 1;
+        char op = '\0'; int op_len = 0;
+        for (const auto& c : cigar_vector)
+        {
+            op = c.first; op_len = c.second;
+
+            switch (op)
+            {
+                case 'M': case '=': case 'X': case 'D':
+                    spliced_ref_seq += 
+                        loc_ref.fasta.getSubSequence(chrom, curr_pos, op_len);
+                    curr_pos += op_len;
+                    break;
+
+                case 'N':
+                    curr_pos += op_len;
+                    break;
+                default:
+                    break;
+            }        
+        }
+        ref_seq = spliced_ref_seq; // covert to string_view
+    }
+
+    // reference seq flags
+    is_ref = (seq == ref_seq);
+    is_na_ref = (ref_seq.empty());
 }
 
 
@@ -389,9 +424,13 @@ void annot_target_info(
         }
         else 
         {
-            // non-ref exists within target's shiftable region
+            // non-targets within target's shiftable region
             if (target_start <= variant.pos && variant.pos <= target_end) 
             {      
+                variant.is_overlapping = true;
+                
+                // magic numbers 
+                // should abolish? 
                 if (target.indel_len < 4 && read.central_score > 0.15)
                 {
                     read.incomplete_shift = true; 
@@ -405,35 +444,31 @@ void annot_target_info(
             int event_region_start = variant.lpos;
             int event_region_end = variant.rpos + (variant.ref_len - 1);
             
-            //overlap with target
+            //shiftable-non-targets overlapping with target 
+            //(target may not be shiftable)
             if (!(event_region_end < target_start
                 || target_end < event_region_start))
             {
-                /*
-                int lt_d = std::abs(target.pos - event_region_start);
-                int rt_d = std::abs(event_region_end - target.pos);
-                if (lt_d < rt_d) dist.push_back(lt_d);
-                else dist.push_back(rt_d);*/
+                variant.is_overlapping = true;
                 dist.push_back(0);
             }
-            
-            /*
+
             if (event_region_end < target_start
-                || target_end < event_region_start) 
+                || target_end < event_region_start)
             {
                 //non-overlap -> pass
-                //dist.push_back(target_start - event_region_end);
+                dist.push_back(std::abs(target_start - event_region_end));
             }
-            else 
+            else
             {
-                //overlap cases   
+                //overlap cases
                 int lt_d = std::abs(target.pos - event_region_start);
                 int rt_d = std::abs(event_region_end - target.pos);
-            
+
                 if (lt_d < rt_d) dist.push_back(lt_d);
                 else dist.push_back(rt_d);
-                
-            }*/
+
+            }
         }
         ++idx;
     }
@@ -870,7 +905,8 @@ void annotate_reads(
     {
         if (!is_retargeted)
         {
-            annot_ref_seq(read, loc_ref);
+            //annot_ref_seq(read, loc_ref);
+            read.setRefSeq(loc_ref);
             annot_splice_pattern(read);
         }
         
@@ -901,6 +937,13 @@ void classify_reads(
      
     for (size_t i = 0; i < max_size; ++i)
     {
+        
+        if (reads[i].name == "WIGTC-HISEQ:6:1307:10350:85982")
+        {
+            std::cout << reads[i].covering_ptrn << " " << reads[i].local_ptrn << " " << reads[i].dist_to_non_target << " " << reads[i].variants.size() << std::endl;
+        }
+        
+        
         if (reads[i].local_ptrn == 'A') 
         {
             transfer_elem(targets, reads, i);
@@ -927,4 +970,9 @@ void classify_reads(
     targets.shrink_to_fit();
     candidates.shrink_to_fit();
     non_targets.shrink_to_fit();
+
+    for (auto j : candidates)
+    {
+        if (! j.is_reverse) std::cout << j.name << std::endl;
+    }
 } 
