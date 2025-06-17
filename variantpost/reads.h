@@ -6,25 +6,40 @@
 
 struct Read
 {   
-    //-------------------------------------------------------------
+    //--------------------------------------------------------------------------
     // constructor from inputs passed by Cython wrapper
     Read(std::string_view name, const bool is_reverse, std::string_view cigar_str,
          const int aln_start, const int aln_end, std::string_view seq,
          const std::vector<int>& quals, const int mapq, const bool is_from_first_bam);
+     
+    //--------------------------------------------------------------------------
+    // setup reference sequence and coordinates 
+    void setReference(LocalReference& loc_ref); 
+
+    //--------------------------------------------------------------------------
+    // parse CIGAR for variants
+    void setVariants(LocalReference& loc_ref);
     
-    //-------------------------------------------------------------
+    //--------------------------------------------------------------------------
+    // annotate how the read covers the target locus
+    void parseCoveringPattern(LocalReference& loc_ref, const Variant& target);
+        
+    //--------------------------------------------------------------------------
+    // annotate how the read covers the target locus
+    void parseLocalPattern(LocalReference& loc_ref, const Variant& target);
+    
     // basic attributes 
     std::string_view name;  // read identifier 
     bool is_reverse;        // true if read is aligned to the complementary strand  
     bool is_from_first_bam; // true if read is from the first BAM file 
 
-    //-------------------------------------------------------------
+    //--------------------------------------------------------------------------
     // quality scores 
     int mapq;  // mapping quality 
     std::string base_quals; // base quality string 
     std::string non_ref_quals; // base quality for non-ref bases including softclippings
 
-    //-------------------------------------------------------------
+    //--------------------------------------------------------------------------
     // genome coordinates (1-based) 
     int aln_start; int aln_end; // alignment start/end 
     int start_offset; int end_offset; // softclip len 
@@ -34,32 +49,33 @@ struct Read
     int covering_start; int covering_end; // start/end of aligned segment covering the target locus
                                           // may differ from aln_start/aln_end if spliced
 
-    //-------------------------------------------------------------
+    //--------------------------------------------------------------------------
     // sequences 
     std::string_view seq = ""; // reference to read seq data (std::string) from input
     std::string_view ref_seq = ""; // reference to refseq data
     std::string spliced_ref_seq; // store refseq data if spliced.  
                                  // if unspliced, stored in LocalReference in util.h
                                     
-    //-------------------------------------------------------------
+    //--------------------------------------------------------------------------
     // cigar 
     std::string_view cigar_str = ""; // reference to cigar string from input
     CigarVec cigar_vector; // CigarVec vector<pair<char, int>>
     
-    //------------------------------------------------------------- 
+    //-------------------------------------------------------------------------- 
     // flags for reference-seq related info
     bool is_na_ref = false; // true if no ref_seq is available for this read
     bool is_ref = false; // true if seq is identical to ref_seq 
 
-    
-    
-    
+    //--------------------------------------------------------------------------
+    // variant info
+    std::vector<Variant> variants;
+    int variants_target_idx = -1; // target variant idx in variants (vector<Variants>)
     
     
     
     //non reference event info
-    std::vector<Variant> variants;
-    int variants_target_idx = -1;
+    //std::vector<Variant> variants;
+    //int variants_target_idx = -1;
     /*dist to closest non-target overlapping target shiftable segment*/
     int dist_to_non_target = INT_MAX; 
     int dist_to_clip = INT_MAX;
@@ -102,8 +118,6 @@ struct Read
     bool is_deprioritized = false;
     //bool is_contig_member = false;
    
-    //-------------------------------------------------------------
-    void setRefSeq(LocalReference& loc_ref); 
 };
 
 
@@ -113,9 +127,9 @@ void sort_by_start(Reads & reads);
 
 void sort_by_kmer(Reads & reads);
 
-void annot_ref_seq(Read& read, LocalReference& loc_ref);
+//void annot_ref_seq(Read& read, LocalReference& loc_ref);
 
-void annot_splice_pattern(Read& read);
+//void annot_splice_pattern(Read& read);
 
 void annot_clip_pattern(Read& read, const Variant& target);
 

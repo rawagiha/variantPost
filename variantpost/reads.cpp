@@ -6,6 +6,10 @@ inline char offset_qual(int q)
     return static_cast<char>(q + 33);
 }
 
+inline bool is_ascending(const int a, const int b, const int c)
+{
+    return (a <= b && b <= c);
+}
 
 std::string to_qual_str (const std::vector<int>& qual_vec) 
 {
@@ -45,8 +49,8 @@ void sort_by_kmer(Reads& reads)
     ); 
 }
 
-//-----------------------------------------------------------------
-// %initilizer list reordered to suppress warning
+//-----------------------------------------------------------------------------
+// NOTE: initilizer list reordered to suppress warning
 Read::Read(std::string_view name_, const bool is_reverse_, 
            std::string_view cigar_str_, const int aln_start_, const int aln_end_, 
            std::string_view seq_, const std::vector<int>& quals_, const int mapq_, 
@@ -67,11 +71,12 @@ Read::Read(std::string_view name_, const bool is_reverse_,
     read_end = aln_end + end_offset;
 }
 
-
-void Read::setRefSeq(LocalReference& loc_ref)
+//------------------------------------------------------------------------------
+void Read::setReference(LocalReference& loc_ref)
 {
     int loc_ref_len = static_cast<int>(loc_ref.seq.size());
-
+    int pos_2 = read_start; // for coordinate setup    
+  
     if (cigar_str.find('N') == std::string::npos)
     {
         int _idx = aln_start - loc_ref.start; // idx on local reference 
@@ -83,7 +88,7 @@ void Read::setRefSeq(LocalReference& loc_ref)
     {   
         const std::string chrom = loc_ref.chrom;
 
-        int curr_pos = aln_start - 1;
+        int pos_1 = aln_start - 1; // for refseq setup
         char op = '\0'; int op_len = 0;
         for (const auto& c : cigar_vector)
         {
@@ -93,12 +98,17 @@ void Read::setRefSeq(LocalReference& loc_ref)
             {
                 case 'M': case '=': case 'X': case 'D':
                     spliced_ref_seq += 
-                        loc_ref.fasta.getSubSequence(chrom, curr_pos, op_len);
-                    curr_pos += op_len;
+                        loc_ref.fasta.getSubSequence(chrom, pos_1, op_len);
+                    pos_1 += op_len; 
+                    pos_2 += op_len;
                     break;
-
+                case 'S':
+                    pos_2 += op_len;
+                    break;
                 case 'N':
-                    curr_pos += op_len;
+                    skipped_segments.emplace_back(pos_2, (pos_2 + op_len -1));
+                    pos_1 += op_len;
+                    pos_2 += op_len;
                     break;
                 default:
                     break;
@@ -110,9 +120,122 @@ void Read::setRefSeq(LocalReference& loc_ref)
     // reference seq flags
     is_ref = (seq == ref_seq);
     is_na_ref = (ref_seq.empty());
+
+    if (is_na_ref) return;
+    
+    //aligned segment
+    pos_2 = read_start; // reset to read_start
+    for (const auto& seg : skipped_segments)
+    {
+        aligned_segments.emplace_back(pos_2, seg.first - 1);
+        pos_2 = seg.second + 1;
+    }
+    aligned_segments.emplace_back(pos_2, read_end);
+}
+
+//------------------------------------------------------------------------------
+// NOTE: use only after setReference
+void Read::setVariants(LocalReference& loc_ref)
+{
+    if (is_na_ref || is_ref) return;
+    
+    // from util.h
+    parse_variants(aln_start, ref_seq, seq, base_quals, 
+                   cigar_vector, loc_ref.dict, variants, non_ref_quals);
+}
+
+//------------------------------------------------------------------------------
+// 'A': target locus + shiftable region is completely covered
+// 'B': partially
+// 'C': not covered
+// 'X': skipped
+void Read::parseCoveringPattern(LocalReference& loc_ref, const Variant& target)
+{
+    // skipped
+    for (const auto& seg : skipped_segments)
+    {
+        if (seg.first < target.lpos && target.rpos < seg.second)
+        {
+            is_na_ref = true; covering_ptrn = 'X'; return;
+        }
+    }
+    
+    // completly covered
+    for (const auto& seg : aligned_segments)
+    {
+        if (seg.first <= target.lpos && target.rpos <= seg.second)
+        {
+            covering_start = seg.first; covering_end = seg.second; 
+            covering_ptrn = 'A'; return;
+        }
+    }
+             
+    // partially covered (left- and right-partial)
+    bool is_partial = false;
+    covering_start = aligned_segments.front().first;
+    covering_end = aligned_segments.back().second;
+
+    if (is_ascending(target.lpos, covering_start, target.end_pos)) 
+    {
+        covering_end = aligned_segments.front().second;
+        // starts with softclip
+        if (start_offset) is_partial = true;
+        // has variants in shiftable
+        if (!variants.empty() && variants.front().pos <= target.end_pos)
+            is_partial = true;
+    } 
+    else if (is_ascending(target.lpos, covering_end, target.end_pos))
+    {
+        covering_start = aligned_segments.back().first;
+        // ends with softclip
+        if (end_offset) is_partial = true;
+        if (!variants.empty() && target.lpos <= variants.back().pos)
+            is_partial = true;
+    }
+
+    if (is_partial) covering_ptrn = 'B';
+    else covering_ptrn = 'C'; 
+}
+
+//------------------------------------------------------------------------------
+// find target and nearest non-target events
+void Read::parseLocalPattern(LocalReference& loc_ref, const Variant& target)
+{
+    if (covering_ptrn == 'C' || covering_ptrn == 'X' ||
+        variants.empty()     || is_na_ref             ) return;
+    
+    int idx = 0; std::vector<int> dists;
+    for (auto& v : variants)
+    {
+        if (target.is_equivalent(v, loc_ref))
+        {
+            has_target = true; variants_target_idx = idx;
+            target_pos = v.pos; target_ref = v.ref; target_alt = v.alt;
+            return;
+        }
+        
+        // collect distances from target region to non-targets
+        // 0 if overlapping with target region
+        v.set_leftmost_pos(loc_ref);
+        v.set_rightmost_pos(loc_ref);
+        if (v.lpos < target.lpos                ||
+            target.rpos + target.ref_len < v.rpos)
+        {
+            int lt_d = target.lpos - v.lpos;
+            int rt_d = v.rpos - (target.rpos + target.ref_len);
+            if (lt_d < rt_d) dists.push_back(lt_d);
+            else dists.push_back(rt_d);    
+        } 
+        else dists.push_back(0);
+        ++idx;
+    }
+
+    if (!dists.empty()) 
+        dist_to_non_target = *std::min_element(dists.begin(), dists.end());
 }
 
 
+/*
 std::string_view get_unspliced_ref_seq(
     const int loc_ref_start, 
     std::string_view loc_ref_seq,
@@ -238,12 +361,11 @@ void annot_splice_pattern(Read& read)
     read.aligned_segments.emplace_back(curr_pos, read.read_end);
 }   
 
-
 inline bool is_ascending(const int a, const int b, const int c)
 {
     return (a <= b && b <= c);
 }
-
+*/
                                                                     
 void covering_patterns(Read& read, const Variant& target)   
 {
@@ -906,10 +1028,12 @@ void annotate_reads(
         if (!is_retargeted)
         {
             //annot_ref_seq(read, loc_ref);
-            read.setRefSeq(loc_ref);
-            annot_splice_pattern(read);
+            read.setReference(loc_ref);
+            read.setVariants(loc_ref);
+            //annot_splice_pattern(read);
         }
         
+        read.parseCoveringPattern(loc_ref, target);
         annot_covering_ptrn(read, target, loc_ref, is_retargeted);
         annot_target_info(read, target, loc_ref);
         annot_clip_pattern(read, target);

@@ -12,11 +12,14 @@
 #include <unordered_map>
 
 #include "fasta/Fasta.h"
-
+#include "ssw/ssw_cpp.h"
 
 typedef std::set<std::string_view> Kmers;
 typedef std::vector<std::pair<int, int>> Coord;
 typedef std::vector<std::pair<char, int>> CigarVec;
+typedef StripedSmithWaterman::Alignment Alignment;
+typedef StripedSmithWaterman::Aligner Aligner;
+typedef StripedSmithWaterman::Filter Filter;
 
 
 struct UserParams
@@ -66,14 +69,16 @@ private:
     std::string _seq;    
 };
 
-
+//------------------------------------------------------------------------------
 struct Variant
 {
-    Variant(
-        const int pos, const std::string& ref, const std::string& alt,
-        bool is_clipped_segment = false
-    );
+    Variant(const int pos, const std::string& ref, const std::string& alt,
+            bool is_clipped_segment = false); //don't remeber last arg...
 
+
+
+    // NOTE
+    // non-initialized members are initialized by contructor
     int pos;
     std::string ref;
     std::string alt;
@@ -87,12 +92,14 @@ struct Variant
     int variant_end_pos = pos + ref_len;
     int lpos = -1;
     int rpos = -1;
+    int end_pos = variant_end_pos;
     
     bool is_substitute;
     bool is_ins;
     bool is_del;
     bool is_complex;
     bool is_shiftable;
+    bool is_overlapping = false;
     
     void _sb_leftmost_pos(const LocalReference& loc_ref);
     void set_leftmost_pos(const LocalReference& loc_ref);
@@ -103,40 +110,6 @@ struct Variant
     bool is_equivalent(const Variant& v, const LocalReference& loc_ref) const;
     
     std::string minimal_repeat_unit() const;
-
-    /*
-    bool operator == (const Variant& rhs) const
-    {
-        return (pos == rhs.pos && ref == rhs.ref && alt == rhs.alt);
-    }*/
-
-    /*
-    bool operator < (const Variant& rhs) const
-    {
-        if (pos < rhs.pos) 
-        {    
-            return true;
-        }
-        else if (rhs.pos < pos) 
-        {    
-            return false;
-        }
-        else //pos == rhs.pos
-        {
-            if (ref.size() < rhs.ref.size()) 
-            {
-                return true;
-            }
-            else if (rhs.ref.size() < ref.size())
-            {
-                return false;
-            }
-            else //same ref deleted
-            {
-                return (alt < rhs.alt);
-            }
-        }
-    }*/
 };
 
 
@@ -270,5 +243,12 @@ int to_idx(
     const int aln_start, const int target_pos, const CigarVec& cigar_vector
 );
 
-
+/*
+struct MatchResult
+{
+    MatchResult(
+        const int ss_start, const int ss_end,
+        const Alignment& aln
+    );
+};*/
 #endif 

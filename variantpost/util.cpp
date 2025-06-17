@@ -273,7 +273,6 @@ inline void to_right(
     shorter_allele = next_base;
     ++variant_end_pos;
     is_failed = false;
-    
 }
 
 
@@ -348,8 +347,8 @@ void Variant::set_rightmost_pos(const LocalReference& loc_ref)
 {
     if (is_complex 
         || is_clipped_segment
-        || loc_ref.start <= pos
-        || loc_ref.end >= pos) 
+        || pos <= loc_ref.start
+        || loc_ref.end <= pos) 
     {    
         rpos = pos;
         return;
@@ -378,6 +377,7 @@ void Variant::set_rightmost_pos(const LocalReference& loc_ref)
     );
     
     rpos = _pos;
+    end_pos = rpos + ref_len;
 }
 
 
@@ -1198,3 +1198,12 @@ int to_idx(
     return -1; //invalid case
 }
 
+/*
+MatchResult::MatchResult(
+    const int ss_start, const int ss_end,
+    const int query_begin, const int query_end,
+    const CigarVec& cigar_vector
+) 
+{
+    
+}*/
