@@ -1,64 +1,24 @@
 #include "util.h"
 #include "reads.h"
 
-inline char offset_qual(int q) 
-{
-    return static_cast<char>(q + 33);
-}
-
+//------------------------------------------------------------------------------
+// helper function used in Read::parseCoveringPattern
 inline bool is_ascending(const int a, const int b, const int c)
 {
     return (a <= b && b <= c);
 }
 
-std::string to_qual_str (const std::vector<int>& qual_vec) 
-{
-    std::vector<char> res(qual_vec.size());
-    std::transform(qual_vec.begin(), qual_vec.end(), res.begin(), offset_qual);
-    std::string q_str(res.begin(), res.end());
-    
-    return q_str;
-}
-
-
-void sort_by_start(Reads& reads)
-{
-    std::sort(
-        reads.begin(), reads.end(), [](const Read& a, const Read& b)
-        {
-            return a.read_start <  b.read_start ? true : false;
-        }
-    );
-
-    std::sort(
-        reads.begin(), reads.end(), [](const Read& a, const Read& b)
-        {
-            return a.aln_start <  b.aln_start ? true : false;
-        }
-    );
-}
-
-
-void sort_by_kmer(Reads& reads)
-{
-    std::sort(
-        reads.begin(), reads.end(), [](const Read & a, const Read & b)
-        {
-            return a.kmer_score >  b.kmer_score ? true : false;
-        }
-    ); 
-}
-
-//-----------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 // NOTE: initilizer list reordered to suppress warning
 Read::Read(std::string_view name_, const bool is_reverse_, 
            std::string_view cigar_str_, const int aln_start_, const int aln_end_, 
            std::string_view seq_, const std::vector<int>& quals_, const int mapq_, 
            const bool is_from_first_bam_) 
-    : name(name_), is_reverse(is_reverse_), is_from_first_bam(is_from_first_bam_),
-      mapq(mapq_), aln_start(aln_start_), aln_end(aln_end_), seq(seq_), cigar_str(cigar_str_)
+    : name(name_), mapq(mapq_), aln_start(aln_start_), aln_end(aln_end_), seq(seq_), 
+      is_reverse(is_reverse_), is_from_first_bam(is_from_first_bam_)
 {
-    base_quals = to_qual_str(quals_);
+    for (const auto& q : quals_)
+        base_quals.push_back(static_cast<char>(q + 33));
     
     cigar_vector = to_cigar_vector(cigar_str_);
     
@@ -67,8 +27,7 @@ Read::Read(std::string_view name_, const bool is_reverse_,
     end_offset 
         = cigar_vector.back().first == 'S' ? cigar_vector.back().second : 0;
 
-    read_start = aln_start - start_offset;
-    read_end = aln_end + end_offset;
+    read_start = aln_start - start_offset; read_end = aln_end + end_offset;
 }
 
 //------------------------------------------------------------------------------
@@ -86,8 +45,6 @@ void Read::setReference(LocalReference& loc_ref)
     }          
     else//spliced reference 
     {   
-        const std::string chrom = loc_ref.chrom;
-
         int pos_1 = aln_start - 1; // for refseq setup
         char op = '\0'; int op_len = 0;
         for (const auto& c : cigar_vector)
@@ -98,17 +55,15 @@ void Read::setReference(LocalReference& loc_ref)
             {
                 case 'M': case '=': case 'X': case 'D':
                     spliced_ref_seq += 
-                        loc_ref.fasta.getSubSequence(chrom, pos_1, op_len);
-                    pos_1 += op_len; 
-                    pos_2 += op_len;
+                        loc_ref.fasta.getSubSequence(loc_ref.chrom, pos_1, op_len);
+                    pos_1 += op_len; pos_2 += op_len;
                     break;
                 case 'S':
                     pos_2 += op_len;
                     break;
                 case 'N':
                     skipped_segments.emplace_back(pos_2, (pos_2 + op_len -1));
-                    pos_1 += op_len;
-                    pos_2 += op_len;
+                    pos_1 += op_len; pos_2 += op_len;
                     break;
                 default:
                     break;
@@ -118,10 +73,8 @@ void Read::setReference(LocalReference& loc_ref)
     }
 
     // reference seq flags
+    is_na_ref = (ref_seq.empty()); if (is_na_ref) return;
     is_ref = (seq == ref_seq);
-    is_na_ref = (ref_seq.empty());
-
-    if (is_na_ref) return;
     
     //aligned segment
     pos_2 = read_start; // reset to read_start
@@ -134,21 +87,9 @@ void Read::setReference(LocalReference& loc_ref)
 }
 
 //------------------------------------------------------------------------------
-// NOTE: use only after setReference
-void Read::setVariants(LocalReference& loc_ref)
-{
-    if (is_na_ref || is_ref) return;
-    
-    // from util.h
-    parse_variants(aln_start, ref_seq, seq, base_quals, 
-                   cigar_vector, loc_ref.dict, variants, non_ref_quals);
-}
-
-//------------------------------------------------------------------------------
 // 'A': target locus + shiftable region is completely covered
 // 'B': partially
-// 'C': not covered
-// 'X': skipped
+// 'C': not covered or skipped by splicing
 void Read::parseCoveringPattern(LocalReference& loc_ref, const Variant& target)
 {
     // skipped
@@ -156,7 +97,7 @@ void Read::parseCoveringPattern(LocalReference& loc_ref, const Variant& target)
     {
         if (seg.first < target.lpos && target.rpos < seg.second)
         {
-            is_na_ref = true; covering_ptrn = 'X'; return;
+            is_na_ref = true; covering_ptrn = 'C'; return;
         }
     }
     
@@ -198,42 +139,155 @@ void Read::parseCoveringPattern(LocalReference& loc_ref, const Variant& target)
 }
 
 //------------------------------------------------------------------------------
-// find target and nearest non-target events
+// NOTE: use only after setReference
+void Read::setVariants(LocalReference& loc_ref)
+{
+    if (is_ref) return;
+    
+    // from util.h
+    parse_variants(aln_start, ref_seq, seq, base_quals, 
+                   cigar_vector, loc_ref.dict, variants, pos2idx, non_ref_quals);
+}
+
+//------------------------------------------------------------------------------
 void Read::parseLocalPattern(LocalReference& loc_ref, const Variant& target)
 {
-    if (covering_ptrn == 'C' || covering_ptrn == 'X' ||
-        variants.empty()     || is_na_ref             ) return;
+    // fail to cover regions with enough 2-mer diversity (flankings)
+    if (loc_ref.flanking_start < covering_start || covering_end < loc_ref.flanking_end) 
+        fail_to_cover_flankings = true;
     
     int idx = 0; std::vector<int> dists;
     for (auto& v : variants)
     {
-        if (target.is_equivalent(v, loc_ref))
+        if (target.isEquivalent(v, loc_ref))
         {
-            has_target = true; variants_target_idx = idx;
+            has_target = true; target_idx = idx;
             target_pos = v.pos; target_ref = v.ref; target_alt = v.alt;
             return;
         }
         
-        // collect distances from target region to non-targets
-        // 0 if overlapping with target region
-        v.set_leftmost_pos(loc_ref);
-        v.set_rightmost_pos(loc_ref);
-        if (v.lpos < target.lpos                ||
-            target.rpos + target.ref_len < v.rpos)
+        // distances from target region to non-target variants
+        v.setEndPos(loc_ref);
+        if (v.lpos < target.lpos || target.end_pos < v.rpos)
         {
             int lt_d = target.lpos - v.lpos;
-            int rt_d = v.rpos - (target.rpos + target.ref_len);
+            int rt_d = v.rpos - target.end_pos;
             if (lt_d < rt_d) dists.push_back(lt_d);
             else dists.push_back(rt_d);    
         } 
-        else dists.push_back(0);
+        else dists.push_back(0); // 0 if overlapped
         ++idx;
     }
+
+    //clipping
+    if (start_offset)
+        dists.push_back(std::abs(target.pos - aln_start));
+    if (end_offset)
+        dists.push_back(std::abs(target.pos - aln_end));
 
     if (!dists.empty()) 
         dist_to_non_target = *std::min_element(dists.begin(), dists.end());
 }
 
+//------------------------------------------------------------------------------
+void Read::setSignatureStrings()
+{
+    for (const auto& v : variants) 
+        non_ref_sig += (std::to_string(v.pos) + "_" + v.ref + "_" + v.alt + ";");
+    
+    std::string s1, s2;
+    for (const auto& s : skipped_segments) 
+    {
+        s1 = std::to_string(s.first); s2 = std::to_string(s.second);
+        non_ref_sig += ("spl=" + s1 + "-" + s2 + ";");
+        splice_sig += ("spl=" + s1 + "-" + s2 + ";");
+    }
+    
+    if (start_offset) 
+        non_ref_sig += ("lt_clip_end=" + std::to_string(aln_start - 1) + ";");
+    
+    if (end_offset) 
+        non_ref_sig += ("rt_clip_start=" + std::to_string(aln_end + 1));
+}
+
+//------------------------------------------------------------------------------
+void prep_reads(const std::vector<std::string>& read_names,
+                const std::vector<bool>& are_reverse, 
+                const std::vector<std::string>& cigar_strs,
+                const std::vector<int>& aln_starts,
+                const std::vector<int>& aln_ends,
+                const std::vector<std::string>& read_seqs,
+                const std::vector<std::vector<int>>& quals,
+                const std::vector<int>& mapqs,
+                const std::vector<bool>& are_from_first_bam,
+                LocalReference& loc_ref,
+                Variant& target,
+                const UserParams& params,
+                Reads& reads)
+{
+    size_t n_reads = read_names.size(); reads.reserve(n_reads);
+    for (size_t i = 0; i < n_reads; ++i)
+    {
+        if (mapqs[i] < params.mapq_thresh) continue; //can do this at Python?
+        
+        reads.emplace_back(read_names[i], are_reverse[i], cigar_strs[i],
+                           aln_starts[i], aln_ends[i], read_seqs[i],
+                           quals[i], mapqs[i], are_from_first_bam[i]);
+
+        reads[i].setReference(loc_ref); 
+        
+        if (reads[i].is_na_ref) continue;
+        reads[i].setVariants(loc_ref); 
+
+        reads[i].parseCoveringPattern(loc_ref, target);
+        if (reads[i].covering_ptrn == 'C') continue;
+        
+        reads[i].setVariants(loc_ref);
+        reads[i].parseLocalPattern(loc_ref, target); 
+        reads[i].is_analyzable = true;
+    }
+    reads.shrink_to_fit();
+}
+
+//------------------------------------------------------------------------------
+void triage_reads(Reads& reads, Reads& supportings, Reads& candidates, 
+                  Reads& non_supportings, UserParams& params)
+{
+    size_t buff = reads.size(); 
+    supportings.reserve(buff); candidates.reserve(buff); non_supportings.reserve(buff);
+
+    for (size_t i = 0; i < buff; ++i)
+    {
+        if (!reads[i].is_analyzable) continue;
+
+        if(reads[i].has_target)
+        {
+            reads[i].setSignatureStrings(); transfer_elem(supportings, reads, i);
+        }
+        else if (reads[i].dist_to_non_target < params.local_thresh)
+        {   
+            reads[i].setSignatureStrings(); transfer_elem(candidates, reads, i);
+        }
+        else 
+            transfer_elem(non_supportings, reads, i);
+    }
+
+    reads.clear(); 
+    supportings.shrink_to_fit(); candidates.shrink_to_fit(); non_supportings.shrink_to_fit();
+
+    /*std::cout << supportings.size() << " " << candidates.size() << " " << non_supportings.size() << " " << std::endl;
+
+    for (auto r : non_supportings)
+        std::cout << r.is_reverse << " " << r.name << " " << r.covering_ptrn << std::endl;
+    */
+}
+
+//------------------------------------------------------------------------------
+// QC
+//void Read::qualityCheck(const Variant& target, const UserParams& params)
+//{
+    /**/
+//}
 
 /*
 std::string_view get_unspliced_ref_seq(
@@ -366,7 +420,8 @@ inline bool is_ascending(const int a, const int b, const int c)
     return (a <= b && b <= c);
 }
 */
-                                                                    
+
+/*                                                            
 void covering_patterns(Read& read, const Variant& target)   
 {
     if (!read.skipped_segments.empty()) 
@@ -561,7 +616,7 @@ void annot_target_info(
             }
             
             variant.set_leftmost_pos(loc_ref);
-            variant.set_rightmost_pos(loc_ref);
+            variant.rightAlign(loc_ref);
 
             int event_region_start = variant.lpos;
             int event_region_end = variant.rpos + (variant.ref_len - 1);
@@ -1099,4 +1154,4 @@ void classify_reads(
     {
         if (! j.is_reverse) std::cout << j.name << std::endl;
     }
-} 
+}*/ 

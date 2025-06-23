@@ -1,6 +1,7 @@
 #include <set>
 #include <map>
 #include <cmath>
+#include <bitset>
 #include <string>
 #include <vector>
 #include <utility>
@@ -19,6 +20,19 @@
 #ifndef BAM_CIGAR_SHIFT
 #define BAM_CIGAR_SHIFT 4u
 #endif
+
+typedef  std::unordered_map<std::string_view, int> Dimers;
+Dimers dimers = 
+{
+    {"AA", 0}, {"AC", 1}, {"AG", 2}, {"AT", 3},
+    {"CA", 4}, {"CC", 5}, {"CG", 6}, {"CT", 7},
+    {"GA", 8}, {"GC", 9}, {"GG", 10}, {"GT", 11},
+    {"TA", 12}, {"TC", 13}, {"TG", 14}, {"TT", 15}
+};
+
+
+Qual::Qual(const int idx_, const int pos_, const int len_)
+    : idx(idx_), pos(pos_), len(len_) { };
 
 
 UserParams::UserParams(
@@ -43,9 +57,10 @@ UserParams::UserParams(
     retarget_thresh(retarget_thresh)
 {
     base_q_thresh = static_cast<char>(_base_q_thresh + 33);    
+    min_dimer_cnt=8;
 };
 
-
+/*
 std::unordered_map<int, std::string_view> dictize_reference(
     std::string_view ref_seq, 
     int ref_start, 
@@ -64,25 +79,54 @@ std::unordered_map<int, std::string_view> dictize_reference(
 
   return ref_dict;
 }
+*/
 
 
-LocalReference::LocalReference(
-    const string& fastafile,
-    const string& chrom,
-    const int start,
-    const int end
-) : chrom(chrom),
-    start(start),
-    end(end)
+
+
+
+//------------------------------------------------------------------------------
+LocalReference::LocalReference(const std::string& fastafile, 
+                               const std::string& chrom_, const int start_, const int end_) 
+    : chrom(chrom_), start(start_), end(end_)
 {
     fasta.open(fastafile);
     
-    _seq = fasta.getSubSequence(chrom, start - 1, end - start + 1);
-    
+    _seq = fasta.getSubSequence(chrom_, start_ - 1, end_ - start_ + 1);
     seq = static_cast<std::string_view>(_seq);
     
-    dict = dictize_reference(seq, start, end);
-};
+    for (int i = 0; i <= end - start; ++i)
+        dict[start + i] = seq.substr(i, 1); 
+}
+
+
+//------------------------------------------------------------------------------
+// define flanking region by 2-mer diversity
+void LocalReference::setFlankingBoundary(const int pos, const size_t thresh)
+{
+    if (seq.find('N') != std::string::npos) return;
+    
+    std::bitset<16> flags;
+    for (int i = pos - start; i <= end - start - 1; ++i)
+    {
+        flags.set(dimers[seq.substr(i, 2)]);
+        if (flags.count() > thresh) 
+        {
+            flanking_end = pos + i - (pos - start); break;
+           
+        } 
+    }
+    
+    flags.reset();
+    for (int i = pos - start; i > 0; --i)
+    {
+        flags.set(dimers[seq.substr(i, 2)]);
+        if (flags.count() > thresh)
+        {
+            flanking_start = pos + i - (pos - start); break;
+        }
+    }
+}
 
 
 inline bool contain_n(std::string_view sv1, std::string_view sv2)
@@ -101,16 +145,16 @@ inline bool is_rotatable(std::string_view allele)
 
 
 Variant::Variant 
-(    int pos, 
-     const std::string& ref, 
-     const std::string& alt,
-     bool is_clipped_segment
-) : pos(pos), 
-    ref(ref), 
-    alt(alt),
-    is_clipped_segment(is_clipped_segment),  
-    ref_len(ref.size()), 
-    alt_len(alt.size()),
+(    int pos_, 
+     const std::string& ref_, 
+     const std::string& alt_,
+     bool is_clipped_segment_
+) : pos(pos_), 
+    ref(ref_), 
+    alt(alt_),
+    is_clipped_segment(is_clipped_segment_),  
+    ref_len(ref_.size()), 
+    alt_len(alt_.size()),
     is_substitute(alt_len == ref_len),
     is_ins(alt_len > ref_len),
     is_del(alt_len < ref_len)
@@ -215,39 +259,26 @@ void Variant::_sb_leftmost_pos(const LocalReference& loc_ref)
 }
 
 
-void Variant::set_leftmost_pos(const LocalReference& loc_ref)
+void Variant::setLeftPos(const LocalReference& loc_ref)
 {
-    if (is_complex 
-        || is_clipped_segment 
-        || has_n
-        || pos <= loc_ref.start
-        || loc_ref.end <= pos) 
+    if (is_complex || is_clipped_segment   || 
+        has_n      || pos <= loc_ref.start || 
+        loc_ref.end <= pos) 
     {    
-        lpos = pos;   
-        return;
+        lpos = pos; return;
     }
 
     if (is_substitute)
     {
-        _sb_leftmost_pos(loc_ref);
-        return;
+        _sb_leftmost_pos(loc_ref); return;
     }
     
     //copy -> keep orig data
-    int _pos = pos;
-    int _variant_end_pos = variant_end_pos;
-    std::string _ref = ref;
-    std::string _alt = alt;
+    int _pos = pos, _end_pos = pos + ref_len;
+    std::string _ref = ref, _alt = alt;
 
-    left_align(
-        _pos, 
-        _variant_end_pos, 
-        _ref, 
-        _alt, 
-        is_ins, 
-        loc_ref.start, 
-        loc_ref.dict
-    );
+    left_align(_pos, _end_pos, _ref, _alt, 
+               is_ins, loc_ref.start, loc_ref.dict);
 
     lpos = _pos;
 }
@@ -292,7 +323,6 @@ void right_align(
 
     do {
         if (ref_dict.find(variant_end_pos) == ref_dict.cend()) return;
-
         to_right(
             variant_end_pos, 
             longer_allele, 
@@ -300,7 +330,6 @@ void right_align(
             is_failed,
             ref_dict
         );
-
         if (is_failed) return;
         
         ++pos;
@@ -343,85 +372,70 @@ void Variant::_sb_rightmost_pos(const LocalReference& loc_ref)
 }
 
 
-void Variant::set_rightmost_pos(const LocalReference& loc_ref)
+void Variant::setRightPos(const LocalReference& loc_ref)
 {
-    if (is_complex 
-        || is_clipped_segment
-        || pos <= loc_ref.start
-        || loc_ref.end <= pos) 
+    if (is_complex           || is_clipped_segment   || 
+        pos <= loc_ref.start || loc_ref.end <= pos    ) 
     {    
-        rpos = pos;
-        return;
+        rpos = pos; return;
     }
     
     if (is_substitute)
     {
-        _sb_rightmost_pos(loc_ref);
-        return;
+        _sb_rightmost_pos(loc_ref);return;
     }
     
     //copy -> keep orig info
-    int _pos = pos;
-    int _variant_end_pos = variant_end_pos;
-    std::string _ref = ref;
-    std::string _alt = alt;
-
-    right_align(
-        _pos, 
-        _variant_end_pos, 
-        _ref, 
-        _alt, 
-        is_ins,
-        loc_ref.end, 
-        loc_ref.dict
-    );
+    int _pos = pos, _end_pos = pos + ref_len;
+    std::string _ref = ref, _alt = alt;
+    
+    right_align(_pos, _end_pos, _ref, _alt, 
+                is_ins, loc_ref.end, loc_ref.dict);
     
     rpos = _pos;
-    end_pos = rpos + ref_len;
 }
 
 
-bool Variant::is_equivalent(
-    const Variant& other, 
-    const LocalReference& loc_ref
-) const
+void Variant::setEndPos(const LocalReference& loc_ref)
 {
+    setLeftPos(loc_ref); setRightPos(loc_ref);
+    end_pos = rpos + ref_len;
+    is_shiftable = (rpos != lpos);
+}
+
+
+//------------------------------------------------------------------------------
+bool Variant::isEquivalent(const Variant& other, const LocalReference& loc_ref) const
+{
+    // different variant type
+    if (ref_len != other.ref_len || alt_len != other.alt_len) return false;
+    //exact match
+    if (pos == other.pos && ref == other.ref && alt == other.alt) return true;
     
-    int _pos = other.pos;
-    int _varient_end_pos = other.variant_end_pos;
-    std::string _ref = other.ref;
-    std::string _alt = other.alt;
+    int _pos = other.pos; int _end_pos = other.pos + other.ref_len;
+    std::string _ref = other.ref, _alt = other.alt;
     
-    //cplx other
+    //cplx other (cant remember)
     if (_ref.size() > 1 && _alt.size() > 1)
     {
         if (ref == _ref && pos == _pos) return true; //del seq match
         if (alt.substr(1) == _alt.substr(1))
         {
             //inserted seq (w/o padding base) may be anywhere in the deletion
-            if (_pos <= pos 
-                && pos <= _pos + static_cast<int>(_ref.size()) - 1) return true;
+            if (_pos <= pos && pos <= _pos + static_cast<int>(_ref.size()) - 1) 
+                return true;
         }
 
         return false;
     }
     
-    if (pos == _pos && ref == _ref && alt == _alt) return true;
-    if (is_clipped_segment || other.is_clipped_segment) return false;
-    if (ref_len != other.ref_len || alt_len != other.alt_len) return false;
-    if (is_substitute) return false;
+    /* don't remember*/
+    //if (is_clipped_segment || other.is_clipped_segment) return false;
+    //if (is_substitute) return false;
     
-    left_align(
-        _pos, 
-        _varient_end_pos, 
-        _ref, 
-        _alt, 
-        other.is_ins, 
-        loc_ref.start, 
-        loc_ref.dict
-     );
+    left_align(_pos, _end_pos, _ref, _alt, other.is_ins, loc_ref.start, loc_ref.dict);
             
-     return (pos == _pos && ref == _ref && alt == _alt);
+    return (pos == _pos && ref == _ref && alt == _alt);
 } 
 
 
@@ -901,10 +915,11 @@ void parse_variants(
     std::string_view ref_seq, 
     std::string_view read_seq,
     std::string_view base_qualities, 
-    const std::vector<std::pair<char, int>>& cigar_vector,
+    const CigarVec& cigar_vector,
     const std::unordered_map<int, std::string_view>& ref_dict,
-    std::vector<Variant>& variants, 
-    std::string& non_ref_quals
+    std::vector<Variant>& variants,
+    Coord& pos2idx, 
+    std::vector<Qual>& non_ref_quals
 )
 {
     if (read_seq == ref_seq) return;
@@ -921,9 +936,7 @@ void parse_variants(
         op_len = cigar.second;
         switch (op)
         {
-            case 'M':
-            case 'X':
-            case '=':
+            case 'M': case 'X': case '=':
                 for (int i = 0; i < op_len; ++i)
                 {
                     ref = ref_seq.substr(ref_idx, 1);
@@ -934,11 +947,13 @@ void parse_variants(
                             pos, 
                             std::string(ref), 
                             std::string(alt)
-                        ); 
-                        non_ref_quals += std::string(
-                            base_qualities.substr(read_idx, 1)
                         );
+                        non_ref_quals.emplace_back(read_idx, pos, 1); 
+                        //non_ref_quals += std::string(
+                        //  base_qualities.substr(read_idx, 1)
+                        //);
                     }
+                    pos2idx.emplace_back(pos, read_idx);
                     ++ref_idx;
                     ++read_idx;
                     ++pos;
@@ -966,9 +981,11 @@ void parse_variants(
                     std::string(ref) 
                     + std::string(read_seq.substr(read_idx, op_len))
                 );
-                non_ref_quals += std::string(
-                    base_qualities.substr(read_idx, op_len)
-                ); 
+                non_ref_quals.emplace_back(read_idx, pos - 1, op_len);
+                //non_ref_quals += std::string(
+                //    base_qualities.substr(read_idx, op_len)
+                //);
+                //pos2idx.emplace_back(pos - 1, read_idx); 
                 read_idx += op_len;
                 break; 
             case 'D':
@@ -1000,13 +1017,13 @@ void parse_variants(
                 is_padding_base_supported = false;
                 break;
             case 'S':
-                non_ref_quals += std::string(
-                    base_qualities.substr(read_idx, op_len)
-                );
+                non_ref_quals.emplace_back(read_idx, pos, op_len);
+                //non_ref_quals += std::string(
+                //    base_qualities.substr(read_idx, op_len)
+                //);
                 read_idx += (op_len);
                 break;
-            case 'H':
-            case 'P':
+            case 'H': case 'P':
                 break;
          }
      }

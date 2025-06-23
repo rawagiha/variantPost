@@ -1,14 +1,15 @@
-#include "eval.h"
+//#include "eval.h"
 #include "util.h"
-#include "match.h"
+//#include "match.h"
 #include "reads.h"
 #include "search.h"
-#include "contig.h"
-#include "substitutes.h"
+//#include "contig.h"
+//#include "substitutes.h"
+
 
 SearchResult::SearchResult() {}
 
-
+/*
 void SearchResult::fill_read_info(const Reads& reads, const int target_status)
 {
     for (const auto& read : reads)
@@ -124,8 +125,9 @@ void SearchResult::report(
     skip_ends = contig.skip_ends;
     is_retargeted = _is_retargeted;
 }
+*/
 
-
+/*
 Variant prep_target(
     const int pos, 
     const std::string& ref, 
@@ -137,11 +139,11 @@ Variant prep_target(
     target.set_leftmost_pos(loc_ref);
     target.set_rightmost_pos(loc_ref); 
     target.is_shiftable = target.lpos != target.rpos ? true : false;
-    
+    target.is_overlapping = true;    
     return target;    
 }
-
-
+*/
+/*
 void prep_reads(
     Reads& reads,
     const std::vector<std::string>& read_names,
@@ -152,22 +154,39 @@ void prep_reads(
     const std::vector<std::string>& read_seqs,
     const std::vector<std::vector<int>>& quals,
     const std::vector<int>& mapqs,
-    const std::vector<bool>& are_from_first_bam
+    const std::vector<bool>& are_from_first_bam,
+    LocalReference& loc_ref,
+    Variant& target,
+    const UserParams& params
 )
 {
     size_t n_reads = read_names.size();
     reads.reserve(n_reads);
     for (size_t i = 0; i < n_reads; ++i)
     {
+        if (mapqs[i] < params.mapq_thresh) continue; 
+        
         reads.emplace_back(
             read_names[i], are_reverse[i], cigar_strs[i],
             aln_starts[i], aln_ends[i], read_seqs[i],
             quals[i], mapqs[i], are_from_first_bam[i]
         );
+
+        reads[i].setReference(loc_ref); 
+        
+        if (reads[i].is_na_ref) continue;
+        reads[i].setVariants(loc_ref); 
+
+        reads[i].parseCoveringPattern(loc_ref, target);
+        if (reads[i].covering_ptrn == 'C') continue;
+        
+        reads[i].setVariants(loc_ref);
+        reads[i].parseLocalPattern(loc_ref, target); 
+        reads[i].is_analyzable = true;
     }
-}
+}*/
 
-
+/*
 void from_target_reads(
     Contig& contig,
     const Variant& target,
@@ -201,8 +220,7 @@ void from_target_reads(
         return;      
     }
 
-    ShiftableSegment ss;
-    annot_shiftable_segment(ss, target, contig); 
+    CritSeg ss(target, contig);
 
     Reads lt_matches, mid_matches, rt_matches;    
     classify_cand_indel_reads(
@@ -211,12 +229,21 @@ void from_target_reads(
         undetermined, contig, ss, user_params
     );
     
+    std::cout << "eval " << _eval << std::endl;
+    
+    for (size_t i = 0; i < contig.ref_bases.size(); ++i)
+    {
+        std::cout << contig.positions[i] << ":" << contig.ref_bases[i] << ">" << contig.alt_bases[i] << ", ";
+    }
+    std::cout << std::endl;
     if (_eval != 'A')
     {
+        std::cout << "enter here " << std::endl;
         extend_contig(_eval, contig, lt_matches, rt_matches, loc_ref);
         aln_extended_contig(contig, target, user_params, loc_ref);
     }
      
+    std::cout << contig.seq << std::endl;
     transfer_vector(targets, lt_matches);
     transfer_vector(targets, mid_matches);
     transfer_vector(targets, rt_matches);
@@ -281,6 +308,10 @@ void from_candidate_reads(
             contig, target, user_params, loc_ref, is_mocked, p_decomposed
         );
         
+        std::cout << _eval << " mocked " << is_mocked << std::endl; 
+        //overide
+        is_mocked = false;
+        
         if (!is_mocked)
         {
             transfer_vector(non_targets, candidates);
@@ -298,7 +329,7 @@ void from_candidate_reads(
         p_decomposed, target, contig, user_params
     );
 }   
-
+*/
 
 void _search_target(
     
@@ -341,32 +372,29 @@ void _search_target(
     const std::vector<bool>& are_from_first_bam)
 {  
     
-    //auto t1 = std::chrono::high_resolution_clock::now();
-        
-    // do input validation at python ends
-    // 1) no fetched reads, 
-    // 2) undefined variants...
-    // 3) ref_start/ref_end must be non-N region
-    
-    // packing data from Python 
-    UserParams user_params(
-        mapq_thresh, base_q_thresh, lq_base_rate_thresh,
-        match_score, mismatch_penal, gap_open_penal, gap_ext_penal, 
-        kmer_size, local_thresh, retarget_thresh 
-    );
+    UserParams user_params(mapq_thresh, base_q_thresh, lq_base_rate_thresh,
+                           match_score, mismatch_penal, gap_open_penal, gap_ext_penal, 
+                           kmer_size, local_thresh, retarget_thresh);
 
     LocalReference loc_ref(fastafile, chrom, ref_start, ref_end);   
-
-    Variant target = prep_target(pos, ref, alt, loc_ref);
+    
+    
+    // prepare target
+    Variant target(pos, ref, alt); target.setEndPos(loc_ref); 
    
+    std::cout << target.lpos  << " " << target.rpos << " " << target.end_pos << std::endl;
+    
+    loc_ref.setFlankingBoundary(pos, user_params.min_dimer_cnt);
+    
     Reads reads, targets, candidates, non_targets, undetermined;
     
     // read parsing
-    prep_reads(
-        reads, read_names, are_reverse, cigar_strs,
-        aln_starts, aln_ends, read_seqs, quals, mapqs, are_from_first_bam
-    ); 
+    prep_reads(read_names, are_reverse, cigar_strs, aln_starts, aln_ends, 
+               read_seqs, quals, mapqs, are_from_first_bam, loc_ref, target, user_params, reads); 
     
+    triage_reads(reads, targets, candidates, non_targets, user_params);   
+    
+    /*
     Contig contig;
     bool is_retargeted = false, is_non_supporting = false, is_mocked = false;
     if (target.is_substitute)
@@ -376,6 +404,8 @@ void _search_target(
             is_retargeted, is_non_supporting, is_mocked
         );
                 
+        for (auto& read : reads) std::cout << read.name << " " << read.sb_ptrn << std::endl;
+        
         if (is_retargeted) // process as indel
         {    
             target = prep_target(target.pos, target.ref, target.alt, loc_ref);   
@@ -423,5 +453,5 @@ void _search_target(
     }
     
     rslt.report(contig, targets, non_targets, undetermined, is_retargeted);
-    if (is_retargeted) rslt.retarget_pos = target.pos;
+    if (is_retargeted) rslt.retarget_pos = target.pos;*/
 }   

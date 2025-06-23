@@ -1,7 +1,7 @@
 #ifndef SEARCH_H
 #define SEARCH_H
 
-#include "contig.h"
+//#include "contig.h"
 
 struct SearchResult 
 {
@@ -23,15 +23,16 @@ struct SearchResult
 
     SearchResult();
                                                 
-    void fill_read_info(const Reads& reads, const int target_status);
+    //void fill_read_info(const Reads& reads, const int target_status);
     
+    /*
     void report(
         const Contig& contig,
         Reads& targets,
         Reads& non_targets,
         Reads& undetermined,
         const bool is_retargeted = false
-    );
+    );*/
 };
 
 
