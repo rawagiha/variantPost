@@ -17,10 +17,18 @@
 typedef std::set<std::string_view> Kmers;
 typedef std::vector<std::pair<int, int>> Coord;
 typedef std::vector<std::pair<char, int>> CigarVec;
+typedef std::unordered_map<int, std::string_view> Dict;
 typedef StripedSmithWaterman::Alignment Alignment;
 typedef StripedSmithWaterman::Aligner Aligner;
 typedef StripedSmithWaterman::Filter Filter;
 
+struct Variant;
+
+struct Qual
+{
+    Qual(const int idx, const int pos, const int len);
+    int idx; int pos; int len;
+};
 
 struct UserParams
 { 
@@ -34,6 +42,7 @@ struct UserParams
     int kmer_size; 
     int local_thresh;
     int retarget_thresh;
+    int min_dimer_cnt;
 
     UserParams
     (
@@ -50,64 +59,90 @@ struct UserParams
     );
 }; 
 
-
+//------------------------------------------------------------------------------
 struct LocalReference
 { 
-    LocalReference(
-        const string& fastafile,  
-        const std::string& chrom, const int start, const int end
-    );
+    LocalReference(const std::string& fastafile, 
+                   const std::string& chrom, const int start, const int end);
     
+    void setFlankingBoundary(const Variant& target, const size_t window);
+     
     FastaReference fasta;
     std::string chrom;
+    
     int start;
     int end;
+    
+    // flanking region defined by 2-mer diversity
+    int flanking_start = -1; int flanking_end = -1;
+    bool has_flankings = false;
+
     std::string_view seq;
-    std::unordered_map<int, std::string_view> dict;
+    Dict dict;
 
 private:
     std::string _seq;    
 };
 
+
 //------------------------------------------------------------------------------
 struct Variant
 {
-    Variant(const int pos, const std::string& ref, const std::string& alt,
-            bool is_clipped_segment = false); //don't remeber last arg...
-
-
-
-    // NOTE
-    // non-initialized members are initialized by contructor
-    int pos;
-    std::string ref;
-    std::string alt;
+    //--------------------------------------------------------------------------
+    // base qualities may not be supplied (e.g.,deletions) 
+    Variant(const int pos, 
+            const std::string& ref, const std::string& alt, std::string_view qual = ""); 
     
-    bool has_n;
-    bool is_clipped_segment;
+    //--------------------------------------------------------------------------
+    // perform left or right alignmemt 
+    void setLeftPos(const LocalReference& loc_ref);
+    void setRightPos(const LocalReference& loc_ref);
+    void setEndPos(const LocalReference& loc_ref);
     
-    int ref_len;
-    int alt_len;
-    int indel_len;
-    int variant_end_pos = pos + ref_len;
-    int lpos = -1;
-    int rpos = -1;
-    int end_pos = variant_end_pos;
+    //--------------------------------------------------------------------------
+    // set left-flanking, inserted seq (middle), right flanking
+    void setFlankingSequences(const LocalReference& loc_ref);
     
-    bool is_substitute;
-    bool is_ins;
-    bool is_del;
-    bool is_complex;
-    bool is_shiftable;
-    bool is_overlapping = false;
+    //--------------------------------------------------------------------------
+    // test variant identity after normalization
+    bool isEquivalent(const Variant& v, const LocalReference& loc_ref) const;
+    
+    //--------------------------------------------------------------------------
+    // inputs
+    int pos; // 1-based genomic pos
+    std::string ref; std::string alt;
+    std::string_view qual; // base qualities, NOT including padding (aln may begin with insertion) 
+    
+    //--------------------------------------------------------------------------
+    // flanking sequences
+    std::string_view lt_seq; // left flanking
+    std::string_view mid_seq; // middle (inserted seq)
+    std::string_view rt_seq; // right flanking
+
+    //--------------------------------------------------------------------------
+    // numeric data
+    int ref_len = 0, alt_len = 0; // allele len
+    int indel_len = 0; // len of inserted or deleted sequence
+    int lpos = -1, rpos = -1; // left and right aligned positions
+    int end_pos = rpos + ref_len; // end postion of event after right-aligned
+    
+    //--------------------------------------------------------------------------
+    // boolean flags
+    bool has_n = false; // true if "N" base in alleles
+    bool has_flankings = false; // true if flanking sequences set
+    bool is_substitute = false, is_ins = false, is_del = false; // variant class
+    bool is_complex = false; // true if complex event
+    bool is_shiftable = false; // true if left- and right-positions are different
+    
+    //bool is_overlapping = false;
     
     void _sb_leftmost_pos(const LocalReference& loc_ref);
-    void set_leftmost_pos(const LocalReference& loc_ref);
+    //void set_leftmost_pos(const LocalReference& loc_ref);
     
     void _sb_rightmost_pos(const LocalReference& loc_ref);
-    void set_rightmost_pos(const LocalReference& loc_ref);
+    //void set_rightmost_pos(const LocalReference& loc_ref);
 
-    bool is_equivalent(const Variant& v, const LocalReference& loc_ref) const;
+    //bool is_equivalent(const Variant& v, const LocalReference& loc_ref) const;
     
     std::string minimal_repeat_unit() const;
 };
@@ -171,15 +206,15 @@ void parse_to_cplx_gaps(
 );
 
 
-void parse_variants(
+void read2variants(
     const int aln_start, 
     std::string_view ref_seq, 
     std::string_view read_seq,
     std::string_view base_qualities, 
-    const std::vector<std::pair<char, int>>& cigar_vector,
-    const std::unordered_map<int, std::string_view>& ref_dict,
+    const CigarVec& cigar_vector,
+    const Dict& ref_dict,
     std::vector<Variant>& variants, 
-    std::string& non_ref_quals
+    Coord& idx2pos
 );
 
 

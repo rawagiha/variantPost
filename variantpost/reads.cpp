@@ -10,12 +10,12 @@ inline bool is_ascending(const int a, const int b, const int c)
 
 //------------------------------------------------------------------------------
 // NOTE: initilizer list reordered to suppress warning
-Read::Read(std::string_view name_, const bool is_reverse_, 
-           std::string_view cigar_str_, const int aln_start_, const int aln_end_, 
+Read::Read(std::string_view name_, const bool is_rv, 
+           std::string_view cigar_str_, const int start, const int end, 
            std::string_view seq_, const std::vector<int>& quals_, const int mapq_, 
-           const bool is_from_first_bam_) 
-    : name(name_), mapq(mapq_), aln_start(aln_start_), aln_end(aln_end_), seq(seq_), 
-      is_reverse(is_reverse_), is_from_first_bam(is_from_first_bam_)
+           const bool is_frm_frst) 
+    : name(name_), mapq(mapq_), aln_start(start), aln_end(end), seq(seq_), 
+      cigar_str(cigar_str_), is_reverse(is_rv), is_from_first_bam(is_frm_frst)
 {
     for (const auto& q : quals_)
         base_quals.push_back(static_cast<char>(q + 33));
@@ -87,6 +87,17 @@ void Read::setReference(LocalReference& loc_ref)
 }
 
 //------------------------------------------------------------------------------
+// NOTE: use only after setReference
+void Read::setVariants(LocalReference& loc_ref)
+{
+    if (is_ref) return;
+    
+    // from util.h
+    read2variants(aln_start, ref_seq, seq, base_quals, 
+                   cigar_vector, loc_ref.dict, variants, idx2pos);
+}
+
+//------------------------------------------------------------------------------
 // 'A': target locus + shiftable region is completely covered
 // 'B': partially
 // 'C': not covered or skipped by splicing
@@ -94,13 +105,8 @@ void Read::parseCoveringPattern(LocalReference& loc_ref, const Variant& target)
 {
     // skipped
     for (const auto& seg : skipped_segments)
-    {
-        if (seg.first < target.lpos && target.rpos < seg.second)
-        {
-            is_na_ref = true; covering_ptrn = 'C'; return;
-        }
-    }
-    
+        if (seg.first < target.lpos && target.rpos < seg.second) return;
+        
     // completly covered
     for (const auto& seg : aligned_segments)
     {
@@ -135,27 +141,31 @@ void Read::parseCoveringPattern(LocalReference& loc_ref, const Variant& target)
     }
 
     if (is_partial) covering_ptrn = 'B';
-    else covering_ptrn = 'C'; 
 }
 
 //------------------------------------------------------------------------------
-// NOTE: use only after setReference
-void Read::setVariants(LocalReference& loc_ref)
-{
-    if (is_ref) return;
+void Read::qualityCheck(const int start, const int end, const UserParams& params)
+{   
     
-    // from util.h
-    parse_variants(aln_start, ref_seq, seq, base_quals, 
-                   cigar_vector, loc_ref.dict, variants, pos2idx, non_ref_quals);
+    const int last_ = static_cast<int>(base_quals.size()) - 1;
+    
+    int i = 0, j = last_; //index
+    for (const auto& elem : idx2pos)
+    {    
+        if (!i && start <= elem.second) i = elem.first;
+        if (j == last_ && end > elem.second) j = elem.first;  
+    }
+    if (i == j) return;
+    
+    int cnt = 0;
+    for (int k = i; k <= j; ++k)
+        if (base_quals[k] < params.base_q_thresh ) ++cnt;
+    qc_passed = (static_cast<double>(cnt) / (j - i) <= params.lq_rate_thresh); 
 }
 
 //------------------------------------------------------------------------------
 void Read::parseLocalPattern(LocalReference& loc_ref, const Variant& target)
 {
-    // fail to cover regions with enough 2-mer diversity (flankings)
-    if (loc_ref.flanking_start < covering_start || covering_end < loc_ref.flanking_end) 
-        fail_to_cover_flankings = true;
-    
     int idx = 0; std::vector<int> dists;
     for (auto& v : variants)
     {
@@ -178,7 +188,7 @@ void Read::parseLocalPattern(LocalReference& loc_ref, const Variant& target)
         else dists.push_back(0); // 0 if overlapped
         ++idx;
     }
-
+    
     //clipping
     if (start_offset)
         dists.push_back(std::abs(target.pos - aln_start));
@@ -190,11 +200,16 @@ void Read::parseLocalPattern(LocalReference& loc_ref, const Variant& target)
 }
 
 //------------------------------------------------------------------------------
+// NOTE: qualityCheck before use
 void Read::setSignatureStrings()
 {
+    if(!qc_passed) return;
+
     for (const auto& v : variants) 
+    {
         non_ref_sig += (std::to_string(v.pos) + "_" + v.ref + "_" + v.alt + ";");
-    
+    }
+
     std::string s1, s2;
     for (const auto& s : skipped_segments) 
     {
@@ -211,6 +226,53 @@ void Read::setSignatureStrings()
 }
 
 //------------------------------------------------------------------------------
+// non-ref alignments bounded by steep increase in dimer diversity (flanking)
+void Read::isStableNonReferenceAlignment(LocalReference& loc_ref)
+{
+    
+    // fail to cove flanking boundaries defined by maxinum dimer-diverisity increase
+    if (loc_ref.flanking_start < covering_start || covering_end < loc_ref.flanking_end) 
+        fail_to_cover_flankings = true;
+     
+    // must have variants 
+    if (is_ref      || fail_to_cover_flankings || 
+        !qc_passed  || start_offset            || end_offset) return;
+    
+    // no variants out of flankings
+    if (variants.front().pos < loc_ref.flanking_start ||
+        loc_ref.flanking_end < variants.back().pos) return;
+    
+    is_stable_non_ref = true;  
+}
+
+
+//------------------------------------------------------------------------------
+// only applicable if input is complex
+void Read::hasTargetComplexVariant(LocalReference& loc_ref, const Variant& target)
+{
+    
+    int i = -1;
+    for (const auto& elem : idx2pos)
+    {
+        if (elem.second == loc_ref.flanking_start) 
+        {    
+            i = elem.first; break;
+        }
+    }
+    
+    if (i < 0) return;
+    int lt_len = static_cast<int>(target.lt_seq.size());
+    int rt_len = static_cast<int>(target.rt_seq.size());
+
+    if (seq.substr(i, lt_len) != target.lt_seq) return;
+    if (seq.substr(i + lt_len, target.alt_len) != target.mid_seq) return;
+    if (seq.substr(i + lt_len + target.alt_len, rt_len) != target.rt_seq) return;
+    has_target = true; 
+}
+
+//------------------------------------------------------------------------------
+
+//------------------------------------------------------------------------------
 void prep_reads(const std::vector<std::string>& read_names,
                 const std::vector<bool>& are_reverse, 
                 const std::vector<std::string>& cigar_strs,
@@ -225,6 +287,9 @@ void prep_reads(const std::vector<std::string>& read_names,
                 const UserParams& params,
                 Reads& reads)
 {
+    
+    const int qc_start = target.lpos - params.local_thresh;
+    const int qc_end = target.end_pos + params.local_thresh;
     size_t n_reads = read_names.size(); reads.reserve(n_reads);
     for (size_t i = 0; i < n_reads; ++i)
     {
@@ -242,8 +307,18 @@ void prep_reads(const std::vector<std::string>& read_names,
         reads[i].parseCoveringPattern(loc_ref, target);
         if (reads[i].covering_ptrn == 'C') continue;
         
-        reads[i].setVariants(loc_ref);
-        reads[i].parseLocalPattern(loc_ref, target); 
+        reads[i].parseLocalPattern(loc_ref, target);
+        reads[i].qualityCheck(qc_start, qc_end, params); 
+        
+        if (loc_ref.has_flankings)
+            reads[i].isStableNonReferenceAlignment(loc_ref); 
+        
+        reads[i].is_analyzable = true;
+        
+        //
+        if (target.is_complex && reads[i].covering_ptrn == 'A' && reads[i].is_stable_non_ref)
+                reads[i].hasTargetComplexVariant(loc_ref, target);
+                
         reads[i].is_analyzable = true;
     }
     reads.shrink_to_fit();
@@ -281,6 +356,8 @@ void triage_reads(Reads& reads, Reads& supportings, Reads& candidates,
         std::cout << r.is_reverse << " " << r.name << " " << r.covering_ptrn << std::endl;
     */
 }
+
+
 
 //------------------------------------------------------------------------------
 // QC

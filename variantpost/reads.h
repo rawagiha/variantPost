@@ -26,6 +26,8 @@ void prep_reads(const std::vector<std::string>& read_names,
 void triage_reads(Reads& reads, Reads& targets, 
                   Reads& candidates, Reads& non_targets, UserParams& params);
 
+//------------------------------------------------------------------------------
+// features at read level
 struct Read
 {   
     //--------------------------------------------------------------------------
@@ -51,9 +53,20 @@ struct Read
     void parseLocalPattern(LocalReference& loc_ref, const Variant& target);
     
     //--------------------------------------------------------------------------
+    // find freq. of low quality bases within start/end region
+    void qualityCheck(const int start, const int end, const UserParams& param); 
+     
+    //--------------------------------------------------------------------------
     // annotate variants/clip/splice patterns in std::string
     void setSignatureStrings();
 
+    //--------------------------------------------------------------------------
+    // flag unambigous non-ref alignments to be used as template
+    void isStableNonReferenceAlignment(LocalReference& loc_ref);
+    
+    void hasTargetComplexVariant(LocalReference& loc_ref, const Variant& target);
+    
+    
     //--------------------------------------------------------------------------
     // read identifier
     std::string_view name;
@@ -69,7 +82,7 @@ struct Read
     int aln_start = 0; int aln_end = 0; // alignment start/end 
     int start_offset = 0; int end_offset = 0; // softclip len 
     int read_start = 0; int read_end = 0; // alignmet start/end extented by softclip len
-    Coord pos2idx; //TODO consider if this is really necessary TODO 
+    Coord idx2pos; // maps read idx to aligned genomic position
     Coord aligned_segments; // vector<pair<int, int>> start/end of aligned segments 
     Coord skipped_segments; // vector<pair<int, int>> start/end of skipped segments
     int covering_start = 0; // start of unspliced segment covering the target locus
@@ -93,12 +106,14 @@ struct Read
     bool is_na_ref = false; // true if no ref_seq is available for this read
     bool is_ref = false; // true if seq is identical to ref_seq
     bool has_target = false; // true if supporitng the target
+    bool qc_passed = false; // true if local freq of dirty bases < user thresh
     bool fail_to_cover_flankings = false; // if true, classify as ambigous read
     bool is_analyzable = false; // true if passed all filters
+    bool is_stable_non_ref = false; // true if bounded by enough 2-mer diversity
    
     //--------------------------------------------------------------------------
     // pattern keys
-    char covering_ptrn = '\0'; // 'A':complete coverage, 'B":partial, 'C':none   
+    char covering_ptrn = 'C'; // 'A':complete coverage, 'B":partial, 'C':none (default)   
 
     //--------------------------------------------------------------------------
     // variant info
@@ -110,8 +125,11 @@ struct Read
 
     //--------------------------------------------------------------------------
     // signtures to compare variations    
+    //std::string flanking_sig; // for variants in flanking regions
+    //std::string variant_sig; // for all variants in read
+    //std::string clip_sig; // for clipping pattern
+    std::string splice_sig; // for splicing pattern
     std::string non_ref_sig; // for variants and clippings
-    std::string splice_sig; // for splicing  
     
     //--------------------------------------------------------------------------
     // metrics

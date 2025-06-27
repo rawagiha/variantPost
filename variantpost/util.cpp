@@ -30,6 +30,15 @@ Dimers dimers =
     {"TA", 12}, {"TC", 13}, {"TG", 14}, {"TT", 15}
 };
 
+inline size_t count_dimers(std::string_view seq)
+{
+    const size_t len = seq.size(); if (len < 2) return 0;
+    
+    std::bitset<16> flags;
+    for (size_t i = 0; i < len - 1; ++i)
+        flags.set(dimers[seq.substr(i, 2)]);
+    return flags.count();
+}
 
 Qual::Qual(const int idx_, const int pos_, const int len_)
     : idx(idx_), pos(pos_), len(len_) { };
@@ -57,7 +66,7 @@ UserParams::UserParams(
     retarget_thresh(retarget_thresh)
 {
     base_q_thresh = static_cast<char>(_base_q_thresh + 33);    
-    min_dimer_cnt=8;
+    min_dimer_cnt=6; // dimer search window
 };
 
 /*
@@ -101,41 +110,45 @@ LocalReference::LocalReference(const std::string& fastafile,
 
 
 //------------------------------------------------------------------------------
-// define flanking region by 2-mer diversity
-void LocalReference::setFlankingBoundary(const int pos, const size_t thresh)
+// find nearest genomics pos containing min(16, n - 1) 2-mers in a window of n
+void LocalReference::setFlankingBoundary(const Variant& target, const size_t window)
 {
+    const size_t max_ = (window - 1 < 16) ? window - 1 : 16;
+    
     if (seq.find('N') != std::string::npos) return;
     
-    std::bitset<16> flags;
-    for (int i = pos - start; i <= end - start - 1; ++i)
+    const int last_idx = end - start - static_cast<int>(window) + 1;
+    for (int i = target.end_pos - start; i < last_idx; ++i)
     {
-        flags.set(dimers[seq.substr(i, 2)]);
-        if (flags.count() > thresh) 
+        if (count_dimers(seq.substr(i, window)) == max_) 
         {
-            flanking_end = pos + i - (pos - start); break;
-           
+            flanking_end 
+                = target.end_pos + i - (target.end_pos - start) + window; 
+            break;
         } 
     }
     
-    flags.reset();
-    for (int i = pos - start; i > 0; --i)
+    for (int i = target.lpos - start; i > 0; --i)
     {
-        flags.set(dimers[seq.substr(i, 2)]);
-        if (flags.count() > thresh)
+        if (count_dimers(seq.substr(i, window)) == max_)
         {
-            flanking_start = pos + i - (pos - start); break;
+            flanking_start 
+                = target.lpos + i - (target.lpos - start) - window; 
+            break;
         }
     }
+
+    if (flanking_start > 0 && flanking_end > 0) has_flankings = true; 
 }
 
-
+/*
 inline bool contain_n(std::string_view sv1, std::string_view sv2)
 {
     if (sv1.find('N') != std::string_view::npos) return true;
     if (sv2.find('N') != std::string_view::npos) return true;
 
     return false;
-}
+}*/
 
 
 inline bool is_rotatable(std::string_view allele)
@@ -144,37 +157,31 @@ inline bool is_rotatable(std::string_view allele)
 }
 
 
-Variant::Variant 
-(    int pos_, 
-     const std::string& ref_, 
-     const std::string& alt_,
-     bool is_clipped_segment_
-) : pos(pos_), 
-    ref(ref_), 
-    alt(alt_),
-    is_clipped_segment(is_clipped_segment_),  
-    ref_len(ref_.size()), 
-    alt_len(alt_.size()),
-    is_substitute(alt_len == ref_len),
-    is_ins(alt_len > ref_len),
-    is_del(alt_len < ref_len)
+//------------------------------------------------------------------------------
+Variant::Variant (int pos_, 
+                  const std::string& ref_, const std::string& alt_, std::string_view qual_)
+    : pos(pos_), ref(ref_), alt(alt_), qual(qual_)
 {
-    has_n = contain_n(ref, alt);
-     
-    if (ref_len < alt_len)
-    {
-        if (alt.substr(0, ref_len) == ref) is_complex = false; 
-        else is_complex = true;
 
-        indel_len = alt_len - 1;
+    if (ref.find('N') != std::string_view::npos ||
+        alt.find('N') != std::string_view::npos ) has_n = true;
+    
+    ref_len = ref_.size(); alt_len = alt_.size();
+    if (alt_len == ref_len) 
+    {
+        is_substitute = true;
+        is_complex = (ref_len > 1); // MNVs
     }
-    else if (ref_len > alt_len)
+    else if (ref_len < alt_len)
     {
-        if (ref.substr(0, alt_len) == alt) is_complex = false;
-        else is_complex = true;
-
-        indel_len = ref_len - 1;
-    }   
+        is_ins = true; indel_len = alt_len - ref_len;
+        if (alt.substr(0, ref_len) != ref) is_complex = true; 
+    }
+    else
+    {
+        is_del = true; indel_len = ref_len - alt_len;
+        if (ref.substr(0, alt_len) != alt) is_complex = true;
+    }
 }
 
 
@@ -261,17 +268,18 @@ void Variant::_sb_leftmost_pos(const LocalReference& loc_ref)
 
 void Variant::setLeftPos(const LocalReference& loc_ref)
 {
-    if (is_complex || is_clipped_segment   || 
-        has_n      || pos <= loc_ref.start || 
+    if (is_substitute     || is_complex           ||
+        has_n             || pos <= loc_ref.start || 
         loc_ref.end <= pos) 
     {    
         lpos = pos; return;
     }
-
+   
+    /*can't remember shiftable substitute examples
     if (is_substitute)
     {
         _sb_leftmost_pos(loc_ref); return;
-    }
+    }*/
     
     //copy -> keep orig data
     int _pos = pos, _end_pos = pos + ref_len;
@@ -374,16 +382,17 @@ void Variant::_sb_rightmost_pos(const LocalReference& loc_ref)
 
 void Variant::setRightPos(const LocalReference& loc_ref)
 {
-    if (is_complex           || is_clipped_segment   || 
-        pos <= loc_ref.start || loc_ref.end <= pos    ) 
+    if (is_substitute        || is_complex  || 
+        pos <= loc_ref.start || loc_ref.end <= pos) 
     {    
         rpos = pos; return;
     }
     
+    /*can't remember shiftable substitute examples ...
     if (is_substitute)
     {
         _sb_rightmost_pos(loc_ref);return;
-    }
+    }*/
     
     //copy -> keep orig info
     int _pos = pos, _end_pos = pos + ref_len;
@@ -403,6 +412,18 @@ void Variant::setEndPos(const LocalReference& loc_ref)
     is_shiftable = (rpos != lpos);
 }
 
+//------------------------------------------------------------------------------
+void Variant::setFlankingSequences(const LocalReference& loc_ref)
+{
+    if (!is_complex || !loc_ref.has_flankings) return;
+
+    lt_seq = loc_ref.seq.substr(loc_ref.flanking_start - loc_ref.start, 
+                                pos - loc_ref.flanking_start);
+    mid_seq = alt;
+    rt_seq = loc_ref.seq.substr(pos - loc_ref.start + ref_len, 
+                                loc_ref.flanking_end - end_pos);
+    has_flankings = true;
+}
 
 //------------------------------------------------------------------------------
 bool Variant::isEquivalent(const Variant& other, const LocalReference& loc_ref) const
@@ -909,31 +930,19 @@ void splice_cigar(
    std::swap(tmp, cigar_vector); 
 }
 
-
-void parse_variants(
-    const int aln_start, 
-    std::string_view ref_seq, 
-    std::string_view read_seq,
-    std::string_view base_qualities, 
-    const CigarVec& cigar_vector,
-    const std::unordered_map<int, std::string_view>& ref_dict,
-    std::vector<Variant>& variants,
-    Coord& pos2idx, 
-    std::vector<Qual>& non_ref_quals
-)
+//------------------------------------------------------------------------------
+void read2variants(const int aln_start, std::string_view ref_seq, 
+                   std::string_view read_seq, std::string_view base_qualities,
+                   const CigarVec& cigar_vector, const Dict& ref_dict,
+                   std::vector<Variant>& variants, Coord& idx2pos)
 {
-    if (read_seq == ref_seq) return;
-
-    char op = '\0';
+    char op = '\0'; 
+    std::string_view ref, alt, qual;
+    bool is_padding_base_supported = false; // relavant to skips
     int op_len = 0, ref_idx = 0, read_idx = 0, pos = aln_start;
-
-    std::string_view ref, alt;
-    bool is_padding_base_supported = false;
-     
     for (const auto & cigar : cigar_vector)
     {
-        op = cigar.first;
-        op_len = cigar.second;
+        op = cigar.first; op_len = cigar.second;
         switch (op)
         {
             case 'M': case 'X': case '=':
@@ -941,88 +950,60 @@ void parse_variants(
                 {
                     ref = ref_seq.substr(ref_idx, 1);
                     alt = read_seq.substr(read_idx, 1);
+                    qual = base_qualities.substr(read_idx, 1);
                     if (ref != alt)
-                    {
-                        variants.emplace_back(
-                            pos, 
-                            std::string(ref), 
-                            std::string(alt)
-                        );
-                        non_ref_quals.emplace_back(read_idx, pos, 1); 
-                        //non_ref_quals += std::string(
-                        //  base_qualities.substr(read_idx, 1)
-                        //);
-                    }
-                    pos2idx.emplace_back(pos, read_idx);
-                    ++ref_idx;
-                    ++read_idx;
-                    ++pos;
+                        variants.emplace_back(pos, 
+                                              std::string(ref), std::string(alt), qual);
+                    idx2pos.emplace_back(read_idx, pos);
+                    ++ref_idx; ++read_idx; ++pos;
                 }
 
-                is_padding_base_supported = true;
-                break;
+                is_padding_base_supported = true; break;
             case 'I':
                 if (is_padding_base_supported) 
-                {
                     ref = ref_seq.substr(ref_idx - 1, 1);
-                }
                 else
-                {   
+                {
                     auto it = ref_dict.find(pos - 1);
                     if (it != ref_dict.cend()) 
-                    {
                         ref = it->second;
-                    }
                     else ref = "N";        
                 } 
                 
                 variants.emplace_back(pos - 1, 
-                    std::string(ref), 
-                    std::string(ref) 
-                    + std::string(read_seq.substr(read_idx, op_len))
-                );
-                non_ref_quals.emplace_back(read_idx, pos - 1, op_len);
-                //non_ref_quals += std::string(
-                //    base_qualities.substr(read_idx, op_len)
-                //);
-                //pos2idx.emplace_back(pos - 1, read_idx); 
-                read_idx += op_len;
-                break; 
+                                      std::string(ref), 
+                                      std::string(ref) 
+                                      + std::string(read_seq.substr(read_idx, op_len)),
+                                      base_qualities.substr(read_idx, op_len));
+                
+                for (int i = 0; i < op_len; ++i)
+                    idx2pos.emplace_back(read_idx + i, pos - 1);
+                
+                read_idx += op_len; break; 
             case 'D':
+            {
                 if (is_padding_base_supported) 
-                {
                      alt = ref_seq.substr(ref_idx - 1, 1);
-                }
                 else
                 {
                     auto it = ref_dict.find(pos - 1);
                     if (it != ref_dict.cend()) 
-                    {    
                         alt = it->second;
-                    }
                     else alt = "N";
                 }
                 
                 variants.emplace_back(pos - 1, 
-                    std::string(alt) 
-                    + std::string(ref_seq.substr(ref_idx, op_len)), 
-                    std::string(alt)
-                );
-                ref_idx += op_len;
-                pos += op_len;
-                is_padding_base_supported = true;                 
-                break;
+                                      std::string(alt) 
+                                      + std::string(ref_seq.substr(ref_idx, op_len)), 
+                                      std::string(alt));
+                
+                ref_idx += op_len; pos += op_len; 
+                is_padding_base_supported = true; break;
+            }
             case 'N':
-                pos += op_len;
-                is_padding_base_supported = false;
-                break;
+                pos += op_len; is_padding_base_supported = false; break;
             case 'S':
-                non_ref_quals.emplace_back(read_idx, pos, op_len);
-                //non_ref_quals += std::string(
-                //    base_qualities.substr(read_idx, op_len)
-                //);
-                read_idx += (op_len);
-                break;
+                read_idx += (op_len); break;
             case 'H': case 'P':
                 break;
          }

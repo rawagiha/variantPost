@@ -3,7 +3,7 @@
 //#include "match.h"
 #include "reads.h"
 #include "search.h"
-//#include "contig.h"
+#include "contig.h"
 //#include "substitutes.h"
 
 
@@ -372,20 +372,27 @@ void _search_target(
     const std::vector<bool>& are_from_first_bam)
 {  
     
+    
+    
     UserParams user_params(mapq_thresh, base_q_thresh, lq_base_rate_thresh,
                            match_score, mismatch_penal, gap_open_penal, gap_ext_penal, 
                            kmer_size, local_thresh, retarget_thresh);
 
+    
     LocalReference loc_ref(fastafile, chrom, ref_start, ref_end);   
+
     
+    // prep variant
+    Variant target(pos, ref, alt); target.setEndPos(loc_ref);
     
-    // prepare target
-    Variant target(pos, ref, alt); target.setEndPos(loc_ref); 
+    // additional preps (flanking stuff)
+    loc_ref.setFlankingBoundary(target, user_params.min_dimer_cnt);
+    target.setFlankingSequences(loc_ref); // only applicable if target is complex
+
    
-    std::cout << target.lpos  << " " << target.rpos << " " << target.end_pos << std::endl;
+    std::cout << target.lpos  << " " << target.rpos << " " << target.end_pos << " " << target.is_substitute << " " << target.is_complex << std::endl;
     
-    loc_ref.setFlankingBoundary(pos, user_params.min_dimer_cnt);
-    
+    std::cout << loc_ref.flanking_start << " " << loc_ref.flanking_end << std::endl; 
     Reads reads, targets, candidates, non_targets, undetermined;
     
     // read parsing
@@ -394,6 +401,12 @@ void _search_target(
     
     triage_reads(reads, targets, candidates, non_targets, user_params);   
     
+    std::cout << targets.size() << " " << candidates.size() << " " << non_targets.size() << std::endl;
+    
+    for (auto& r : candidates)
+        std::cout << r.name << " " << r.is_from_first_bam << " " << r.is_reverse << " " << r.cigar_str << std::endl;
+    //Contig c;
+    //c.setSequenceFromTarget(targets);
     /*
     Contig contig;
     bool is_retargeted = false, is_non_supporting = false, is_mocked = false;

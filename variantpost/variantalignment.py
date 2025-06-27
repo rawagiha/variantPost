@@ -71,8 +71,8 @@ class VariantAlignment(object):
         chrom_name=None,
         exclude_duplicates=True,
         mapping_quality_threshold=1,
-        base_quality_threshold=30,
-        low_quality_base_rate_threshold=0.1,
+        base_quality_threshold=20,
+        low_quality_base_rate_threshold=0.3,
         downsample_threshold=2000,
         match_score=3,
         mismatch_penalty=2,
@@ -98,17 +98,18 @@ class VariantAlignment(object):
         retarget_thresh = _retarget_thresh(local_threshold, self.window)
 
         # interact with c++ code
-        (
-            self.contig_dict,
-            self.skips,
-            self.read_names,
-            self.are_reverse,
-            self.target_status,
-            self.are_first_bam,
-            self.is_retargeted,
-            self.retarget_pos,
-            self.trans_vars,
-        ) = search_target(
+        #(
+        #    self.contig_dict,
+        #    self.skips,
+        #    self.read_names,
+        #    self.are_reverse,
+        #    self.target_status,
+        #    self.are_first_bam,
+        #    self.is_retargeted,
+        #    self.retarget_pos,
+        #    self.trans_vars,
+        #) 
+        a   = search_target(
             bam,
             second_bam,
             variant.reference_len,
@@ -135,8 +136,9 @@ class VariantAlignment(object):
             variant.unspliced_local_reference_end,
             variant.k
         )
-
-        self.is_with_target = any([status == 1 for status in self.target_status])
+        print(a)
+        #print(self.contig_dict)
+        #self.is_with_target = any([status == 1 for status in self.target_status])
 
     def count_alleles(self):
         """returns :class:`AlleleCount` as `namedtuple <https://docs.python.org/3/library/collections.html#collections.namedtuple>`__ of read counts.
