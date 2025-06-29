@@ -108,11 +108,11 @@ LocalReference::LocalReference(const std::string& fastafile,
         dict[start + i] = seq.substr(i, 1); 
 }
 
-
 //------------------------------------------------------------------------------
 // find nearest genomics pos containing min(16, n - 1) 2-mers in a window of n
 void LocalReference::setFlankingBoundary(const Variant& target, const size_t window)
 {
+    // maximum possible number of 2-mers in window
     const size_t max_ = (window - 1 < 16) ? window - 1 : 16;
     
     if (seq.find('N') != std::string::npos) return;
@@ -141,16 +141,6 @@ void LocalReference::setFlankingBoundary(const Variant& target, const size_t win
     if (flanking_start > 0 && flanking_end > 0) has_flankings = true; 
 }
 
-/*
-inline bool contain_n(std::string_view sv1, std::string_view sv2)
-{
-    if (sv1.find('N') != std::string_view::npos) return true;
-    if (sv2.find('N') != std::string_view::npos) return true;
-
-    return false;
-}*/
-
-
 inline bool is_rotatable(std::string_view allele)
 {
     return (allele.front() == allele.back());   
@@ -169,17 +159,19 @@ Variant::Variant (int pos_,
     ref_len = ref_.size(); alt_len = alt_.size();
     if (alt_len == ref_len) 
     {
-        is_substitute = true;
+        is_substitute = true; event_len = ref_len;
         is_complex = (ref_len > 1); // MNVs
     }
     else if (ref_len < alt_len)
     {
-        is_ins = true; indel_len = alt_len - ref_len;
+        is_ins = true; 
+        indel_len = alt_len - ref_len; event_len = alt_len;
         if (alt.substr(0, ref_len) != ref) is_complex = true; 
     }
     else
     {
-        is_del = true; indel_len = ref_len - alt_len;
+        is_del = true; 
+        indel_len = ref_len - alt_len; event_len = ref_len;
         if (ref.substr(0, alt_len) != alt) is_complex = true;
     }
 }

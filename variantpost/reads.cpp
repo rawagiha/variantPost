@@ -2,13 +2,6 @@
 #include "reads.h"
 
 //------------------------------------------------------------------------------
-// helper function used in Read::parseCoveringPattern
-inline bool is_ascending(const int a, const int b, const int c)
-{
-    return (a <= b && b <= c);
-}
-
-//------------------------------------------------------------------------------
 // NOTE: initilizer list reordered to suppress warning
 Read::Read(std::string_view name_, const bool is_rv, 
            std::string_view cigar_str_, const int start, const int end, 
@@ -122,7 +115,7 @@ void Read::parseCoveringPattern(LocalReference& loc_ref, const Variant& target)
     covering_start = aligned_segments.front().first;
     covering_end = aligned_segments.back().second;
 
-    if (is_ascending(target.lpos, covering_start, target.end_pos)) 
+    if (target.lpos <= covering_start && covering_start <= target.end_pos) 
     {
         covering_end = aligned_segments.front().second;
         // starts with softclip
@@ -131,7 +124,7 @@ void Read::parseCoveringPattern(LocalReference& loc_ref, const Variant& target)
         if (!variants.empty() && variants.front().pos <= target.end_pos)
             is_partial = true;
     } 
-    else if (is_ascending(target.lpos, covering_end, target.end_pos))
+    else if (target.lpos <= covering_end && covering_end <= target.end_pos)
     {
         covering_start = aligned_segments.back().first;
         // ends with softclip
@@ -178,12 +171,12 @@ void Read::parseLocalPattern(LocalReference& loc_ref, const Variant& target)
         
         // distances from target region to non-target variants
         v.setEndPos(loc_ref);
-        if (v.lpos < target.lpos || target.end_pos < v.rpos)
+        if (target.end_pos < v.lpos || v.rpos < target.lpos)
         {
-            int lt_d = target.lpos - v.lpos;
-            int rt_d = v.rpos - target.end_pos;
-            if (lt_d < rt_d) dists.push_back(lt_d);
-            else dists.push_back(rt_d);    
+            int d1 = std::abs(target.end_pos - v.lpos);
+            int d2 = std::abs(v.rpos - target.lpos);
+            if (d1 < d2) dists.push_back(d1);
+            else dists.push_back(d2);    
         } 
         else dists.push_back(0); // 0 if overlapped
         ++idx;
@@ -197,6 +190,8 @@ void Read::parseLocalPattern(LocalReference& loc_ref, const Variant& target)
 
     if (!dists.empty()) 
         dist_to_non_target = *std::min_element(dists.begin(), dists.end());
+
+    if (dist_to_non_target <= target.event_len) has_local_events = true;
 }
 
 //------------------------------------------------------------------------------
@@ -245,12 +240,10 @@ void Read::isStableNonReferenceAlignment(LocalReference& loc_ref)
     is_stable_non_ref = true;  
 }
 
-
 //------------------------------------------------------------------------------
 // only applicable if input is complex
 void Read::hasTargetComplexVariant(LocalReference& loc_ref, const Variant& target)
 {
-    
     int i = -1;
     for (const auto& elem : idx2pos)
     {
@@ -270,127 +263,7 @@ void Read::hasTargetComplexVariant(LocalReference& loc_ref, const Variant& targe
     has_target = true; 
 }
 
-//------------------------------------------------------------------------------
-
-//------------------------------------------------------------------------------
-void prep_reads(const std::vector<std::string>& read_names,
-                const std::vector<bool>& are_reverse, 
-                const std::vector<std::string>& cigar_strs,
-                const std::vector<int>& aln_starts,
-                const std::vector<int>& aln_ends,
-                const std::vector<std::string>& read_seqs,
-                const std::vector<std::vector<int>>& quals,
-                const std::vector<int>& mapqs,
-                const std::vector<bool>& are_from_first_bam,
-                LocalReference& loc_ref,
-                Variant& target,
-                const UserParams& params,
-                Reads& reads)
-{
-    
-    const int qc_start = target.lpos - params.local_thresh;
-    const int qc_end = target.end_pos + params.local_thresh;
-    size_t n_reads = read_names.size(); reads.reserve(n_reads);
-    for (size_t i = 0; i < n_reads; ++i)
-    {
-        if (mapqs[i] < params.mapq_thresh) continue; //can do this at Python?
-        
-        reads.emplace_back(read_names[i], are_reverse[i], cigar_strs[i],
-                           aln_starts[i], aln_ends[i], read_seqs[i],
-                           quals[i], mapqs[i], are_from_first_bam[i]);
-
-        reads[i].setReference(loc_ref); 
-        
-        if (reads[i].is_na_ref) continue;
-        reads[i].setVariants(loc_ref); 
-
-        reads[i].parseCoveringPattern(loc_ref, target);
-        if (reads[i].covering_ptrn == 'C') continue;
-        
-        reads[i].parseLocalPattern(loc_ref, target);
-        reads[i].qualityCheck(qc_start, qc_end, params); 
-        
-        if (loc_ref.has_flankings)
-            reads[i].isStableNonReferenceAlignment(loc_ref); 
-        
-        reads[i].is_analyzable = true;
-        
-        //
-        if (target.is_complex && reads[i].covering_ptrn == 'A' && reads[i].is_stable_non_ref)
-                reads[i].hasTargetComplexVariant(loc_ref, target);
-                
-        reads[i].is_analyzable = true;
-    }
-    reads.shrink_to_fit();
-}
-
-//------------------------------------------------------------------------------
-void triage_reads(Reads& reads, Reads& supportings, Reads& candidates, 
-                  Reads& non_supportings, UserParams& params)
-{
-    size_t buff = reads.size(); 
-    supportings.reserve(buff); candidates.reserve(buff); non_supportings.reserve(buff);
-
-    for (size_t i = 0; i < buff; ++i)
-    {
-        if (!reads[i].is_analyzable) continue;
-
-        if(reads[i].has_target)
-        {
-            reads[i].setSignatureStrings(); transfer_elem(supportings, reads, i);
-        }
-        else if (reads[i].dist_to_non_target < params.local_thresh)
-        {   
-            reads[i].setSignatureStrings(); transfer_elem(candidates, reads, i);
-        }
-        else 
-            transfer_elem(non_supportings, reads, i);
-    }
-
-    reads.clear(); 
-    supportings.shrink_to_fit(); candidates.shrink_to_fit(); non_supportings.shrink_to_fit();
-
-    /*std::cout << supportings.size() << " " << candidates.size() << " " << non_supportings.size() << " " << std::endl;
-
-    for (auto r : non_supportings)
-        std::cout << r.is_reverse << " " << r.name << " " << r.covering_ptrn << std::endl;
-    */
-}
-
-
-
-//------------------------------------------------------------------------------
-// QC
-//void Read::qualityCheck(const Variant& target, const UserParams& params)
-//{
-    /**/
-//}
-
 /*
-std::string_view get_unspliced_ref_seq(
-    const int loc_ref_start, 
-    std::string_view loc_ref_seq,
-    const int aln_start, 
-    const int aln_end
-)
-{
-  int start_idx = aln_start - loc_ref_start;
-  size_t expected_ref_len = aln_end - aln_start + 1;
-  
-  if (0 <= start_idx && start_idx <= int(loc_ref_seq.size())) 
-  {
-    std::string_view fitted_ref = loc_ref_seq.substr(start_idx, expected_ref_len);
-    if (fitted_ref.size() == expected_ref_len) //may be short near rt end
-    {
-        return fitted_ref;
-    }
-  }
-
-  // failed to fit
-  return "";
-}
-
-
 std::string_view get_spliced_ref_seq(
     std::string& ref_seq,
     const std::string& chrom, 

@@ -60,6 +60,7 @@ struct UserParams
 }; 
 
 //------------------------------------------------------------------------------
+// features derived from input reference genome (not from alignment data) 
 struct LocalReference
 { 
     LocalReference(const std::string& fastafile, 
@@ -70,15 +71,15 @@ struct LocalReference
     FastaReference fasta;
     std::string chrom;
     
-    int start;
-    int end;
+    int start; int end;
     
     // flanking region defined by 2-mer diversity
     int flanking_start = -1; int flanking_end = -1;
     bool has_flankings = false;
 
     std::string_view seq;
-    Dict dict;
+    
+    Dict dict; // dictitionary {pos, base} 
 
 private:
     std::string _seq;    
@@ -121,7 +122,7 @@ struct Variant
 
     //--------------------------------------------------------------------------
     // numeric data
-    int ref_len = 0, alt_len = 0; // allele len
+    int ref_len = 0, alt_len = 0, event_len = 0; // allele len, event = the loner 
     int indel_len = 0; // len of inserted or deleted sequence
     int lpos = -1, rpos = -1; // left and right aligned positions
     int end_pos = rpos + ref_len; // end postion of event after right-aligned

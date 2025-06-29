@@ -3,7 +3,7 @@
 //#include "match.h"
 #include "reads.h"
 #include "search.h"
-#include "contig.h"
+#include "pileup.h"
 //#include "substitutes.h"
 
 
@@ -371,40 +371,31 @@ void _search_target(
     const std::vector<int>& mapqs,
     const std::vector<bool>& are_from_first_bam)
 {  
-    
-    
-    
-    UserParams user_params(mapq_thresh, base_q_thresh, lq_base_rate_thresh,
-                           match_score, mismatch_penal, gap_open_penal, gap_ext_penal, 
-                           kmer_size, local_thresh, retarget_thresh);
+    UserParams params(mapq_thresh, base_q_thresh, lq_base_rate_thresh,
+                      match_score, mismatch_penal, gap_open_penal, gap_ext_penal, 
+                      kmer_size, local_thresh, retarget_thresh);
 
-    
     LocalReference loc_ref(fastafile, chrom, ref_start, ref_end);   
-
     
     // prep variant
     Variant target(pos, ref, alt); target.setEndPos(loc_ref);
     
     // additional preps (flanking stuff)
-    loc_ref.setFlankingBoundary(target, user_params.min_dimer_cnt);
+    loc_ref.setFlankingBoundary(target, params.min_dimer_cnt);
     target.setFlankingSequences(loc_ref); // only applicable if target is complex
-
-   
-    std::cout << target.lpos  << " " << target.rpos << " " << target.end_pos << " " << target.is_substitute << " " << target.is_complex << std::endl;
     
-    std::cout << loc_ref.flanking_start << " " << loc_ref.flanking_end << std::endl; 
-    Reads reads, targets, candidates, non_targets, undetermined;
+    Pileup pileup(read_names, are_reverse, cigar_strs, 
+                  aln_starts, aln_ends, 
+                  read_seqs, quals, mapqs, are_from_first_bam, 
+                  params, loc_ref, target); 
     
-    // read parsing
-    prep_reads(read_names, are_reverse, cigar_strs, aln_starts, aln_ends, 
-               read_seqs, quals, mapqs, are_from_first_bam, loc_ref, target, user_params, reads); 
+    //pileup.triage(reads, user_params);
+    //triage_reads(reads, targets, candidates, non_targets, user_params);   
     
-    triage_reads(reads, targets, candidates, non_targets, user_params);   
+    //std::cout << targets.size() << " " << candidates.size() << " " << non_targets.size() << std::endl;
     
-    std::cout << targets.size() << " " << candidates.size() << " " << non_targets.size() << std::endl;
-    
-    for (auto& r : candidates)
-        std::cout << r.name << " " << r.is_from_first_bam << " " << r.is_reverse << " " << r.cigar_str << std::endl;
+    //for (auto& r : candidates)
+    //    std::cout << r.name << " " << r.is_from_first_bam << " " << r.is_reverse << " " << r.cigar_str << std::endl;
     //Contig c;
     //c.setSequenceFromTarget(targets);
     /*

@@ -5,27 +5,6 @@
 #include <bitset>
 #include "util.h"
 
-struct Read; //forward declaration
-typedef std::vector<Read> Reads;
-
-//------------------------------------------------------------------------------
-// receive inputs from Python and create Read 
-void prep_reads(const std::vector<std::string>& read_names,
-                const std::vector<bool>& are_reverse, 
-                const std::vector<std::string>& cigar_strs,
-                const std::vector<int>& aln_starts,
-                const std::vector<int>& aln_ends,
-                const std::vector<std::string>& read_seqs,
-                const std::vector<std::vector<int>>& quals,
-                const std::vector<int>& mapqs,
-                const std::vector<bool>& are_from_first_bam,
-                LocalReference& loc_ref, Variant& target,
-                const UserParams& params, Reads& reads);
-
-//------------------------------------------------------------------------------
-void triage_reads(Reads& reads, Reads& targets, 
-                  Reads& candidates, Reads& non_targets, UserParams& params);
-
 //------------------------------------------------------------------------------
 // features at read level
 struct Read
@@ -66,7 +45,6 @@ struct Read
     
     void hasTargetComplexVariant(LocalReference& loc_ref, const Variant& target);
     
-    
     //--------------------------------------------------------------------------
     // read identifier
     std::string_view name;
@@ -106,9 +84,9 @@ struct Read
     bool is_na_ref = false; // true if no ref_seq is available for this read
     bool is_ref = false; // true if seq is identical to ref_seq
     bool has_target = false; // true if supporitng the target
+    bool has_local_events = false; // true if non_ref events with event_len (Variant)
     bool qc_passed = false; // true if local freq of dirty bases < user thresh
     bool fail_to_cover_flankings = false; // if true, classify as ambigous read
-    bool is_analyzable = false; // true if passed all filters
     bool is_stable_non_ref = false; // true if bounded by enough 2-mer diversity
    
     //--------------------------------------------------------------------------
@@ -135,88 +113,9 @@ struct Read
     // metrics
     int dist_to_non_target = INT_MAX; // distance to nearest variant or clip 
       
-    /*
-    //non reference event info
-    //std::vector<Variant> variants;
-    //int variants_target_idx = -1;
-    //dist to closest non-target overlapping target shiftable segmen
-    //int dist_to_non_target = INT_MAX; 
-    int dist_to_clip = INT_MAX;
-    //int target_pos = -1;  //actual pos (may not be normalized)
-    //std::string target_ref = "N"; //actual alt
-    //std::string target_alt = "N"; //actual ref
-    //std::string non_ref_signature;
-    //std::string splice_signature;
-    bool incomplete_shift= false;
-    bool may_be_complex = false; 
-    int local_uniqueness = 0;
-    int lt_end_matches = -1;
-    int rt_end_matches = -1;
-    
-    //annotated patterns    
-    //char covering_ptrn = '\0';
-    char clip_ptrn = '\0';
-    char local_ptrn = '\0';   
-    
-    // substitute-related
-    char sb_ptrn = '\0';
-    bool has_sb_target = false;
-    size_t sb_read_idx = 0; 
-    int sb_kmer_score = -1;
-    int aln_score = 0;
-    std::string sb_loc_signature;
-    
-    //metrics   
-    double central_score = -1.0;
-    double overall_lq_rate = 0.0;
-    double nonref_lq_rate = 0.0;
-    double local_lq_rate = -1.0;
-    int kmer_score = -1;
-    
-    //other flags
-    bool is_tight_covering = false;
-    bool is_deprioritized = false;
-    //bool is_contig_member = false;
-    */
+    //--------------------------------------------------------------------------
+    // rank: 's' supporting target, 'n': non_supprting 'u': undetermined
+    char rank = '\0'; 
 };
-
-/*
-typedef std::vector<Read> Reads;
-
-void sort_by_start(Reads & reads);
-
-void sort_by_kmer(Reads & reads);
-
-//void annot_ref_seq(Read& read, LocalReference& loc_ref);
-
-//void annot_splice_pattern(Read& read);
-
-void annot_clip_pattern(Read& read, const Variant& target);
-
-void annot_non_ref_signature(Read& read);
-
-void eval_read_quality(Read& read, const UserParams& user_params);
-
-int eval_loc_uniq(
-    Read& read, 
-    const UserParams& user_params, 
-    const LocalReference& loc_ref
-);
-
-void annot_covering_ptrn(
-    Read& read, 
-    const Variant& target, 
-    LocalReference& loc_ref,
-    bool is_retargeted
-);
-
-void annotate_reads(
-    Reads& reads, 
-    const Variant& target, 
-    const UserParams& user_params, 
-    LocalReference& loc_ref,
-    bool is_retargeted
-);
-*/
 
 #endif
