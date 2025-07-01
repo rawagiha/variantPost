@@ -5,11 +5,9 @@
 // NOTE: initilizer list reordered to suppress warning
 Read::Read(std::string_view name_, const bool is_rv, 
            std::string_view cigar_str_, const int start, const int end, 
-           std::string_view seq_, const std::vector<int>& quals_, const int mapq_, 
-           const bool is_frm_frst) 
-    : name(name_), mapq(mapq_), aln_start(start), aln_end(end), seq(seq_), 
-      cigar_str(cigar_str_), is_reverse(is_rv), is_from_first_bam(is_frm_frst)
-{
+           std::string_view seq_, const std::vector<int>& quals_, const bool is_frm_frst) 
+    : name(name_), aln_start(start), aln_end(end), seq(seq_), cigar_str(cigar_str_), 
+      is_reverse(is_rv), is_control(is_frm_frst) {
     for (const auto& q : quals_)
         base_quals.push_back(static_cast<char>(q + 33));
     
@@ -24,28 +22,23 @@ Read::Read(std::string_view name_, const bool is_rv,
 }
 
 //------------------------------------------------------------------------------
-void Read::setReference(LocalReference& loc_ref)
-{
+void Read::setReference(LocalReference& loc_ref) {
     int loc_ref_len = static_cast<int>(loc_ref.seq.size());
     int pos_2 = read_start; // for coordinate setup    
   
-    if (cigar_str.find('N') == std::string::npos)
-    {
+    if (cigar_str.find('N') == std::string::npos) {
         int _idx = aln_start - loc_ref.start; // idx on local reference 
         int _ref_len = aln_end - aln_start + 1; // expected refseq len
         if (_idx >= 0 && _idx + _ref_len <= loc_ref_len)
             ref_seq = loc_ref.seq.substr(_idx, _ref_len);
     }          
-    else//spliced reference 
-    {   
+    else {   
         int pos_1 = aln_start - 1; // for refseq setup
         char op = '\0'; int op_len = 0;
-        for (const auto& c : cigar_vector)
-        {
+        for (const auto& c : cigar_vector) {
             op = c.first; op_len = c.second;
 
-            switch (op)
-            {
+            switch (op) {
                 case 'M': case '=': case 'X': case 'D':
                     spliced_ref_seq += 
                         loc_ref.fasta.getSubSequence(loc_ref.chrom, pos_1, op_len);
@@ -71,8 +64,7 @@ void Read::setReference(LocalReference& loc_ref)
     
     //aligned segment
     pos_2 = read_start; // reset to read_start
-    for (const auto& seg : skipped_segments)
-    {
+    for (const auto& seg : skipped_segments) {
         aligned_segments.emplace_back(pos_2, seg.first - 1);
         pos_2 = seg.second + 1;
     }
@@ -81,8 +73,7 @@ void Read::setReference(LocalReference& loc_ref)
 
 //------------------------------------------------------------------------------
 // NOTE: use only after setReference
-void Read::setVariants(LocalReference& loc_ref)
-{
+void Read::setVariants(LocalReference& loc_ref) {
     if (is_ref) return;
     
     // from util.h
@@ -94,17 +85,14 @@ void Read::setVariants(LocalReference& loc_ref)
 // 'A': target locus + shiftable region is completely covered
 // 'B': partially
 // 'C': not covered or skipped by splicing
-void Read::parseCoveringPattern(LocalReference& loc_ref, const Variant& target)
-{
+void Read::parseCoveringPattern(LocalReference& loc_ref, const Variant& target) {
     // skipped
     for (const auto& seg : skipped_segments)
         if (seg.first < target.lpos && target.rpos < seg.second) return;
         
     // completly covered
-    for (const auto& seg : aligned_segments)
-    {
-        if (seg.first <= target.lpos && target.rpos <= seg.second)
-        {
+    for (const auto& seg : aligned_segments) {
+        if (seg.first <= target.lpos && target.rpos <= seg.second) {
             covering_start = seg.first; covering_end = seg.second; 
             covering_ptrn = 'A'; return;
         }
@@ -115,8 +103,7 @@ void Read::parseCoveringPattern(LocalReference& loc_ref, const Variant& target)
     covering_start = aligned_segments.front().first;
     covering_end = aligned_segments.back().second;
 
-    if (target.lpos <= covering_start && covering_start <= target.end_pos) 
-    {
+    if (target.lpos <= covering_start && covering_start <= target.end_pos) {
         covering_end = aligned_segments.front().second;
         // starts with softclip
         if (start_offset) is_partial = true;
@@ -124,27 +111,23 @@ void Read::parseCoveringPattern(LocalReference& loc_ref, const Variant& target)
         if (!variants.empty() && variants.front().pos <= target.end_pos)
             is_partial = true;
     } 
-    else if (target.lpos <= covering_end && covering_end <= target.end_pos)
-    {
+    else if (target.lpos <= covering_end && covering_end <= target.end_pos) {
         covering_start = aligned_segments.back().first;
         // ends with softclip
         if (end_offset) is_partial = true;
         if (!variants.empty() && target.lpos <= variants.back().pos)
             is_partial = true;
     }
-
     if (is_partial) covering_ptrn = 'B';
 }
 
 //------------------------------------------------------------------------------
-void Read::qualityCheck(const int start, const int end, const UserParams& params)
-{   
+void Read::qualityCheck(const int start, const int end, const UserParams& params) {   
     
     const int last_ = static_cast<int>(base_quals.size()) - 1;
     
     int i = 0, j = last_; //index
-    for (const auto& elem : idx2pos)
-    {    
+    for (const auto& elem : idx2pos) {    
         if (!i && start <= elem.second) i = elem.first;
         if (j == last_ && end > elem.second) j = elem.first;  
     }
@@ -157,13 +140,10 @@ void Read::qualityCheck(const int start, const int end, const UserParams& params
 }
 
 //------------------------------------------------------------------------------
-void Read::parseLocalPattern(LocalReference& loc_ref, const Variant& target)
-{
+void Read::parseLocalPattern(LocalReference& loc_ref, const Variant& target) {
     int idx = 0; std::vector<int> dists;
-    for (auto& v : variants)
-    {
-        if (target.isEquivalent(v, loc_ref))
-        {
+    for (auto& v : variants) {
+        if (target.isEquivalent(v, loc_ref)) {
             has_target = true; target_idx = idx;
             target_pos = v.pos; target_ref = v.ref; target_alt = v.alt;
             return;
@@ -171,8 +151,7 @@ void Read::parseLocalPattern(LocalReference& loc_ref, const Variant& target)
         
         // distances from target region to non-target variants
         v.setEndPos(loc_ref);
-        if (target.end_pos < v.lpos || v.rpos < target.lpos)
-        {
+        if (target.end_pos < v.lpos || v.rpos < target.lpos) {
             int d1 = std::abs(target.end_pos - v.lpos);
             int d2 = std::abs(v.rpos - target.lpos);
             if (d1 < d2) dists.push_back(d1);
@@ -196,59 +175,65 @@ void Read::parseLocalPattern(LocalReference& loc_ref, const Variant& target)
 
 //------------------------------------------------------------------------------
 // NOTE: qualityCheck before use
-void Read::setSignatureStrings()
-{
+void Read::setSignatureStrings() {
     if(!qc_passed) return;
 
-    for (const auto& v : variants) 
-    {
-        non_ref_sig += (std::to_string(v.pos) + "_" + v.ref + "_" + v.alt + ";");
+    for (const auto& v : variants) {
+        non_ref_sig += (std::to_string(v.pos) + ":" + v.ref + ">" + v.alt + ";");
     }
 
     std::string s1, s2;
-    for (const auto& s : skipped_segments) 
-    {
+    for (const auto& s : skipped_segments) {
         s1 = std::to_string(s.first); s2 = std::to_string(s.second);
-        non_ref_sig += ("spl=" + s1 + "-" + s2 + ";");
-        splice_sig += ("spl=" + s1 + "-" + s2 + ";");
+        non_ref_sig += ("spl=" + s1 + "-" + s2 + "|");
+        splice_sig += ("spl=" + s1 + "-" + s2 + "|");
     }
     
     if (start_offset) 
-        non_ref_sig += ("lt_clip_end=" + std::to_string(aln_start - 1) + ";");
+        non_ref_sig += ("lt=" + std::to_string(aln_start - 1) + "$");
     
     if (end_offset) 
-        non_ref_sig += ("rt_clip_start=" + std::to_string(aln_end + 1));
+        non_ref_sig += ("rt=" + std::to_string(aln_end + 1));
 }
 
 //------------------------------------------------------------------------------
 // non-ref alignments bounded by steep increase in dimer diversity (flanking)
-void Read::isStableNonReferenceAlignment(LocalReference& loc_ref)
-{
-    
+void Read::isStableNonReferenceAlignment(LocalReference& loc_ref) {
     // fail to cove flanking boundaries defined by maxinum dimer-diverisity increase
-    if (loc_ref.flanking_start < covering_start || covering_end < loc_ref.flanking_end) 
-        fail_to_cover_flankings = true;
-     
-    // must have variants 
-    if (is_ref      || fail_to_cover_flankings || 
-        !qc_passed  || start_offset            || end_offset) return;
+    if (loc_ref.flanking_start < covering_start || covering_end < loc_ref.flanking_end) {
+        fail_to_cover_flankings = true; return;
+    } 
+
+    // must have variants
+    if (variants.empty() || !qc_passed) return;
     
-    // no variants out of flankings
-    if (variants.front().pos < loc_ref.flanking_start ||
-        loc_ref.flanking_end < variants.back().pos) return;
+    // no variants out of flankings (this may be too restrictive) 
+    //if (variants.front().pos < loc_ref.flanking_start ||
+    //    loc_ref.flanking_end < variants.back().pos) return;
     
     is_stable_non_ref = true;  
 }
 
 //------------------------------------------------------------------------------
+// test if target locus is mapped in the middle of mapped read len tertiles
+void Read::isCenterMapped(const Variant& target) {
+    int d = INT_MAX, i = -1;
+    for (const auto& elem : idx2pos) {
+        if (std::abs(elem.second - target.pos) < d) {
+            i = elem.first; d = std::abs(elem.second - target.pos);
+        }
+    }
+   
+    int tertile = static_cast<int>(idx2pos.size() / 3);
+    is_central_mapped = (tertile <= i && i <= tertile * 2);             
+}
+
+//------------------------------------------------------------------------------
 // only applicable if input is complex
-void Read::hasTargetComplexVariant(LocalReference& loc_ref, const Variant& target)
-{
+void Read::hasTargetComplexVariant(LocalReference& loc_ref, const Variant& target) {
     int i = -1;
-    for (const auto& elem : idx2pos)
-    {
-        if (elem.second == loc_ref.flanking_start) 
-        {    
+    for (const auto& elem : idx2pos) {
+        if (elem.second == loc_ref.flanking_start) {    
             i = elem.first; break;
         }
     }

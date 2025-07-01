@@ -7,13 +7,12 @@
 
 //------------------------------------------------------------------------------
 // features at read level
-struct Read
-{   
+struct Read {   
     //--------------------------------------------------------------------------
     // constructor from inputs passed by Cython wrapper
     Read(std::string_view name, const bool is_reverse, std::string_view cigar_str,
          const int aln_start, const int aln_end, std::string_view seq,
-         const std::vector<int>& quals, const int mapq, const bool is_from_first_bam);
+         const std::vector<int>& quals, const bool is_from_first_bam);
      
     //--------------------------------------------------------------------------
     // setup reference sequence and coordinates 
@@ -43,6 +42,12 @@ struct Read
     // flag unambigous non-ref alignments to be used as template
     void isStableNonReferenceAlignment(LocalReference& loc_ref);
     
+    //--------------------------------------------------------------------------
+    // test if the target locus is middle of read mapping
+    void isCenterMapped(const Variant& target);
+    
+    //-------------------------------------------------------------------------
+    // test if read has the target by pattern matching (complex indel/MNVs only)
     void hasTargetComplexVariant(LocalReference& loc_ref, const Variant& target);
     
     //--------------------------------------------------------------------------
@@ -51,7 +56,6 @@ struct Read
 
     //--------------------------------------------------------------------------
     // quality scores 
-    int mapq = -1;  // mapping quality 
     std::string base_quals; // base quality string 
     std::vector<Qual> non_ref_quals; // base quality for variant and clipped bases
 
@@ -80,7 +84,7 @@ struct Read
     //-------------------------------------------------------------------------- 
     // boolean flags
     bool is_reverse = false; // true if aligned to the complementary stran
-    bool is_from_first_bam = false; // true if read is from the first BAM file
+    bool is_control = false; // true for second BAM reads. always true for single BAM
     bool is_na_ref = false; // true if no ref_seq is available for this read
     bool is_ref = false; // true if seq is identical to ref_seq
     bool has_target = false; // true if supporitng the target
@@ -88,7 +92,8 @@ struct Read
     bool qc_passed = false; // true if local freq of dirty bases < user thresh
     bool fail_to_cover_flankings = false; // if true, classify as ambigous read
     bool is_stable_non_ref = false; // true if bounded by enough 2-mer diversity
-   
+    bool is_central_mapped = false; // true if mapped in 2nd of read len tertile
+
     //--------------------------------------------------------------------------
     // pattern keys
     char covering_ptrn = 'C'; // 'A':complete coverage, 'B":partial, 'C':none (default)   
