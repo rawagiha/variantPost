@@ -98,7 +98,7 @@ class VariantAlignment(object):
         retarget_thresh = _retarget_thresh(local_threshold, self.window)
 
         # interact with c++ code
-        #(
+        # (
         #    self.contig_dict,
         #    self.skips,
         #    self.read_names,
@@ -108,8 +108,8 @@ class VariantAlignment(object):
         #    self.is_retargeted,
         #    self.retarget_pos,
         #    self.trans_vars,
-        #) 
-        a   = search_target(
+        # )
+        (self.target_status, self.are_reverse, self.are_first_bam,) = search_target(
             bam,
             second_bam,
             variant.reference_len,
@@ -134,12 +134,16 @@ class VariantAlignment(object):
             retarget_thresh,
             variant.unspliced_local_reference_start,
             variant.unspliced_local_reference_end,
-            variant.k
+            variant.k,
         )
-        print(a)
-        #print(self.contig_dict)
-        #self.is_with_target = any([status == 1 for status in self.target_status])
+        # print(a)
+        # print(self.contig_dict)
+        # self.is_with_target = any([status == 1 for status in self.target_status])
 
+    def cnt(self):
+        #print(len(self.target_status), len(self.are_reverse), len(self.are_first_bam))
+        return self.target_status.count(1), self.target_status.count(0), self.target_status.count(-1)
+    
     def count_alleles(self):
         """returns :class:`AlleleCount` as `namedtuple <https://docs.python.org/3/library/collections.html#collections.namedtuple>`__ of read counts.
         :class:`AlleleCount` has the following fields accessible by attribute:
@@ -243,14 +247,18 @@ class VariantAlignment(object):
         return pac
 
     def phase(
-        self, cis=False, base_quality_threshold=20, match_penalty_for_phasing=0.5, max_common_substr_len=15
+        self,
+        cis=False,
+        base_quality_threshold=20,
+        match_penalty_for_phasing=0.5,
+        max_common_substr_len=15,
     ):
         """returns :class:`~variantpost.Variant` representing a phased target variant.
 
         Parameters
         ----------
         cis : bool
-       
+
         base_quality_threshold : int
 
         max_common_substr_len : int

@@ -12,7 +12,7 @@ struct Read {
     // constructor from inputs passed by Cython wrapper
     Read(std::string_view name, const bool is_reverse, std::string_view cigar_str,
          const int aln_start, const int aln_end, std::string_view seq,
-         const std::vector<int>& quals, const bool is_from_first_bam);
+         const std::string_view quals, const bool is_from_first_bam);
      
     //--------------------------------------------------------------------------
     // setup reference sequence and coordinates 
@@ -36,7 +36,7 @@ struct Read {
      
     //--------------------------------------------------------------------------
     // annotate variants/clip/splice patterns in std::string
-    void setSignatureStrings();
+    void setSignatureStrings(const UserParams& params);
 
     //--------------------------------------------------------------------------
     // flag unambigous non-ref alignments to be used as template
@@ -56,7 +56,7 @@ struct Read {
 
     //--------------------------------------------------------------------------
     // quality scores 
-    std::string base_quals; // base quality string 
+    std::string_view base_quals; // base quality string 
     std::vector<Qual> non_ref_quals; // base quality for variant and clipped bases
 
     //--------------------------------------------------------------------------

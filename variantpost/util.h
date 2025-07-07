@@ -61,8 +61,7 @@ struct UserParams
 
 //------------------------------------------------------------------------------
 // features derived from input reference genome (not from alignment data) 
-struct LocalReference
-{ 
+struct LocalReference { 
     LocalReference(const std::string& fastafile, 
                    const std::string& chrom, const int start, const int end);
     
@@ -76,19 +75,18 @@ struct LocalReference
     // flanking region defined by 2-mer diversity
     int flanking_start = -1; int flanking_end = -1;
     bool has_flankings = false;
-
-    std::string_view seq;
     
-    Dict dict; // dictitionary {pos, base} 
-
-private:
-    std::string _seq;    
+    //--------------------------------------------------------------------------
+    // sequences 
+    std::string_view seq; // read only
+    std::string _seq; // data for string_view
+    
+    Dict dict; // dictitionary {pos, base}    
 };
 
 
 //------------------------------------------------------------------------------
-struct Variant
-{
+struct Variant {
     //--------------------------------------------------------------------------
     // base qualities may not be supplied (e.g.,deletions) 
     Variant(const int pos, 
@@ -125,6 +123,7 @@ struct Variant
     int ref_len = 0, alt_len = 0, event_len = 0; // allele len, event = the loner 
     int indel_len = 0; // len of inserted or deleted sequence
     int lpos = -1, rpos = -1; // left and right aligned positions
+    int _end_pos = pos + ref_len; // end position before right-aligned
     int end_pos = rpos + ref_len; // end postion of event after right-aligned
     
     //--------------------------------------------------------------------------
@@ -148,11 +147,9 @@ struct Variant
     std::string minimal_repeat_unit() const;
 };
 
-
-template<> struct std::hash<Variant>
-{
-    size_t operator () (const Variant& v) const noexcept
-    {
+//------------------------------------------------------------------------------
+template<> struct std::hash<Variant> {
+    size_t operator () (const Variant& v) const noexcept {
         size_t h1 = std::hash<int>()(v.pos);
         size_t h2 = std::hash<std::string>()(v.ref);
         size_t h3 = std::hash<std::string>()(v.alt);
@@ -219,6 +216,7 @@ void read2variants(
 );
 
 
+
 std::vector<Variant> merge_to_cplx(const std::vector<Variant>& variants);
 
 
@@ -271,6 +269,12 @@ void diff_kmers(
     Kmers& diff
 );
 
+//------------------------------------------------------------------------------
+void make_kmers(std::string_view seq, const size_t k, Kmers& kmers);
+
+//------------------------------------------------------------------------------
+void differential_kmers(std::string_view s1, std::string_view s2,
+                        const size_t k, Kmers& dkm1, Kmers& dkm2);
 
 int count_kmer_overlap(std::string_view seq, const Kmers& kmer_set);
 

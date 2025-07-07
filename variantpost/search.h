@@ -5,21 +5,21 @@
 
 struct SearchResult 
 {
-    std::vector<int> positions;
-    std::vector<std::string> ref_bases;
-    std::vector<std::string> alt_bases;
-    std::vector<std::string> base_quals;
-    std::vector<int> skip_starts;
-    std::vector<int> skip_ends;
-    int retarget_pos = -1;
-    std::string ref;
-    std::string alt;
-    std::vector<std::string> read_names;
-    std::vector<bool> are_reverse;
+    //std::vector<int> positions;
+    //std::vector<std::string> ref_bases;
+    //std::vector<std::string> alt_bases;
+    //std::vector<std::string> base_quals;
+    //std::vector<int> skip_starts;
+    //std::vector<int> skip_ends;
+    //int retarget_pos = -1;
+    //std::string ref;
+    //std::string alt;
+    //std::vector<std::string> read_names;
+    //std::vector<bool> are_reverse;
     std::vector<int> target_statuses;
-    std::vector<bool> are_from_first_bam;
-    std::vector<std::string> trans_vars;
-    bool is_retargeted;
+    //std::vector<bool> are_from_first_bam;
+    //std::vector<std::string> trans_vars;
+    //bool is_retargeted;
 
     SearchResult();
                                                 
@@ -62,7 +62,7 @@ void _search_target(
     const std::vector<int>&, 
     const std::vector<int>&,
     const std::vector<std::string>&, 
-    const std::vector<std::vector<int>>&, 
+    const std::vector<std::string>&, 
     const std::vector<int>&,
     const std::vector<bool>&
 );

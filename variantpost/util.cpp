@@ -128,7 +128,7 @@ void LocalReference::setFlankingBoundary(const Variant& target, const size_t win
         } 
     }
     
-    for (int i = target.lpos - start; i > 0; --i)
+    for (int i = target.lpos - start - window + 1; i > 0; --i)
     {
         if (count_dimers(seq.substr(i, window)) == max_)
         {
@@ -156,7 +156,7 @@ Variant::Variant (int pos_,
     if (ref.find('N') != std::string_view::npos ||
         alt.find('N') != std::string_view::npos ) has_n = true;
     
-    ref_len = ref_.size(); alt_len = alt_.size();
+    ref_len = ref.size(); _end_pos = pos + ref_len; alt_len = alt.size();
     if (alt_len == ref_len) 
     {
         is_substitute = true; event_len = ref_len;
@@ -1096,22 +1096,28 @@ int count_repeats(std::string_view ptrn, std::string_view seq)
     return n;
 }
 
-
-void make_kmers(std::string_view seq, const size_t k, Kmers& kmers)
-{
+//------------------------------------------------------------------------------
+void make_kmers(std::string_view seq, const size_t k, Kmers& kmers) {
     size_t n = seq.size();
+    if (n <= k) return;
     
-    if (n <= k) 
-    {
-        kmers.insert(seq);
-        return;
-    }
-    
-    for (size_t i = 0; i <= n - k; ++i) {
+    for (size_t i = 0; i <= n - k; ++i) 
         kmers.insert(seq.substr(i, k));
-    }
 }
 
+//------------------------------------------------------------------------------
+void differential_kmers(std::string_view s1, std::string_view s2, 
+                        const size_t k, Kmers& dkm1, Kmers& dkm2) {
+    Kmers km1, km2;
+    make_kmers(s1, k, km1); make_kmers(s2, k, km2);
+    
+    // kmers specific to s1
+    std::set_difference(km1.begin(), km1.end(), km2.begin(), km2.end(), 
+                        std::inserter(dkm1, dkm1.end()));
+    // kmers specific to s2
+    std::set_difference(km2.begin(), km2.end(), km1.begin(), km1.end(), 
+                        std::inserter(dkm2, dkm2.end()));
+}
 
 void diff_kmers(
     std::string_view query, 

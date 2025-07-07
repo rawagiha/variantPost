@@ -33,7 +33,7 @@ extensions = [
         "variantpost.__search",
         [
             "variantpost/__search.pyx",
-            "variantpost/contig.cpp",
+            "variantpost/pileup.cpp",
             #"variantpost/eval.cpp",
             "variantpost/search.cpp",
             "variantpost/reads.cpp",
@@ -67,5 +67,5 @@ setup(
     packages=find_packages(exclude=["tests"]),
     cmdclass={"build_ext": BuildExt},
     ext_modules=cythonize(extensions, annotate=False, language_level="3"),
-    install_requires=["pysam>=0.15.0"],
+    install_requires=["pysam>=0.23.3"],
 )

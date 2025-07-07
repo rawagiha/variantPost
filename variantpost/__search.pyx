@@ -13,20 +13,20 @@ cdef extern from "search.h":
 
         SearchResult() except +
 
-        vector[int] positions
-        vector[string] ref_bases
-        vector[string] alt_bases
-        vector[string] base_quals
-        vector[int] skip_starts
-        vector[int] skip_ends
-        int retarget_pos
-        string ref, alt
-        vector[string] read_names
-        vector[bool_t] are_reverse
+        #vector[int] positions
+        #vector[string] ref_bases
+        #vector[string] alt_bases
+        #vector[string] base_quals
+        #vector[int] skip_starts
+        #vector[int] skip_ends
+        #int retarget_pos
+        #string ref, alt
+        #vector[string] read_names
+        #vector[bool_t] are_reverse
         vector[int] target_statuses
-        vector[bool_t] are_from_first_bam
-        vector[string] trans_vars
-        bool_t is_retargeted
+        #vector[bool_t] are_from_first_bam
+        #vector[string] trans_vars
+        #bool_t is_retargeted
 
     void _search_target(
         SearchResult&,
@@ -53,7 +53,7 @@ cdef extern from "search.h":
         vector[int]&,
         vector[int]&,
         vector[string]&,
-        vector[vector[int]]&,
+        vector[string]&,
         vector[int]&,
         vector[bool_t]&
     )
@@ -115,8 +115,7 @@ cdef inline void pack_to_lists(
     vector[int]& aln_starts, 
     vector[int]& aln_ends, 
     vector[string]& read_seqs, 
-    #vector[string]& ref_seqs, 
-    vector[vector[int]]& qual_seqs, 
+    vector[string]& qual_seqs, 
     vector[int]& mapqs, 
     vector[bool_t]& is_primary,
     int unspliced_local_reference_start,
@@ -133,13 +132,13 @@ cdef inline void pack_to_lists(
         aln_starts.push_back(read.reference_start + 1)
         aln_ends.push_back(read.reference_end)
         read_seqs.push_back(read.query_sequence.encode())
-        qual_seqs.push_back(read.query_qualities)
+        qual_seqs.push_back(read.query_qualities_str.encode())
         mapqs.push_back(read.mapping_quality)
     
         if read_tuple[1]:
-            is_primary.push_back(False)
+            is_primary.push_back(True) # to be renamed
         else:
-            is_primary.push_back(True)
+            is_primary.push_back(False)
     else:
         res = shorten_read(
             read, 
@@ -159,17 +158,17 @@ cdef inline void pack_to_lists(
             mapqs.push_back(read.mapping_quality)
 
             if read_tuple[1]:
-                is_primary.push_back(False)
-            else:
                 is_primary.push_back(True)
+            else:
+                is_primary.push_back(False)
 
 
-class AnnotatedRead(object):
-    def __init__(self, read_name, is_reverse, is_first_bam, target_status):
-        self.read_name = read_name
-        self.is_reverse = is_reverse
-        self.is_first_bam = is_first_bam
-        self.target_status = target_status
+#class AnnotatedRead(object):
+#    def __init__(self, read_name, is_reverse, is_first_bam, target_status):
+#        self.read_name = read_name
+#        self.is_reverse = is_reverse
+#        self.is_first_bam = is_first_bam
+#        self.target_status = target_status
 
 
 cpdef object search_target(
@@ -213,7 +212,7 @@ cpdef object search_target(
         exclude_duplicates, 
         fetched_reads, 
         est_cov, 
-        False
+        False if second_bam else True
     )  
     
     if second_bam:
@@ -248,9 +247,7 @@ cpdef object search_target(
     aln_ends.reserve(buff_size)
     cdef vector[string] read_seqs
     read_seqs.reserve(buff_size) 
-    #cdef vector[string] ref_seqs
-    #ref_seqs.reserve(buff_size) 
-    cdef vector[vector[int]] qual_seqs
+    cdef vector[string] qual_seqs
     qual_seqs.reserve(buff_size) 
     cdef vector[int] mapqs 
     mapqs.reserve(buff_size)
@@ -271,7 +268,6 @@ cpdef object search_target(
             aln_starts, 
             aln_ends, 
             read_seqs, 
-            #ref_seqs, 
             qual_seqs, 
             mapqs, 
             are_first_bam,
@@ -311,10 +307,10 @@ cpdef object search_target(
         are_first_bam,
     )
     
-    contig_dict = OrderedDict()
-    for pos, ref_base, alt_base, base_qual in zip(
-        rslt.positions, rslt.ref_bases, rslt.alt_bases, rslt.base_quals
-    ):
+   # contig_dict = OrderedDict()
+   # for pos, ref_base, alt_base, base_qual in zip(
+   #     rslt.positions, rslt.ref_bases, rslt.alt_bases, rslt.base_quals
+   # ):
         #qual_chars = base_qual.decode("utf-8")
         #qual = -1
         #if len(qual_chars) == 1:
@@ -323,30 +319,35 @@ cpdef object search_target(
         #    quals = [ord(c) - 33 for c in qual_chars]
         #    qual = statistics.median(quals)
         
-        contig_dict[pos] = (
-            ref_base.decode("utf-8"), 
-            alt_base.decode("utf-8"), 
-            base_qual.decode("utf-8")
-        )
+    #    contig_dict[pos] = (
+    #        ref_base.decode("utf-8"), 
+    #        alt_base.decode("utf-8"), 
+    #        base_qual.decode("utf-8")
+    #    )
     
-    annot_reads = []
-    for read_name, is_reverse, target_status, is_first_bam in zip(
-        rslt.read_names, rslt.are_reverse, rslt.target_statuses, rslt.are_from_first_bam
-    ):
-        annot_reads.append(
-            AnnotatedRead(read_name.decode("utf-8"), is_reverse, is_first_bam, target_status)
-        )
+    #annot_reads = []
+    #for read_name, is_reverse, target_status, is_first_bam in zip(
+    #    rslt.read_names, rslt.are_reverse, rslt.target_statuses, rslt.are_from_first_bam
+    #):
+    #    annot_reads.append(
+    #        AnnotatedRead(read_name.decode("utf-8"), is_reverse, is_first_bam, target_status)
+    #    )
     
-    skips = [(start, end) for start, end in zip(rslt.skip_starts, rslt.skip_ends)]
+    #skips = [(start, end) for start, end in zip(rslt.skip_starts, rslt.skip_ends)]
     
     return (
-        contig_dict, 
-        skips, 
-        rslt.read_names, 
-        rslt.are_reverse, 
-        rslt.target_statuses, 
-        rslt.are_from_first_bam, 
-        rslt.is_retargeted, 
-        rslt.retarget_pos,
-        rslt.trans_vars
+        rslt.target_statuses,
+        are_reverse,
+        are_first_bam,
     )
+    #return (
+    #    contig_dict, 
+    #    skips, 
+    #    rslt.read_names, 
+    #    rslt.are_reverse, 
+    #    rslt.target_statuses, 
+    #    rslt.are_from_first_bam, 
+    #    rslt.is_retargeted, 
+    #    rslt.retarget_pos,
+    #    rslt.trans_vars
+    #)

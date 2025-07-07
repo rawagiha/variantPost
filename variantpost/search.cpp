@@ -25,7 +25,7 @@ void _search_target(SearchResult& rslt,
                     const std::vector<int>& aln_starts,
                     const std::vector<int>& aln_ends,
                     const std::vector<std::string>& read_seqs,
-                    const std::vector<std::vector<int>>& quals,
+                    const std::vector<std::string>& quals,
                     const std::vector<int>& mapqs,                            //mapqs to be removed 
                     const std::vector<bool>& are_from_first_bam)
 {  
@@ -44,13 +44,33 @@ void _search_target(SearchResult& rslt,
     Pileup pileup(read_names, are_reverse, cigar_strs, 
                   aln_starts, aln_ends, read_seqs, quals, 
                   are_from_first_bam, params, loc_ref, target);
-     
+    
     if (pileup.s_cnt) {
         std::cout << pileup.s_cnt << " " << pileup.n_cnt << " " << pileup.u_cnt << std::endl;
-        //pileup.setSupportingPattern();
         if (pileup.u_cnt) {
-            //pileup.setLocalHaploTypes();
-            //std::cout << pileup.suppr << " " << pileup.non_suppr << " " << pileup.und << std::endl;
+            pileup.setHaploTypeByFrequency(); 
+            pileup.setSequenceFromHaplotype(loc_ref);
+            pileup.differentialKmerAnalysis(params, loc_ref);
+            //std::cout << pileup.seq0 << std::endl;
+            //std::cout << pileup.seq1 << std::endl;
+            //std::cout << pileup.seq2 << std::endl;
+            //
+            //std::cout << pileup.s_cnt << " " << pileup.n_cnt << " " << pileup.u_cnt << std::endl;
+            for (const auto& read : pileup.reads) {
+                if (read.rank == 's') rslt.target_statuses.push_back(1);
+                else if (read.rank == 'n') rslt.target_statuses.push_back(0);
+                else if (read.rank == 'u') rslt.target_statuses.push_back(-1);
+                else rslt.target_statuses.push_back(-2);
+            }
+        }
+        else {
+        // best case
+            for (const auto& read : pileup.reads) {
+                if (read.rank == 's') rslt.target_statuses.push_back(1);
+                else if (read.rank == 'n') rslt.target_statuses.push_back(0);
+                else if (read.rank == 'u') rslt.target_statuses.push_back(-1);
+                else rslt.target_statuses.push_back(-2);
+            }    
         }
     }
     else if (pileup.u_cnt) {
