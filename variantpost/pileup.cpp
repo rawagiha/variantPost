@@ -23,20 +23,17 @@ Pileup::Pileup(const std::vector<std::string>& read_names,
         reads.emplace_back(read_names[i], are_reverse[i], cigar_strs[i],
                            aln_starts[i], aln_ends[i], read_seqs[i],
                            quals[i], are_from_first_bam[i]);
-
         auto& read = reads[i];
-        read.setReference(loc_ref); 
+        read.setReference(loc_ref); if (read.is_na_ref) continue;
         
-        if (read.is_na_ref) continue;
         read.setVariants(loc_ref); 
-
         read.parseCoveringPattern(loc_ref, target);
         if (read.covering_ptrn == 'C') continue;
         
         read.parseLocalPattern(loc_ref, target);
         read.qualityCheck(qc_start, qc_end, params);
         
-        if (loc_ref.has_flankings)
+        if (loc_ref.has_flankings) 
             read.isStableNonReferenceAlignment(loc_ref); 
 
         // covered and has non_ref pattern 
@@ -56,13 +53,10 @@ Pileup::Pileup(const std::vector<std::string>& read_names,
         }
         else if (read.has_local_events) {
             read.setSignatureStrings(params); read.rank = 'u'; ++u_cnt;
-            if (read.is_central_mapped &&
-                read.is_stable_non_ref && read.is_control)
-                freq_u[read.non_ref_sig]++;
+            if (read.is_central_mapped && read.is_stable_non_ref && 
+                read.is_control) freq_u[read.non_ref_sig]++;
         }
-        else {
-            read.rank = 'n'; ++n_cnt;
-        }      
+        else { read.rank = 'n'; ++n_cnt; }      
     }
 }
     
