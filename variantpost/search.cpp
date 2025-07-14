@@ -2,6 +2,7 @@
 #include "reads.h"
 #include "search.h"
 #include "pileup.h"
+#include "sequence_model.h"
 
 SearchResult::SearchResult() {}
 
@@ -19,21 +20,24 @@ void _search_target(SearchResult& rslt,
                     const int kmer_size, const int local_thresh,
                     const int retarget_thresh, const int ref_start, const int ref_end,
     
-                    const std::vector<std::string>& read_names,
-                    const std::vector<bool>& are_reverse,
-                    const std::vector<std::string>& cigar_strs,
-                    const std::vector<int>& aln_starts,
-                    const std::vector<int>& aln_ends,
-                    const std::vector<std::string>& read_seqs,
-                    const std::vector<std::string>& quals,
-                    const std::vector<int>& mapqs,                            //mapqs to be removed 
-                    const std::vector<bool>& are_from_first_bam)
+                    const Strs& read_names,
+                    const Bools& are_reverse,
+                    const Strs& cigar_strs,
+                    const Ints& aln_starts,
+                    const Ints& aln_ends,
+                    const Strs& read_seqs,
+                    const Strs& quals,
+                    const Ints& mapqs,                            //mapqs to be removed 
+                    const Bools& are_from_first_bam)
 {  
     // basic prep
     UserParams params(mapq_thresh, base_q_thresh, lq_base_rate_thresh,
                       match_score, mismatch_penal, gap_open_penal, gap_ext_penal, 
                       kmer_size, local_thresh, retarget_thresh);
     LocalReference loc_ref(fastafile, chrom, ref_start, ref_end);   
+    
+    /*should terminate if fail to set flanking*/ 
+    
     Variant target(pos, ref, alt); target.setEndPos(loc_ref);
     
     // additional prep 
@@ -45,17 +49,12 @@ void _search_target(SearchResult& rslt,
                   aln_starts, aln_ends, read_seqs, quals, 
                   are_from_first_bam, params, loc_ref, target);
     
-    if (pileup.s_cnt) {
-        std::cout << pileup.s_cnt << " " << pileup.n_cnt << " " << pileup.u_cnt << std::endl;
+    if (pileup.has_hiconf_support) {
         if (pileup.u_cnt) {
             pileup.setHaploTypeByFrequency(); 
             pileup.setSequenceFromHaplotype(loc_ref);
-            pileup.differentialKmerAnalysis(params, loc_ref);
-            //std::cout << pileup.seq0 << std::endl;
-            //std::cout << pileup.seq1 << std::endl;
-            //std::cout << pileup.seq2 << std::endl;
-            //
-            //std::cout << pileup.s_cnt << " " << pileup.n_cnt << " " << pileup.u_cnt << std::endl;
+            pileup.reRankByKmer(params, loc_ref);
+            
             for (const auto& read : pileup.reads) {
                 if (read.rank == 's') rslt.target_statuses.push_back(1);
                 else if (read.rank == 'n') rslt.target_statuses.push_back(0);
@@ -64,7 +63,6 @@ void _search_target(SearchResult& rslt,
             }
         }
         else {
-        // best case
             for (const auto& read : pileup.reads) {
                 if (read.rank == 's') rslt.target_statuses.push_back(1);
                 else if (read.rank == 'n') rslt.target_statuses.push_back(0);
@@ -73,10 +71,21 @@ void _search_target(SearchResult& rslt,
             }    
         }
     }
-    else if (pileup.u_cnt) {
-        //kmer search -> asm
+    else if (pileup.has_no_support) {
+        //no result case
     }
     else {
-        //no target no undetermined -> report resuls
+        SequenceModel seqm(pileup, loc_ref, target);        
+        seqm.compareToRefByKmer(pileup, loc_ref, params);
+        seqm.reRankByReAlignment(pileup, read_seqs, params);
+        //std::cout << seqm.flank_start << " " << seqm.target_start << " " << seqm.target_end << " " << seqm.flank_end << std::endl;
+        
+        //pileup.compareToRefByKmer(loc_ref, params, target);
+        for (const auto& read : pileup.reads) {
+            if (read.rank == 's') rslt.target_statuses.push_back(1);
+            else if (read.rank == 'n') rslt.target_statuses.push_back(0);
+            else if (read.rank == 'u') rslt.target_statuses.push_back(-1);
+            else rslt.target_statuses.push_back(-2);
+        }    
     }
 }   

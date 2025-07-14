@@ -8,19 +8,13 @@ typedef std::vector<Read> Reads;
 typedef std::unordered_map<std::string_view, int> Freq;
 
 //------------------------------------------------------------------------------
-// features at pileup level
+// features in a collection of reads (pileup)
 struct Pileup {   
     //--------------------------------------------------------------------------    
-    Pileup(const std::vector<std::string>& read_names,
-           const std::vector<bool>& are_reverse, 
-           const std::vector<std::string>& cigar_strs,
-           const std::vector<int>& aln_starts,
-           const std::vector<int>& aln_ends,
-           const std::vector<std::string>& read_seqs,
-           const std::vector<std::string>& quals,
-           const std::vector<bool>& are_from_first_bam,
-           const UserParams& params,
-           LocalReference& loc_ref, Variant& target);
+    Pileup(const Strs& read_names, const Bools& are_reverse, const Strs& cigar_strs,
+           const Ints& aln_starts, const Ints& aln_end, const Strs& read_seqs,
+           const Strs& quals, const Bools& are_from_first_bam,
+           const UserParams& params, LocalReference& loc_ref, Variant& target);
     
     //--------------------------------------------------------------------------
     void setHaploTypeByFrequency();
@@ -28,7 +22,9 @@ struct Pileup {
     //--------------------------------------------------------------------------
     void setSequenceFromHaplotype(LocalReference& loc_ref);
 
-    void differentialKmerAnalysis(UserParams& params, LocalReference& loc_ref);
+    void reRankByKmer(UserParams& params, LocalReference& loc_ref);
+    void compareToRefByKmer(LocalReference& loc_ref, UserParams& params, const Variant& t);
+
     //--------------------------------------------------------------------------    
     Reads reads; 
     
@@ -49,18 +45,19 @@ struct Pileup {
     std::string_view hap2; // as non_supporting 2
 
     //--------------------------------------------------------------------------
-    std::string seq0;
-    std::string seq1;
-    std::string seq2;
+    std::string seq0; // for hap0
+    std::string seq1; // hap1
+    std::string seq2; // hap2
+    std::string tseq; // refseq with target 
     
     //--------------------------------------------------------------------------
-    Kmers kmers0; 
-    Kmers kmers12;
+    Kmers kmers0; // kmers specific to target
+    Kmers kmers12; // kmers specific to others  
     
     //--------------------------------------------------------------------------
     // flags
-    //bool has_hiconf_target = false; // center-aligned + surrounded by complex seq
-
+    bool has_hiconf_support = false; // center-aligned + surrounded by complex seq
+    bool has_no_support = false;
 
 };
 #endif

@@ -48,7 +48,8 @@ struct Read {
     
     //-------------------------------------------------------------------------
     // test if read has the target by pattern matching (complex indel/MNVs only)
-    void hasTargetComplexVariant(LocalReference& loc_ref, const Variant& target);
+    void hasTargetComplexSubstitute(const Variant& target);
+    void hasTargetComplexIndel(LocalReference& loc_ref, const Variant& target);
     
     //--------------------------------------------------------------------------
     // read identifier
@@ -74,7 +75,7 @@ struct Read {
     // sequences 
     std::string_view seq; // reference to read seq data (std::string) from input
     std::string_view ref_seq; // reference to refseq data
-    std::string spliced_ref_seq; // store refseq data if spliced as string (not view).  
+    std::string spliced_ref_seq; // store refseq data if spliced as string (not view)
                                     
     //--------------------------------------------------------------------------
     // cigar 
@@ -116,7 +117,8 @@ struct Read {
     
     //--------------------------------------------------------------------------
     // metrics
-    int dist_to_non_target = INT_MAX; // distance to nearest variant or clip 
+    int dist_to_non_target = INT_MAX; // distance to nearest variant or clip
+    int smer = 0, nmer = 0; // supporting and non-supporting kmer count 
       
     //--------------------------------------------------------------------------
     // rank: 's' supporting target, 'n': non_supprting 'u': undetermined

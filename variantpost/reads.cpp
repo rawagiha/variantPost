@@ -163,7 +163,8 @@ void Read::parseLocalPattern(LocalReference& loc_ref, const Variant& target) {
         dists.push_back(std::abs(target.pos - aln_end));
     if (!dists.empty()) 
         dist_to_non_target = *std::min_element(dists.begin(), dists.end());
-    if (dist_to_non_target <= target.event_len) has_local_events = true;
+    if (dist_to_non_target <= target.event_len + target.rpos - target.lpos) 
+        has_local_events = true;
 }
 
 inline bool is_dirty(const Variant& v, const char thresh) {
@@ -223,8 +224,8 @@ void Read::isCenterMapped(const Variant& target) {
 }
 
 //------------------------------------------------------------------------------
-// only applicable if input is complex
-void Read::hasTargetComplexVariant(LocalReference& loc_ref, const Variant& target) {
+// use if input is complex indel
+void Read::hasTargetComplexIndel(LocalReference& loc_ref, const Variant& target) {
     int i = -1;
     for (const auto& elem : idx2pos) {
         if (elem.second == loc_ref.flanking_start) { i = elem.first; break; }
@@ -237,4 +238,15 @@ void Read::hasTargetComplexVariant(LocalReference& loc_ref, const Variant& targe
     if (seq.substr(i + lt_len, target.alt_len) != target.mid_seq) return;
     if (seq.substr(i + lt_len + target.alt_len, rt_len) != target.rt_seq) return;
     has_target = true; 
+}
+
+//------------------------------------------------------------------------------
+// use if input is complex substitute 
+void Read::hasTargetComplexSubstitute(const Variant& target) {
+    int i = -1;
+    for (const auto& elem : idx2pos) {
+        if (elem.second == target.pos) { i = elem.first; break; }
+    }
+    if (i < 0) return;
+    if (seq.substr(i, target.alt_len) == target.alt) has_target = true;
 }

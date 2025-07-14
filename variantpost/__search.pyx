@@ -118,6 +118,7 @@ cdef inline void pack_to_lists(
     vector[string]& qual_seqs, 
     vector[int]& mapqs, 
     vector[bool_t]& is_primary,
+    #vector[string]& cb,             #for isoanalysis
     int unspliced_local_reference_start,
     unspliced_local_reference_end,
     int window_len,
@@ -125,15 +126,21 @@ cdef inline void pack_to_lists(
 ):
     cdef object read = read_tuple[0]
     
-    if len(read.query_sequence) < window_len:
+    #if len(read.query_sequence) < window_len:
+    if True:
         read_names.push_back(read.query_name.encode())
         are_reverse.push_back(read.is_reverse)
         cigar_strings.push_back(read.cigarstring.encode())
         aln_starts.push_back(read.reference_start + 1)
         aln_ends.push_back(read.reference_end)
         read_seqs.push_back(read.query_sequence.encode())
-        qual_seqs.push_back(read.query_qualities_str.encode())
+        if not read.query_qualities_str:
+            qual_seqs.push_back(('F'*len(read.query_sequence)).encode())
+        else:
+            qual_seqs.push_back(read.query_qualities_str.encode())
         mapqs.push_back(read.mapping_quality)
+
+        #cb.push_back(read.get_tag("CB").encode())
     
         if read_tuple[1]:
             is_primary.push_back(True) # to be renamed
@@ -252,6 +259,11 @@ cpdef object search_target(
     cdef vector[int] mapqs 
     mapqs.reserve(buff_size)
     cdef vector[bool_t] are_first_bam
+
+    #isoseq#
+    #cdef vector[string] cb
+    #cb.reserve(buff_size)
+
     are_first_bam.reserve(buff_size)
     
     cdef int widow_len = unspliced_local_reference_end - unspliced_local_reference_start
@@ -271,6 +283,7 @@ cpdef object search_target(
             qual_seqs, 
             mapqs, 
             are_first_bam,
+            #cb,
             unspliced_local_reference_start,
             unspliced_local_reference_end,
             widow_len,
@@ -339,6 +352,7 @@ cpdef object search_target(
         rslt.target_statuses,
         are_reverse,
         are_first_bam,
+     #   cb
     )
     #return (
     #    contig_dict, 

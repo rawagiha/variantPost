@@ -14,6 +14,9 @@
 #include "fasta/Fasta.h"
 #include "ssw/ssw_cpp.h"
 
+typedef std::vector<std::string> Strs;
+typedef std::vector<int> Ints;
+typedef std::vector<bool> Bools;
 typedef std::set<std::string_view> Kmers;
 typedef std::vector<std::pair<int, int>> Coord;
 typedef std::vector<std::pair<char, int>> CigarVec;
