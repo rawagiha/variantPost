@@ -264,6 +264,7 @@ cpdef object search_target(
     #cdef vector[string] cb
     #cb.reserve(buff_size)
 
+    #opposite!!!
     are_first_bam.reserve(buff_size)
     
     cdef int widow_len = unspliced_local_reference_end - unspliced_local_reference_start

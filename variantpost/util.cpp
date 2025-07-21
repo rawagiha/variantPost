@@ -21,17 +21,15 @@
 #define BAM_CIGAR_SHIFT 4u
 #endif
 
-typedef  std::unordered_map<std::string_view, int> Dimers;
-Dimers dimers = 
-{
+typedef std::unordered_map<std::string_view, int> Dimers;
+Dimers dimers =  {
     {"AA", 0}, {"AC", 1}, {"AG", 2}, {"AT", 3},
     {"CA", 4}, {"CC", 5}, {"CG", 6}, {"CT", 7},
     {"GA", 8}, {"GC", 9}, {"GG", 10}, {"GT", 11},
     {"TA", 12}, {"TC", 13}, {"TG", 14}, {"TT", 15}
 };
 
-inline size_t count_dimers(std::string_view seq)
-{
+inline size_t count_dimers(std::string_view seq) {
     const size_t len = seq.size(); if (len < 2) return 0;
     
     std::bitset<16> flags;
@@ -69,76 +67,56 @@ UserParams::UserParams(
     min_dimer_cnt=6; // dimer search window
 };
 
-/*
-std::unordered_map<int, std::string_view> dictize_reference(
-    std::string_view ref_seq, 
-    int ref_start, 
-    int ref_end
-) 
-{
-  std::unordered_map<int, std::string_view> ref_dict;
-
-  int i = 0, pos = ref_start;
-  while (pos <= ref_end) 
-  {
-    ref_dict[pos] = ref_seq.substr(i, 1);
-    ++i;
-    ++pos;
-  }
-
-  return ref_dict;
-}
-*/
-
-
-
-
-
 //------------------------------------------------------------------------------
 LocalReference::LocalReference(const std::string& fastafile, 
                                const std::string& chrom_, const int start_, const int end_) 
-    : chrom(chrom_), start(start_), end(end_)
-{
+    : chrom(chrom_), start(start_), end(end_) {
     fasta.open(fastafile);
-    
-    _seq = fasta.getSubSequence(chrom_, start_ - 1, end_ - start_ + 1);
-    seq = static_cast<std::string_view>(_seq);
-    
-    for (int i = 0; i <= end - start; ++i)
-        dict[start + i] = seq.substr(i, 1); 
+    _seq = fasta.getSubSequence(chrom_, start_ - 1, end_ - start_ + 1); seq = _seq;
+    for (int i = 0; i <= end - start; ++i) dict[start + i] = seq.substr(i, 1); 
 }
 
 //------------------------------------------------------------------------------
 // find nearest genomics pos containing min(16, n - 1) 2-mers in a window of n
-void LocalReference::setFlankingBoundary(const Variant& target, const size_t window)
-{
+void LocalReference::setFlankingBoundary(const Variant& target, const size_t window) {
     // maximum possible number of 2-mers in window
     const size_t max_ = (window - 1 < 16) ? window - 1 : 16;
     
-    if (seq.find('N') != std::string::npos) return;
-    
+    if (seq.find('N') != std::string_view::npos) return;
+
     const int last_idx = end - start - static_cast<int>(window) + 1;
-    for (int i = target.end_pos - start; i < last_idx; ++i)
-    {
-        if (count_dimers(seq.substr(i, window)) == max_) 
-        {
-            flanking_end 
-                = target.end_pos + i - (target.end_pos - start) + window; 
-            break;
+    for (int i = target.end_pos - start; i < last_idx; ++i) {
+        if (count_dimers(seq.substr(i, window)) == max_) {
+            flanking_end = i + start + 1; break;
         } 
     }
     
-    for (int i = target.lpos - start - window + 1; i > 0; --i)
-    {
-        if (count_dimers(seq.substr(i, window)) == max_)
-        {
-            flanking_start 
-                = target.lpos + i - (target.lpos - start) - window; 
-            break;
+    for (int i = target.lpos - start - window + 1; i > 0; --i) {
+        if (count_dimers(seq.substr(i, window)) == max_) {
+            flanking_start = i + start - 1; break;
         }
     }
-
-    if (flanking_start > 0 && flanking_end > 0) has_flankings = true; 
+    
+    if (flanking_start > 0 && flanking_end > 0) has_flankings = true;
+    if (!has_flankings) return; 
+        
+    // find the length of low 2-mer diversity sequence len
+    std::set<int> found; size_t prev_cnt = 0; 
+    int low_cplx_start = flanking_start - start, i = flanking_start - start;
+    for (/* */; i <  flanking_end - start + 1; ++i) {
+        found.insert(dimers[seq.substr(i, 2)]);
+        if (found.size() - prev_cnt > 1) {
+            low_cplx_start = i; prev_cnt = found.size();
+            if (i - low_cplx_start > low_cplx_len) low_cplx_len = i - low_cplx_start;
+        }
+    }
+    
+    if (found.size() == 16) {
+        found.clear(); prev_cnt = 0; low_cplx_start = i;
+        if (i - low_cplx_start > low_cplx_len) low_cplx_len = i - low_cplx_start;
+    }      
+            
+    if (i - low_cplx_start > low_cplx_len) low_cplx_len = i - low_cplx_start;
 }
 
 inline bool is_rotatable(std::string_view allele)
@@ -544,41 +522,26 @@ inline std::pair<char, int> split_cigar(const std::string& cigar)
   return std::make_pair(cigar.substr(last_idx, 1)[0], std::stoi(cigar.substr(0, last_idx)));
 }
 
-CigarVec to_cigar_vector(std::string_view cigar_str) 
-{
-  CigarVec cigar_vec;
-
-  size_t pos = 0;
-  size_t new_pos;
-  const size_t len = cigar_str.size();
-
-  while (pos < len) 
-  {
+//------------------------------------------------------------------------------
+void fill_cigar_vector(const std::string& cigar_str, CigarVec& cigar_vector) {
+  size_t pos = 0; size_t new_pos; const size_t len = cigar_str.size();
+  
+  while (pos < len) {
     new_pos = cigar_str.find_first_of(MAPSTR, pos) + 1;
-    cigar_vec.emplace_back(
-        split_cigar(
-            std::string{cigar_str.substr(pos, new_pos - pos)}
-        )
-    );
+    std::string cigar = cigar_str.substr(pos, new_pos - pos); 
+    cigar_vector.emplace_back(cigar.substr(cigar.size() - 1, 1)[0],
+                              std::stoi(cigar.substr(0, cigar.size() - 1)));
     pos = new_pos;
   }
-
-  return cigar_vec;
 }
 
-
-CigarVec to_cigar_vector(std::vector<uint32_t>& cigar)
-{
-    CigarVec cigar_vec;
-    
-    for (uint32_t c : cigar)
-    {
-        cigar_vec.emplace_back(
-             MAPSTR[c & ((static_cast<uint32_t>(1) << BAM_CIGAR_SHIFT) - 1)],
-             c >> BAM_CIGAR_SHIFT);
-    }
-    
-    return cigar_vec;
+//------------------------------------------------------------------------------
+// overloading 
+void fill_cigar_vector(const std::vector<uint32_t>& cigar, CigarVec& cigar_vector) {    
+    for (uint32_t c : cigar) 
+        cigar_vector.emplace_back(
+            MAPSTR[c & ((static_cast<uint32_t>(1) << BAM_CIGAR_SHIFT) - 1)],
+            c >> BAM_CIGAR_SHIFT);
 }
 
 

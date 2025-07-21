@@ -109,7 +109,12 @@ class VariantAlignment(object):
         #    self.retarget_pos,
         #    self.trans_vars,
         # )
-        (self.target_status, self.are_reverse, self.are_first_bam,) = search_target(
+        (
+            self.target_status, 
+            self.are_reverse, 
+            self.are_first_bam, 
+            #self.cb
+        ) = search_target(
             bam,
             second_bam,
             variant.reference_len,
@@ -142,7 +147,42 @@ class VariantAlignment(object):
 
     def cnt(self):
         #print(len(self.target_status), len(self.are_reverse), len(self.are_first_bam))
-        return self.target_status.count(1), self.target_status.count(0), self.target_status.count(-1)
+        
+        s1, n1, u1, s2, n2, u2 = 0, 0, 0, 0, 0, 0
+        for i, j in zip(self.target_status, self.are_first_bam):
+            if i == 1:
+                if not j:
+                    s1 += 1
+                else:
+                    s2 += 1
+            elif i == 0:
+                if not j:
+                    n1 += 1
+                else:
+                    n2 += 1
+            elif i == -1:
+                if not j:
+                    u1 += 1
+                else:
+                    u2 += 1    
+        
+        return ((s1, s2), (n1, n2), (u1, u2))
+        
+        #s_cb, n_cb = [], []
+        #s_cnt, n_cnt, u_cnt = 0, 0, 0
+       # print(len(self.target_status), len(self.cb))
+       # for _, c in zip(self.target_status, self.cb):
+       #     if _ == 1:
+       #         s_cnt += 1
+       #         s_cb.append(c.decode("utf-8"))
+       #     elif _ == 0:
+       #         n_cnt += 1
+       #         n_cb.append(c.decode("utf-8"))
+       #     elif _ == -1:
+       #         u_cnt += 1
+        
+       # return s_cnt, n_cnt, u_cnt, ":".join(s_cb), ":".join(n_cb)
+    
     
     def count_alleles(self):
         """returns :class:`AlleleCount` as `namedtuple <https://docs.python.org/3/library/collections.html#collections.namedtuple>`__ of read counts.

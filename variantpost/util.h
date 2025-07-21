@@ -78,6 +78,7 @@ struct LocalReference {
     // flanking region defined by 2-mer diversity
     int flanking_start = -1; int flanking_end = -1;
     bool has_flankings = false;
+    int low_cplx_len; // len of low compex seq within flanking
     
     //--------------------------------------------------------------------------
     // sequences 
@@ -176,11 +177,12 @@ void find_shared_variants(
     const std::vector<Variant>& var_vec2
 );
 
+//------------------------------------------------------------------------------
+void fill_cigar_vector(const std::string& cigar_str, CigarVec& cigar_vector);
 
-CigarVec to_cigar_vector(std::string_view cigar_string);
-
-//overloading
-CigarVec to_cigar_vector(std::vector<uint32_t>& cigar);
+//------------------------------------------------------------------------------
+// overloading
+void fill_cigar_vector(const std::vector<uint32_t>& cigar, CigarVec& cigar_vector);
 
 
 void move_up_insertion(std::vector<std::pair<char, int>>& cigar_vector);

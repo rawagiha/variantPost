@@ -10,7 +10,7 @@
 struct Read {   
     //--------------------------------------------------------------------------
     // constructor from inputs passed by Cython wrapper
-    Read(std::string_view name, const bool is_reverse, std::string_view cigar_str,
+    Read(std::string_view name, const bool is_reverse, const std::string&  cigar_str,
          const int aln_start, const int aln_end, std::string_view seq,
          const std::string_view quals, const bool is_from_first_bam);
      

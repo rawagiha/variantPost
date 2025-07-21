@@ -1,5 +1,6 @@
 #include "util.h"
 #include "reads.h"
+#include "match.h"
 #include "search.h"
 #include "pileup.h"
 #include "sequence_model.h"
@@ -54,6 +55,8 @@ void _search_target(SearchResult& rslt,
             pileup.setHaploTypeByFrequency(); 
             pileup.setSequenceFromHaplotype(loc_ref);
             pileup.reRankByKmer(params, loc_ref);
+            
+            match2haplotypes(pileup, read_seqs, params);
             
             for (const auto& read : pileup.reads) {
                 if (read.rank == 's') rslt.target_statuses.push_back(1);

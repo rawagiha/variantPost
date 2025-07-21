@@ -4,11 +4,11 @@
 //------------------------------------------------------------------------------
 // NOTE: initilizer list reordered to suppress warning
 Read::Read(std::string_view name_, const bool is_rv, 
-           std::string_view cigar_str_, const int start, const int end, 
+           const std::string& cigar_str_, const int start, const int end, 
            std::string_view seq_, const std::string_view quals_, const bool is_frm_frst) 
     : name(name_), base_quals(quals_), aln_start(start), aln_end(end), seq(seq_),
       cigar_str(cigar_str_), is_reverse(is_rv), is_control(is_frm_frst) {
-    cigar_vector = to_cigar_vector(cigar_str_);
+    fill_cigar_vector(cigar_str_, cigar_vector);
     start_offset 
         = cigar_vector.front().first == 'S' ? cigar_vector.front().second : 0;
     end_offset 
@@ -27,8 +27,7 @@ void Read::setReference(LocalReference& loc_ref) {
         int _ref_len = aln_end - aln_start + 1; // expected refseq len
         if (_idx >= 0 && _idx + _ref_len <= loc_ref_len)
             ref_seq = loc_ref.seq.substr(_idx, _ref_len);
-    }          
-    else {   
+    } else {   
         int pos_1 = aln_start - 1; // for refseq setup
         char op = '\0'; int op_len = 0;
         for (const auto& c : cigar_vector) {
@@ -151,8 +150,7 @@ void Read::parseLocalPattern(LocalReference& loc_ref, const Variant& target) {
             int d1 = std::abs(target.end_pos - v.lpos);
             int d2 = std::abs(v.rpos - target.lpos);
             if (d1 < d2) dists.push_back(d1); else dists.push_back(d2);    
-        } 
-        else dists.push_back(0); // 0 if overlapped
+        } else dists.push_back(0); // 0 if overlapped
         ++idx;
     }
     
@@ -203,7 +201,7 @@ void Read::isStableNonReferenceAlignment(LocalReference& loc_ref) {
     if (loc_ref.flanking_start < covering_start || covering_end < loc_ref.flanking_end) {
         fail_to_cover_flankings = true; return;
     } 
-
+    
     // must have variants
     if (variants.empty() || !qc_passed) return;
     is_stable_non_ref = true;  

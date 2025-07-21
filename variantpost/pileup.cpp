@@ -11,6 +11,7 @@ Pileup::Pileup(const Strs& names, const Bools& is_rv, const Strs& cigar_strs,
     const int qc_start = target.lpos - params.local_thresh;
     const int qc_end = target.end_pos + params.local_thresh;
     
+    int ref_hap_n = 0; 
     sz = static_cast<int>(names.size()); reads.reserve(sz);
     for (int i = 0; i < sz; ++i) {
         reads.emplace_back(names[i], is_rv[i], cigar_strs[i],
@@ -47,15 +48,16 @@ Pileup::Pileup(const Strs& names, const Bools& is_rv, const Strs& cigar_strs,
             if (has_hiconf_support) continue;  
             if (read.is_central_mapped && read.is_stable_non_ref)
                 has_hiconf_support = true;   
-        }
-        else if (read.has_local_events) {
+        } else if (read.has_local_events) {
             read.setSignatureStrings(params); read.rank = 'u'; ++u_cnt;
             if (read.is_central_mapped && read.is_stable_non_ref && 
                 read.is_control) freq_u[read.non_ref_sig]++;
-        }
-        else { read.rank = 'n'; ++n_cnt; }      
+        } else { 
+            read.rank = 'n'; ++n_cnt; 
+            if (read.is_central_mapped && read.is_stable_non_ref) ++ref_hap_n;                
+        }      
     }
-    has_no_support = (!s_cnt && !u_cnt);
+    has_no_support = (!s_cnt && !u_cnt); has_ref_hap = (ref_hap_n);
 }
     
 //------------------------------------------------------------------------------
@@ -77,8 +79,7 @@ void Pileup::setHaploTypeByFrequency() {
         if (elem.second > cnt_1) {
             cnt_2 = cnt_1; ptrn_2 = ptrn_1;
             cnt_1 = elem.second; ptrn_1 = elem.first; 
-        }
-        else if (elem.second > cnt_2 && elem.second < cnt_1) {
+        } else if (elem.second > cnt_2 && elem.second < cnt_1) {
             cnt_2 = elem.second; ptrn_2 = elem.first;
         }
     }
@@ -112,8 +113,7 @@ void Pileup::setSequenceFromHaplotype(LocalReference& loc_ref) {
         if (read.rank == 's' && read.non_ref_sig == hap0) { 
             if (idx0 < 0) idx0 = i;
             starts.push_back(read.covering_start); ends.push_back(read.covering_end); 
-        }
-        else if (read.rank == 'u') {
+        } else if (read.rank == 'u') {
             if (!hap1.empty()) {
                 if (idx1 < 0 && read.non_ref_sig == hap1) {
                     idx1 = i; read.rank = 'n'; ++n_cnt; --u_cnt;
@@ -127,8 +127,8 @@ void Pileup::setSequenceFromHaplotype(LocalReference& loc_ref) {
         }
     }
     
-    int start = *std::min_element(starts.begin(), starts.end()); 
-    int end = *std::max_element(ends.begin(), ends.end());
+    start = *std::min_element(starts.begin(), starts.end()); 
+    end = *std::max_element(ends.begin(), ends.end());
 
     if (idx0 > -1)
         make_sequence(loc_ref, reads[idx0].variants, start, end, seq0);
@@ -136,38 +136,40 @@ void Pileup::setSequenceFromHaplotype(LocalReference& loc_ref) {
         make_sequence(loc_ref, reads[idx1].variants, start, end, seq1);
     if (idx2 > -1)
         make_sequence(loc_ref, reads[idx2].variants, start, end, seq2);
+    
+    // set reference haplotype if it likely exists or both hap1/hap2 failed.
+    if (has_ref_hap || (idx1 == -1 && idx2 == -1))
+        rseq.append(loc_ref._seq.substr(start - loc_ref.start, end - start)); 
 }
 
 //------------------------------------------------------------------------------
 void Pileup::reRankByKmer(UserParams& params, LocalReference& loc_ref) {
-    Kmers km0, km1, km2, km12;
+    int sz = (loc_ref.low_cplx_len > params.kmer_size) 
+           ? loc_ref.low_cplx_len : params.kmer_size;
     
-    //check plato len?
-    int flen = loc_ref.flanking_end - loc_ref.flanking_start;
-    int sz = (flen / 2 > params.kmer_size) ? flen / 2  : params.kmer_size;
-       
-    make_kmers(seq0, sz, km0); make_kmers(seq1, sz, km1); make_kmers(seq2, sz, km2);
+    Kmers km0, km1, km2, kmr, km12, km12r;   
+    make_kmers(seq0, sz, km0); make_kmers(seq1, sz, km1); 
+    make_kmers(seq2, sz, km2); make_kmers(rseq, sz, kmr);
     
     std::set_union(km1.begin(), km1.end(), km2.begin(), km2.end(),
                    std::inserter(km12, km12.begin()));
-     
-    std::set_difference(km0.begin(), km0.end(), km12.begin(), km12.end(),
-                        std::inserter(kmers0, kmers0.end()));
-    std::set_difference(km12.begin(), km12.end(), km0.begin(), km0.end(), 
-                        std::inserter(kmers12, kmers12.end()));
+    std::set_union(km12.begin(), km12.end(), kmr.begin(), kmr.end(),
+                   std::inserter(km12r, km12r.begin()));
+    
+    std::set_difference(km0.begin(), km0.end(), km12r.begin(), km12r.end(),
+                        std::inserter(kmers_t, kmers_t.end()));
+    std::set_difference(km12r.begin(), km12r.end(), km0.begin(), km0.end(), 
+                        std::inserter(kmers_nt, kmers_nt.end()));
     
     for (auto& read : reads) {
-        int neg = 0, pos = 0;
         if (read.rank == 'u') {
-            for (const auto& kmer : kmers12) {
-                if (read.seq.find(kmer) != std::string_view::npos) ++neg;
-            }
-            for (const auto& kmer : kmers0) {
-                if (read.seq.find(kmer) != std::string_view::npos) ++pos;
-            }
+            for (const auto& kmer : kmers_nt) 
+                if (read.seq.find(kmer) != std::string_view::npos) ++(read.nmer);
+            for (const auto& kmer : kmers_t) 
+                if (read.seq.find(kmer) != std::string_view::npos) ++(read.smer);
         }
-        if (pos > 0 && !neg) { read.rank = 's'; --u_cnt; ++s_cnt; }
-        if (neg > 0 && !pos) { read.rank = 'n'; --u_cnt; ++n_cnt; }
+        if (read.smer && !read.nmer) { read.rank = 's'; --u_cnt; ++s_cnt; }
+        if (read.nmer && !read.smer) { read.rank = 'n'; --u_cnt; ++n_cnt; }
     }
 }
 

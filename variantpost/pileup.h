@@ -37,27 +37,40 @@ struct Pileup {
     int s_cnt = 0, n_cnt = 0, u_cnt = 0; //cnt for supporting, non, undetermined
     
     //--------------------------------------------------------------------------
-    // haplotype = any non-reference patterns in a read within target_locus 
-    //             +/- target_event_len in a read.
-    //             reference sequence is not considered. 
-    std::string_view hap0; // pattern supporting target
-    std::string_view hap1; // inferred (from undetermined) as non_supporting 1
-    std::string_view hap2; // as non_supporting 2
-
-    //--------------------------------------------------------------------------
-    std::string seq0; // for hap0
-    std::string seq1; // hap1
-    std::string seq2; // hap2
-    std::string tseq; // refseq with target 
+    int start = -1, end = -1; //haplotype sequence start/end
     
     //--------------------------------------------------------------------------
-    Kmers kmers0; // kmers specific to target
-    Kmers kmers12; // kmers specific to others  
+    // haplotype = any non-reference patterns in a read within target_locus 
+    //             +/- target_event_len in a read.
+    // see setHaploTypeByFrequency in "pileup.cpp" for LOGIC
+    std::string_view hap0; // pattern supporting target
+    std::string_view hap1; // inferred (from rank 'u') as non_supporting 1
+    std::string_view hap2; // as non_supporting 2.
+    
+    //--------------------------------------------------------------------------
+    // set by Pileup by inferring from the actual reads
+    std::string seq0; // seq with hap0 (target)
+    std::string seq1; // seq with hap1 (non-target 1)
+    std::string seq2; // seq with hap2 (non-target 2). This may be refseq
+    std::string rseq; // reference hap. this will be set if necessary
+
+    //--------------------------------------------------------------------------
+    // set by SequenceModel by inserting the target into reference seq
+    //std::string tseq; // refseq with target 
+
+    //--------------------------------------------------------------------------
+    // set by either of Pileup or SequenceModel if necessary
+    //std::string rseq; // refseq
+    
+    //--------------------------------------------------------------------------
+    Kmers kmers_t; // kmers specific to target
+    Kmers kmers_nt; // kmers specific to non_target  
     
     //--------------------------------------------------------------------------
     // flags
     bool has_hiconf_support = false; // center-aligned + surrounded by complex seq
-    bool has_no_support = false;
+    bool has_no_support = false; // no support no undetermined
+    bool has_ref_hap = false; // reference haplotype likely exists in background
 
 };
 #endif
