@@ -117,14 +117,12 @@ void match2haplotypes(Pileup& pileup, const std::vector<std::string>& read_seqs,
                     aligner.SetReferenceSequence(pileup.rseq.c_str(), pileup.rseq.size());
                 }
                 aligner.Align(query, filter, &aln, mask_len); scores[j] = aln.sw_score;
-                std::cout << aln.cigar_string << " " << aln.sw_score << " " << pileup.reads[i].is_control << " " << pileup.reads[i].name << std::endl;
             } 
         }
          
         // aln against target hap is solely highest
         if (scores[0] > scores[1] && scores[0] > scores[2] && scores[0] > scores[3]) {
             pileup.reads[i].rank = 's'; ++pileup.s_cnt; --pileup.u_cnt; 
-            std::cout << scores[0] << " "  << scores[1] << " " << scores[2] << " " <<  scores[3] << std::endl;
         } else if (scores[0] == scores[1] || scores[0] == scores[2] || scores[0] == scores[3]) {
             /* tie score to one of non-target haplotypes -> remain as 'u'*/
         } else {
