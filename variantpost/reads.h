@@ -58,7 +58,7 @@ struct Read {
     //--------------------------------------------------------------------------
     // quality scores 
     std::string_view base_quals; // base quality string 
-    std::vector<Qual> non_ref_quals; // base quality for variant and clipped bases
+    //std::vector<Qual> non_ref_quals; // base quality for variant and clipped bases
 
     //--------------------------------------------------------------------------
     // genome coordinates (1-based) 

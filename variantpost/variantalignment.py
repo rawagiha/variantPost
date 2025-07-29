@@ -79,6 +79,7 @@ class VariantAlignment(object):
         gap_open_penalty=3,
         gap_extension_penalty=1,
         kmer_size=32,
+        dimer_window=6,
         local_threshold=20,
     ):
         if not variant.is_normalized:
@@ -95,7 +96,7 @@ class VariantAlignment(object):
         self.local_thresh = local_threshold
         self.has_second = second_bam
 
-        retarget_thresh = _retarget_thresh(local_threshold, self.window)
+        #retarget_thresh = _retarget_thresh(local_threshold, self.window)
 
         # interact with c++ code
         # (
@@ -135,8 +136,9 @@ class VariantAlignment(object):
             gap_open_penalty,
             gap_extension_penalty,
             kmer_size,
+            dimer_window,
             local_threshold,
-            retarget_thresh,
+            #retarget_thresh,
             variant.unspliced_local_reference_start,
             variant.unspliced_local_reference_end,
             variant.k,
@@ -166,7 +168,8 @@ class VariantAlignment(object):
                 else:
                     u2 += 1    
         
-        return ((s1, s2), (n1, n2), (u1, u2))
+        #return ((s1, s2), (n1, n2), (u1, u2))
+        return (s1+s2, n1+n2, u1+u2)
         
         #s_cb, n_cb = [], []
         #s_cnt, n_cnt, u_cnt = 0, 0, 0

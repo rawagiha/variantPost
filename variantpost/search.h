@@ -44,7 +44,7 @@ void _search_target(
     const int,
     const std::string&,
     const std::string&,
-    const int,
+    //const int,
     const int, 
     const double,
     const int,
@@ -63,7 +63,7 @@ void _search_target(
     const std::vector<int>&,
     const std::vector<std::string>&, 
     const std::vector<std::string>&, 
-    const std::vector<int>&,
+    //const std::vector<int>&,
     const std::vector<bool>&
 );
 

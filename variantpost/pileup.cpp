@@ -86,24 +86,35 @@ void Pileup::setHaploTypeByFrequency() {
     if (cnt_1 > 1) { hap1 = ptrn_1; } if (cnt_2 > 1) { hap2 = ptrn_2; }
 }
 
+/*
 //------------------------------------------------------------------------------
-void make_sequence(LocalReference& loc_ref, 
-                   const std::vector<Variant>& variants, 
-                   const int start, const int end, std::string& seq) {
+void make_sequence(LocalReference& loc_ref, const Vars& variants, const int start, 
+                   const int end, std::string& seq, Coord* p_idx2pos) {
     if (variants.empty()) return;
-
+    
+    int idx = 0, pos = start;
     seq.append(loc_ref._seq.substr(start - loc_ref.start, variants.front().pos - start));
+    if (p_idx2pos)
+        for (//; pos < variants.front().pos; pos++) p_idx2pos->emplace_back(idx++, pos); 
+    
     for (size_t i = 0; i < variants.size(); ++i) {
+        
         seq.append(variants[i].alt);
+        if (p_idx2pos)
+            for (size_t j = 0; j < variants[i].alt.size(); ++j) p_idx2pos->emplace_back(idx++, pos);
+        pos = variants[i]._end_pos;
+         
         if (i < variants.size() - 1) {
-            seq.append(loc_ref._seq.substr(variants[i]._end_pos - loc_ref.start, 
-                                           variants[i + 1].pos - variants[i]._end_pos));
+            seq.append(loc_ref._seq.substr(pos - loc_ref.start, variants[i + 1].pos - pos));
+            if (p_idx2pos)
+                for (//; pos < variants[i + 1].pos; pos++) p_idx2pos->emplace_back(idx++, pos);
         }
     }
-    seq.append(loc_ref._seq.substr(variants.back()._end_pos - loc_ref.start,
-                                   end - variants.back()._end_pos));
+    seq.append(loc_ref._seq.substr(pos - loc_ref.start, end - pos));
+    if (p_idx2pos)
+        for (//; pos < end; ++pos) p_idx2pos->emplace_back(idx++, pos);
 }
-
+*/
 //------------------------------------------------------------------------------
 void Pileup::setSequenceFromHaplotype(LocalReference& loc_ref) {
     int idx0 = -1, idx1 = -1, idx2 = -1;

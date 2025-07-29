@@ -35,7 +35,7 @@ cdef extern from "search.h":
         int,
         string&,
         string&,
-        int,
+        #int,
         int,
         float,
         int,
@@ -54,7 +54,7 @@ cdef extern from "search.h":
         vector[int]&,
         vector[string]&,
         vector[string]&,
-        vector[int]&,
+        #vector[int]&,
         vector[bool_t]&
     )
 
@@ -116,7 +116,7 @@ cdef inline void pack_to_lists(
     vector[int]& aln_ends, 
     vector[string]& read_seqs, 
     vector[string]& qual_seqs, 
-    vector[int]& mapqs, 
+    #vector[int]& mapqs, 
     vector[bool_t]& is_primary,
     #vector[string]& cb,             #for isoanalysis
     int unspliced_local_reference_start,
@@ -138,7 +138,7 @@ cdef inline void pack_to_lists(
             qual_seqs.push_back(('F'*len(read.query_sequence)).encode())
         else:
             qual_seqs.push_back(read.query_qualities_str.encode())
-        mapqs.push_back(read.mapping_quality)
+        #mapqs.push_back(read.mapping_quality)
 
         #cb.push_back(read.get_tag("CB").encode())
     
@@ -162,7 +162,7 @@ cdef inline void pack_to_lists(
             aln_ends.push_back(res[4])
             read_seqs.push_back(res[0].encode())
             qual_seqs.push_back(res[1])
-            mapqs.push_back(read.mapping_quality)
+            #mapqs.push_back(read.mapping_quality)
 
             if read_tuple[1]:
                 is_primary.push_back(True)
@@ -199,8 +199,8 @@ cpdef object search_target(
      int gap_open_penalty,
      int gap_extention_penalty,
      int kmer_size,
+     int dimer_window,
      int local_threshold,
-     int retarget_threshold,
      int unspliced_local_reference_start,
      int unspliced_local_reference_end,
      int k,
@@ -256,8 +256,8 @@ cpdef object search_target(
     read_seqs.reserve(buff_size) 
     cdef vector[string] qual_seqs
     qual_seqs.reserve(buff_size) 
-    cdef vector[int] mapqs 
-    mapqs.reserve(buff_size)
+    #cdef vector[int] mapqs 
+    #mapqs.reserve(buff_size)
     cdef vector[bool_t] are_first_bam
 
     #isoseq#
@@ -282,7 +282,7 @@ cpdef object search_target(
             aln_ends, 
             read_seqs, 
             qual_seqs, 
-            mapqs, 
+            #mapqs, 
             are_first_bam,
             #cb,
             unspliced_local_reference_start,
@@ -298,7 +298,7 @@ cpdef object search_target(
         pos,
         ref,
         alt,
-        mapping_quality_threshold,  #check if this is still meaningful
+        #mapping_quality_threshold,  #check if this is still meaningful
         base_quality_threshold,
         low_quality_base_rate_threshold,
         match_score,
@@ -306,8 +306,9 @@ cpdef object search_target(
         gap_open_penalty,
         gap_extention_penalty,
         kmer_size,
+        dimer_window,
         local_threshold,
-        retarget_threshold,
+        #retarget_threshold,
         unspliced_local_reference_start,
         unspliced_local_reference_end,
         read_names,
@@ -317,7 +318,7 @@ cpdef object search_target(
         aln_ends,
         read_seqs,
         qual_seqs,
-        mapqs,
+        #mapqs,
         are_first_bam,
     )
     

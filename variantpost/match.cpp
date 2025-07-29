@@ -96,14 +96,13 @@ void match2haplotypes(Pileup& pileup, const std::vector<std::string>& read_seqs,
     
     Alignment aln; Filter filter;
     Aligner aligner(params.match_score, params.mismatch_penal,
-                    params.gap_open_penal, params.gap-ext_penal);
+                    params.gap_open_penal, params.gap_ext_penal);
      
     for (int i = 0; i < pileup.sz; ++i) {
         if (pileup.reads[i].rank != 'u') continue; 
         
         const auto& query = read_seqs[i].c_str();
         int32_t mask_len = strlen(query) < 30 ? 15 : strlen(query) / 2;  
-        
         std::vector<int> scores = {0, 0, 0, 0};
         for (int j = 0; j < 4; ++j) {
             if (valid_idx.test(j)) {

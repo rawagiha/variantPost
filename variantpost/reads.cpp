@@ -166,7 +166,7 @@ void Read::parseLocalPattern(LocalReference& loc_ref, const Variant& target) {
 }
 
 inline bool is_dirty(const Variant& v, const char thresh) {
-    for (const auto& q : v.qual) if (q < thresh) return true;
+    for (const auto& q : v.qual) { if (q < thresh) return true; }
     return false; 
 }
 

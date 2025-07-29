@@ -73,4 +73,5 @@ struct Pileup {
     bool has_ref_hap = false; // reference haplotype likely exists in background
 
 };
+
 #endif

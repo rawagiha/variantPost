@@ -13,7 +13,7 @@ struct SequenceModel {
     void reRankByReAlignment(Pileup& pileup, const Strs& read_seqs, UserParams& params);
      
     //--------------------------------------------------------------------------
-    std::string seq; int start = -1, end = -1; Coord idx2pos;
+    std::string seq; int start = INT_MAX, end = -1; Coord idx2pos;
     
     //--------------------------------------------------------------------------
     int target_start = -1, target_end = -1, flank_start = -1, flank_end = -1;

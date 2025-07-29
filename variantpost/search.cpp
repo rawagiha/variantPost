@@ -14,12 +14,13 @@ void _search_target(SearchResult& rslt,
                     const std::string& chrom, const int pos, 
                     const std::string& ref, const std::string& alt,
     
-                    const int mapq_thresh, const int base_q_thresh,
+                    //const int mapq_thresh, 
+                    const int base_q_thresh,
                     const double lq_base_rate_thresh,
                     const int match_score, const int mismatch_penal,
                     const int gap_open_penal, const int gap_ext_penal,
-                    const int kmer_size, const int local_thresh,
-                    const int retarget_thresh, const int ref_start, const int ref_end,
+                    const int kmer_size, const int dimer_window,
+                    const int local_thresh, const int ref_start, const int ref_end,
     
                     const Strs& read_names,
                     const Bools& are_reverse,
@@ -28,13 +29,13 @@ void _search_target(SearchResult& rslt,
                     const Ints& aln_ends,
                     const Strs& read_seqs,
                     const Strs& quals,
-                    const Ints& mapqs,                            //mapqs to be removed 
+                    //const Ints& mapqs,                            //mapqs to be removed 
                     const Bools& are_from_first_bam)
 {  
     // basic prep
-    UserParams params(mapq_thresh, base_q_thresh, lq_base_rate_thresh,
+    UserParams params(base_q_thresh, lq_base_rate_thresh,
                       match_score, mismatch_penal, gap_open_penal, gap_ext_penal, 
-                      kmer_size, local_thresh, retarget_thresh);
+                      kmer_size, dimer_window, local_thresh);
     LocalReference loc_ref(fastafile, chrom, ref_start, ref_end);   
     
     /*should terminate if fail to set flanking*/ 
@@ -42,7 +43,7 @@ void _search_target(SearchResult& rslt,
     Variant target(pos, ref, alt); target.setEndPos(loc_ref);
     
     // additional prep 
-    loc_ref.setFlankingBoundary(target, params.min_dimer_cnt);
+    loc_ref.setFlankingBoundary(target, params.dimer_window);
     target.setFlankingSequences(loc_ref); // for complex indel/MNV
     
     // pileup setup
@@ -52,10 +53,22 @@ void _search_target(SearchResult& rslt,
     
     if (pileup.has_hiconf_support) {
         if (pileup.u_cnt) {
+            // up to 2nd most frequent haplotypes
             pileup.setHaploTypeByFrequency(); 
             pileup.setSequenceFromHaplotype(loc_ref);
+            
+            // w/ kmer specific to target hap & w/o specific to alt haps
+            // -> 's'
+            // w/ kmer specific to alt haps & w/o specific to target hap
+            // -> 'n'
             pileup.reRankByKmer(params, loc_ref);
             
+            /**Here, the remaining reads are not resolved by kmer analysis**/
+            
+            // competitive alignment agains to all haplotypes
+            // uniq best aln to target hap -> 's'
+            // uniq best aln to (one of )alt haps -> 'n'
+            // tie exists -> 'u' 
             match2haplotypes(pileup, read_seqs, params);
             
             for (const auto& read : pileup.reads) {
@@ -64,8 +77,9 @@ void _search_target(SearchResult& rslt,
                 else if (read.rank == 'u') rslt.target_statuses.push_back(-1);
                 else rslt.target_statuses.push_back(-2);
             }
-        }
-        else {
+        } else {
+            // best case 
+            // just make a contig & report
             for (const auto& read : pileup.reads) {
                 if (read.rank == 's') rslt.target_statuses.push_back(1);
                 else if (read.rank == 'n') rslt.target_statuses.push_back(0);
@@ -73,14 +87,21 @@ void _search_target(SearchResult& rslt,
                 else rslt.target_statuses.push_back(-2);
             }    
         }
-    }
-    else if (pileup.has_no_support) {
+    } else if (pileup.has_no_support) {
         //no result case
-    }
-    else {
-        SequenceModel seqm(pileup, loc_ref, target);        
-        seqm.compareToRefByKmer(pileup, loc_ref, params);
-        seqm.reRankByReAlignment(pileup, read_seqs, params);
+    } else {
+        if (pileup.s_cnt) {
+            
+        }
+        
+        if (pileup.u_cnt) {
+            SequenceModel seqm(pileup, loc_ref, target);        
+            seqm.compareToRefByKmer(pileup, loc_ref, params);
+            seqm.reRankByReAlignment(pileup, read_seqs, params);
+        } else {
+            //std::cout << "aho" << std::endl;        
+
+        }
         //std::cout << seqm.flank_start << " " << seqm.target_start << " " << seqm.target_end << " " << seqm.flank_end << std::endl;
         
         //pileup.compareToRefByKmer(loc_ref, params, target);

@@ -38,7 +38,7 @@ extensions = [
             #"variantpost/eval.cpp",
             "variantpost/search.cpp",
             "variantpost/reads.cpp",
-            #"variantpost/match.cpp",
+            "variantpost/match.cpp",
             #"variantpost/merge.cpp",
             "variantpost/util.cpp",
             #"variantpost/local_reference.cpp",

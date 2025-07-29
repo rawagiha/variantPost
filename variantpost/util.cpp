@@ -1,25 +1,28 @@
-#include <set>
-#include <map>
 #include <cmath>
 #include <bitset>
-#include <string>
-#include <vector>
-#include <utility>
 #include <cstring>
-#include <iostream>
-#include <algorithm>
-#include <string_view>
-#include <unordered_map>
-#include <unordered_set>
 
 #include "util.h"
 #include "fasta/Fasta.h"
 
 
-#define MAPSTR "MIDNSHP=X"
-#ifndef BAM_CIGAR_SHIFT
-#define BAM_CIGAR_SHIFT 4u
-#endif
+//------------------------------------------------------------------------------
+UserParams::UserParams(const int _base_q_thresh, const double lq,
+                       const int ma, const int mis, const int go, const int ge,
+                       const int k, const int d, const int loc)
+    : lq_rate_thresh(lq), local_thresh(loc), match_score(ma), mismatch_penal(mis), 
+      gap_open_penal(go), gap_ext_penal(ge), kmer_size(k), dimer_window(d) { 
+    base_q_thresh = static_cast<char>(_base_q_thresh + 33);  
+};
+
+//------------------------------------------------------------------------------
+LocalReference::LocalReference(const std::string& fastafile, 
+                               const std::string& chrom_, const int start_, const int end_) 
+    : chrom(chrom_), start(start_), end(end_) {
+    fasta.open(fastafile);
+    _seq = fasta.getSubSequence(chrom_, start_ - 1, end_ - start_ + 1); seq = _seq;
+    for (int i = 0; i <= end - start; ++i) dict[start + i] = seq.substr(i, 1); 
+}
 
 typedef std::unordered_map<std::string_view, int> Dimers;
 Dimers dimers =  {
@@ -36,44 +39,6 @@ inline size_t count_dimers(std::string_view seq) {
     for (size_t i = 0; i < len - 1; ++i)
         flags.set(dimers[seq.substr(i, 2)]);
     return flags.count();
-}
-
-Qual::Qual(const int idx_, const int pos_, const int len_)
-    : idx(idx_), pos(pos_), len(len_) { };
-
-
-UserParams::UserParams(
-    const int mapq_thresh,
-    const int _base_q_thresh,
-    const double lq_rate_thresh,
-    const int match_score,
-    const int mismatch_penal,
-    const int gap_open_penal,
-    const int gap_ext_penal,
-    const int kmer_size,
-    const int local_thresh,
-    const int retarget_thresh
-) : mapq_thresh(mapq_thresh),
-    lq_rate_thresh(lq_rate_thresh), 
-    match_score(match_score), 
-    mismatch_penal(mismatch_penal),
-    gap_open_penal(gap_open_penal), 
-    gap_ext_penal(gap_ext_penal),
-    kmer_size(kmer_size), 
-    local_thresh(local_thresh),
-    retarget_thresh(retarget_thresh)
-{
-    base_q_thresh = static_cast<char>(_base_q_thresh + 33);    
-    min_dimer_cnt=6; // dimer search window
-};
-
-//------------------------------------------------------------------------------
-LocalReference::LocalReference(const std::string& fastafile, 
-                               const std::string& chrom_, const int start_, const int end_) 
-    : chrom(chrom_), start(start_), end(end_) {
-    fasta.open(fastafile);
-    _seq = fasta.getSubSequence(chrom_, start_ - 1, end_ - start_ + 1); seq = _seq;
-    for (int i = 0; i <= end - start; ++i) dict[start + i] = seq.substr(i, 1); 
 }
 
 //------------------------------------------------------------------------------
@@ -124,7 +89,6 @@ inline bool is_rotatable(std::string_view allele)
     return (allele.front() == allele.back());   
 }
 
-
 //------------------------------------------------------------------------------
 Variant::Variant (int pos_, 
                   const std::string& ref_, const std::string& alt_, std::string_view qual_)
@@ -153,7 +117,6 @@ Variant::Variant (int pos_,
         if (ref.substr(0, alt_len) != alt) is_complex = true;
     }
 }
-
 
 inline void to_left(
     int& pos, 
@@ -213,7 +176,7 @@ void left_align(
     }
 }
 
-
+/*
 void Variant::_sb_leftmost_pos(const LocalReference& loc_ref)
 {
     const std::string ptrn = (alt_len > 1) ? to_tandem_rep(alt) : alt;
@@ -233,7 +196,7 @@ void Variant::_sb_leftmost_pos(const LocalReference& loc_ref)
         idx -= prtn_len;
         curr_pos -= prtn_len;
     }   
-}
+}*/
 
 
 void Variant::setLeftPos(const LocalReference& loc_ref)
@@ -327,7 +290,7 @@ void right_align(
     }
 }
 
-
+/*
 void Variant::_sb_rightmost_pos(const LocalReference& loc_ref)
 {
     const std::string ptrn = (alt_len > 1) ? to_tandem_rep(alt) : alt;
@@ -347,7 +310,7 @@ void Variant::_sb_rightmost_pos(const LocalReference& loc_ref)
         idx += prtn_len;
         curr_pos += prtn_len;
     }   
-}
+}*/
 
 
 void Variant::setRightPos(const LocalReference& loc_ref)
@@ -487,7 +450,7 @@ std::string to_tandem_rep(std::string_view seq)
     return std::string{seq};
 }
 
-
+/*
 std::string Variant::minimal_repeat_unit() const
 {
     std::string seq = "";
@@ -497,7 +460,7 @@ std::string Variant::minimal_repeat_unit() const
     
     return to_tandem_rep(seq);
 }
-
+*/
 
 
 void find_shared_variants(
@@ -520,28 +483,6 @@ inline std::pair<char, int> split_cigar(const std::string& cigar)
 {
   size_t last_idx = cigar.size() - 1;
   return std::make_pair(cigar.substr(last_idx, 1)[0], std::stoi(cigar.substr(0, last_idx)));
-}
-
-//------------------------------------------------------------------------------
-void fill_cigar_vector(const std::string& cigar_str, CigarVec& cigar_vector) {
-  size_t pos = 0; size_t new_pos; const size_t len = cigar_str.size();
-  
-  while (pos < len) {
-    new_pos = cigar_str.find_first_of(MAPSTR, pos) + 1;
-    std::string cigar = cigar_str.substr(pos, new_pos - pos); 
-    cigar_vector.emplace_back(cigar.substr(cigar.size() - 1, 1)[0],
-                              std::stoi(cigar.substr(0, cigar.size() - 1)));
-    pos = new_pos;
-  }
-}
-
-//------------------------------------------------------------------------------
-// overloading 
-void fill_cigar_vector(const std::vector<uint32_t>& cigar, CigarVec& cigar_vector) {    
-    for (uint32_t c : cigar) 
-        cigar_vector.emplace_back(
-            MAPSTR[c & ((static_cast<uint32_t>(1) << BAM_CIGAR_SHIFT) - 1)],
-            c >> BAM_CIGAR_SHIFT);
 }
 
 
@@ -885,6 +826,37 @@ void splice_cigar(
    std::swap(tmp, cigar_vector); 
 }
 
+
+/////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////////
+
+#define MAPSTR "MIDNSHP=X"
+#ifndef BAM_CIGAR_SHIFT
+#define BAM_CIGAR_SHIFT 4u
+#endif
+
+//------------------------------------------------------------------------------
+void fill_cigar_vector(const std::string& cigar_str, CigarVec& cigar_vector) {
+  size_t pos = 0; size_t new_pos; const size_t len = cigar_str.size();
+  
+  while (pos < len) {
+    new_pos = cigar_str.find_first_of(MAPSTR, pos) + 1;
+    std::string cigar = cigar_str.substr(pos, new_pos - pos); 
+    cigar_vector.emplace_back(cigar.substr(cigar.size() - 1, 1)[0],
+                              std::stoi(cigar.substr(0, cigar.size() - 1)));
+    pos = new_pos;
+  }
+}
+
+//------------------------------------------------------------------------------
+// overloading 
+void fill_cigar_vector(const std::vector<uint32_t>& cigar, CigarVec& cigar_vector) {    
+    for (uint32_t c : cigar) 
+        cigar_vector.emplace_back(
+            MAPSTR[c & ((static_cast<uint32_t>(1) << BAM_CIGAR_SHIFT) - 1)],
+            c >> BAM_CIGAR_SHIFT);
+}
+
 //------------------------------------------------------------------------------
 void read2variants(const int aln_start, std::string_view ref_seq, 
                    std::string_view read_seq, std::string_view base_qualities,
@@ -964,6 +936,36 @@ void read2variants(const int aln_start, std::string_view ref_seq,
          }
      }
 }
+
+
+//------------------------------------------------------------------------------
+void make_sequence(LocalReference& loc_ref, const Vars& variants, const int start, 
+                   const int end, std::string& seq, Coord* p_idx2pos) {
+    if (variants.empty()) return;
+    
+    int idx = 0, pos = start;
+    seq.append(loc_ref._seq.substr(start - loc_ref.start, variants.front().pos - start));
+    if (p_idx2pos)
+        for (/**/; pos < variants.front().pos; pos++) p_idx2pos->emplace_back(idx++, pos); 
+    
+    for (size_t i = 0; i < variants.size(); ++i) {
+        
+        seq.append(variants[i].alt);
+        if (p_idx2pos)
+            for (size_t j = 0; j < variants[i].alt.size(); ++j) p_idx2pos->emplace_back(idx++, pos);
+        pos = variants[i]._end_pos;
+         
+        if (i < variants.size() - 1) {
+            seq.append(loc_ref._seq.substr(pos - loc_ref.start, variants[i + 1].pos - pos));
+            if (p_idx2pos)
+                for (/**/; pos < variants[i + 1].pos; pos++) p_idx2pos->emplace_back(idx++, pos);
+        }
+    }
+    seq.append(loc_ref._seq.substr(pos - loc_ref.start, end - pos));
+    if (p_idx2pos)
+        for (/* */; pos < end; ++pos) p_idx2pos->emplace_back(idx++, pos);
+}
+
 
 // merge ins and del at same pos to a cplx indel
 // variants are sorted ins first (by move_up_insertion)
@@ -1156,13 +1158,3 @@ int to_idx(
     
     return -1; //invalid case
 }
-
-/*
-MatchResult::MatchResult(
-    const int ss_start, const int ss_end,
-    const int query_begin, const int query_end,
-    const CigarVec& cigar_vector
-) 
-{
-    
-}*/

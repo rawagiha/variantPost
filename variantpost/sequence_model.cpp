@@ -1,6 +1,19 @@
 #include "sequence_model.h"
 #include "match.h"
 
+// 1. sort 's' read by start
+// 2. make coverage stat
+// 3. cound variants
+// 4. take consensus 
+
+//------------------------------------------------------------------------------
+/*
+void make_sequence_2(const int start, const int end, 
+             const Variants& variants, std::string& seq, Coord& idx2pos) {
+        
+}*/ 
+
+
 //------------------------------------------------------------------------------
 SequenceModel::SequenceModel(Pileup& pileup, LocalReference& loc_ref, Variant& target) {
     std::vector<int> starts, ends;
@@ -11,25 +24,26 @@ SequenceModel::SequenceModel(Pileup& pileup, LocalReference& loc_ref, Variant& t
         }
     }
 
-    start = *std::min_element(starts.begin(), starts.end());
-    end = *std::max_element(ends.begin(), ends.end());
+    if (!starts.empty()) {
+        start = *std::min_element(starts.begin(), starts.end());
+        end = *std::max_element(ends.begin(), ends.end());
+    }
     
-    int idx = 0, pos = start;
-    seq.append(loc_ref._seq.substr(start - loc_ref.start, target.pos - start));
-    for (/* */; pos < target.pos; pos++) idx2pos.emplace_back(idx++, pos);
+    if (target.pos <= start) start = loc_ref.start;
+    if (end <= target._end_pos) end = loc_ref.end;
 
-    seq.append(target.alt); target_start = target.pos - start;
-    for(size_t i = 0; i < target.alt.size(); ++i) idx2pos.emplace_back(idx++, pos);
-
-    pos = target._end_pos;
-    seq.append(loc_ref._seq.substr(pos - loc_ref.start, end - pos));
-    for (/* */; pos < end; ++pos) idx2pos.emplace_back(idx++, pos);
-   
+    Vars variants = {target};
+    // from pileup.h
+    make_sequence(loc_ref, variants, start, end, seq, &idx2pos);
+    
+         
+    // set key index 
+    target_start = target.pos - start;
     for (auto elem : idx2pos) {
         if (flank_start < 0 && loc_ref.flanking_start <= elem.second) flank_start = elem.first;
         if (flank_end < 0 && loc_ref.flanking_end <= elem.second) flank_end = elem.first;
         if (target_end < 0 && target.end_pos <= elem.second) target_end = elem.first; 
-    } 
+    }
 }
 
 //------------------------------------------------------------------------------
@@ -65,13 +79,13 @@ void SequenceModel::reRankByReAlignment(Pileup& pileup, const std::vector<std::s
     Alignment aln; Filter filter;
     for (int i = 0; i < pileup.sz; ++i) {
         
-        if (pileup.reads[i].smer || pileup.reads[i].nmer) continue;
+        if (!pileup.reads[i].smer || pileup.reads[i].nmer) continue;
         
         // hereafter smers > 0 with no nmers
         const auto& query = read_seqs[i].c_str(); 
         int32_t mask_len = strlen(query) < 30 ? 15 : strlen(query) / 2;
         aligner.Align(query, filter, &aln, mask_len);
-        
+         
         CF cf; MF mf;
         match_flag(aln, flank_start, target_start, target_end, flank_end, cf, mf);
         // no event region overlap
