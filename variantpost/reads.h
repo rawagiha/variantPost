@@ -101,7 +101,7 @@ struct Read {
 
     //--------------------------------------------------------------------------
     // variant info
-    std::vector<Variant> variants;
+    Vars variants;
     int target_idx = -1; // target variant idx in variants (vector<Variants>)
     int target_pos = -1;  // genomic pos in the input (possibly non-normalized)
     std::string target_ref = "N"; // ref allele (possibly non-normalized)

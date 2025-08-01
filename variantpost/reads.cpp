@@ -136,31 +136,41 @@ void Read::qualityCheck(const int start, const int end, const UserParams& params
 
 //------------------------------------------------------------------------------
 void Read::parseLocalPattern(LocalReference& loc_ref, const Variant& target) {
-    int idx = 0; std::vector<int> dists;
+    int idx = find_target(loc_ref, target, variants); 
+    if (idx != -1) {
+        has_target = true; target_idx = idx;
+        auto& v = variants[idx];
+        target_pos = v.pos; target_ref = v.ref; target_alt = v.alt;
+        return;
+    }
+    
+    int tmp_d = INT_MAX;
     for (auto& v : variants) {
-        if (target.isEquivalent(v, loc_ref)) {
-            has_target = true; target_idx = idx;
-            target_pos = v.pos; target_ref = v.ref; target_alt = v.alt;
-            return;
-        }
-        
         // distances from target region to non-target variants
+        // note this may not be found by pos comparison alone 
+        // for example for long deletions
         v.setEndPos(loc_ref);
-        if (target.end_pos < v.lpos || v.rpos < target.lpos) {
-            int d1 = std::abs(target.end_pos - v.lpos);
-            int d2 = std::abs(v.rpos - target.lpos);
-            if (d1 < d2) dists.push_back(d1); else dists.push_back(d2);    
-        } else dists.push_back(0); // 0 if overlapped
-        ++idx;
+        if (target.end_pos < v.lpos || v.end_pos < target.lpos) {
+            tmp_d = std::abs(target.end_pos - v.lpos);
+            if (dist_to_non_target > tmp_d) dist_to_non_target = tmp_d;
+            tmp_d = std::abs(v.rpos - target.lpos);
+            if (dist_to_non_target > tmp_d) dist_to_non_target = tmp_d;    
+        } else { 
+            // target and v overllapped
+            dist_to_non_target = 0; has_local_events = true; return;
+        }
     }
     
     //clipping
-    if (start_offset)
-        dists.push_back(std::abs(target.pos - aln_start));
-    if (end_offset)
-        dists.push_back(std::abs(target.pos - aln_end));
-    if (!dists.empty()) 
-        dist_to_non_target = *std::min_element(dists.begin(), dists.end());
+    if (start_offset) {
+        tmp_d = std::abs(target.pos - aln_start);
+        if (dist_to_non_target > tmp_d) dist_to_non_target = tmp_d;
+    }
+    if (end_offset) {
+        tmp_d = std::abs(target.pos - aln_end); 
+        if (dist_to_non_target > tmp_d) dist_to_non_target = tmp_d;
+    }
+
     if (dist_to_non_target <= target.event_len + target.rpos - target.lpos) 
         has_local_events = true;
 }

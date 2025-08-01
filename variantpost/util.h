@@ -7,6 +7,7 @@
 #include <vector>
 #include <utility>
 #include <iterator>
+#include <limits.h>
 #include <algorithm>
 #include <string_view>
 #include <unordered_map>
@@ -112,7 +113,7 @@ struct Variant {
 
     //--------------------------------------------------------------------------
     // numeric data
-    int ref_len = 0, alt_len = 0, event_len = 0; // allele len, event = the loner 
+    int ref_len = 0, alt_len = 0, event_len = 0; // allele len, event = the longer 
     int indel_len = 0; // len of inserted or deleted sequence
     int lpos = -1, rpos = -1; // left and right aligned positions
     int _end_pos = pos + ref_len; // end position before right-aligned
@@ -142,7 +143,6 @@ template<> struct std::hash<Variant> {
 // overloaded operators
 bool operator == (const Variant& lhs, const Variant& rhs); 
 bool operator != (const Variant& lhs, const Variant& rhs);
-// TODO mind sub/ins/del
 bool operator < (const Variant& lhs, const Variant& rhs);
 
 
@@ -166,9 +166,16 @@ void read2variants(const int aln_start, std::string_view ref_seq,
                    Vars& variants, Coord& idx2pos);
 
 //------------------------------------------------------------------------------
+int find_target(LocalReference& loc_ref, const Variant& target, Vars& vars);
+
+//------------------------------------------------------------------------------
 // make seq with Vars and index it
 void make_sequence(LocalReference& loc_ref, const Vars& variants, const int start, 
                    const int end, std::string& seq, Coord* p_idx2pos=nullptr);
+
+//------------------------------------------------------------------------------
+// introduce variant to existing seq/idx2pos 
+void mutate_sequence(const Variant& variant, std::string& seq, Coord& idx2pos);
 
 //------------------------------------------------------------------------------
 // make a set of kmers from string 
