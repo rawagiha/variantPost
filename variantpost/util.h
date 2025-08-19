@@ -37,16 +37,17 @@ typedef std::vector<Variant> Vars;
 //------------------------------------------------------------------------------
 // user parameters
 struct UserParams { 
-    UserParams (const int base_q_thresh, const double lq_rate_thresh, 
-                const int match_score, const int mismatch_penal, 
-                const int gap_open_penal, const int gap_ext_penal, 
-                const int kmer_size, const int dimer_window, const int local_thresh);
+    UserParams(const int base_q_thresh, const double lq_rate_thresh, 
+               const int match_score, const int mismatch_penal, 
+               const int gap_open_penal, const int gap_ext_penal, 
+               const int kmer_size, const int dimer_window, const int local_thresh);
     
     // thresholds
     char base_q_thresh; double lq_rate_thresh; int local_thresh;
     
     // local alignment params
     int match_score; int mismatch_penal; int gap_open_penal; int gap_ext_penal;
+    int max_gap_open_penal = 10; int max_mismatch_penal = 10;
     
     // kmer related 
     int kmer_size; int dimer_window;
@@ -68,7 +69,7 @@ struct LocalReference {
     // flanking region defined by 2-mer diversity
     int flanking_start = -1; int flanking_end = -1;
     bool has_flankings = false;
-    int low_cplx_len; // len of low compex seq within flanking
+    int low_cplx_len = 0; // len of low compex seq within flanking
     
     //--------------------------------------------------------------------------
     // sequences 
@@ -123,7 +124,8 @@ struct Variant {
     // boolean flags
     bool has_n = false; // true if "N" base in alleles
     bool has_flankings = false; // true if flanking sequences set
-    bool is_substitute = false, is_ins = false, is_del = false; // variant class
+    bool is_snv = false, is_mnv = false, is_ins = false, is_del = false; 
+    bool is_substitute = false;
     bool is_complex = false; // true if complex event
     bool is_shiftable = false; // true if left- and right-positions are different
 };
@@ -145,7 +147,6 @@ bool operator == (const Variant& lhs, const Variant& rhs);
 bool operator != (const Variant& lhs, const Variant& rhs);
 bool operator < (const Variant& lhs, const Variant& rhs);
 
-
 /*********************************************************************************/
 /*                               utility functions                               */
 /*********************************************************************************/
@@ -163,7 +164,11 @@ void fill_cigar_vector(const std::vector<uint32_t>& cigar, CigarVec& cigar_vecto
 void read2variants(const int aln_start, std::string_view ref_seq, 
                    std::string_view read_seq, std::string_view base_qualities, 
                    const CigarVec& cigar_vector, const Dict& ref_dict, 
-                   Vars& variants, Coord& idx2pos);
+                   Vars& variants, Ints& var_idx, Coord& idx2pos);
+
+
+//void sw2nonrefs(const std::string& ref, const std::string& query, 
+//                Alignment& aln, NonRefs& nrs);
 
 //------------------------------------------------------------------------------
 int find_target(LocalReference& loc_ref, const Variant& target, Vars& vars);

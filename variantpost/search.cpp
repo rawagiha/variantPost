@@ -30,7 +30,8 @@ void _search_target(SearchResult& rslt,
                     const Strs& read_seqs,
                     const Strs& quals,
                     //const Ints& mapqs,                            //mapqs to be removed 
-                    const Bools& are_from_first_bam)
+                    const Bools& are_from_first_bam,
+                    const bool has_second)
 {  
     // basic prep
     UserParams params(base_q_thresh, lq_base_rate_thresh,
@@ -38,19 +39,55 @@ void _search_target(SearchResult& rslt,
                       kmer_size, dimer_window, local_thresh);
     LocalReference loc_ref(fastafile, chrom, ref_start, ref_end);   
     
-    /*should terminate if fail to set flanking*/ 
     
     Variant target(pos, ref, alt); target.setEndPos(loc_ref);
     
     // additional prep 
     loc_ref.setFlankingBoundary(target, params.dimer_window);
+    // TODO how to return the result in this case??
+    if (!loc_ref.has_flankings) return;
+     
     target.setFlankingSequences(loc_ref); // for complex indel/MNV
     
     // pileup setup
     Pileup pileup(read_names, are_reverse, cigar_strs, 
                   aln_starts, aln_ends, read_seqs, quals, 
-                  are_from_first_bam, params, loc_ref, target);
+                  are_from_first_bam, has_second, 
+                  params, loc_ref, target);
     
+    pileup.gridSearch(params, loc_ref, target);
+   
+    if (pileup.u_cnt) {
+        pileup.setHaploTypes(loc_ref, target);
+        pileup.differentialKmerAnalysis(params, loc_ref, target);
+        
+        //if (pileup.has_hiconf_support)
+        //     match2haplotypes(pileup, read_seqs, params); 
+        
+    
+
+        for (const auto& read : pileup.reads) {
+            //std::cout << read.cigar_str << " " << read.smer << " " << read.nmer << " " << read.dist_to_non_target << std::endl;
+            if (read.rank == 's') rslt.target_statuses.push_back(1);
+            else if (read.rank == 'n') rslt.target_statuses.push_back(0);
+            else if (read.rank == 'u' || read.rank == 'y') rslt.target_statuses.push_back(-1);
+            else rslt.target_statuses.push_back(-2);
+        }
+    } else {
+    
+         std::cout << "here no u " << std::endl; 
+
+        for (const auto& read : pileup.reads) {
+            //std::cout << read.cigar_str << " " << read.smer << " " << read.nmer << " " << read.dist_to_non_target << std::endl;
+            if (read.rank == 's') rslt.target_statuses.push_back(1);
+            else if (read.rank == 'n') rslt.target_statuses.push_back(0);
+            else if (read.rank == 'u' || read.rank == 'y') rslt.target_statuses.push_back(-1);
+            else rslt.target_statuses.push_back(-2);
+        }
+    }
+    
+    
+    /*
     if (pileup.has_hiconf_support) {
         if (pileup.u_cnt) {
             // up to 2nd most frequent haplotypes
@@ -63,7 +100,7 @@ void _search_target(SearchResult& rslt,
             // -> 'n'
             pileup.reRankByKmer(params, loc_ref);
             
-            /**Here, the remaining reads are not resolved by kmer analysis**/
+            //Here, the remaining reads are not resolved by kmer analysis
             
             // competitive alignment agains to all haplotypes
             // uniq best aln to target hap -> 's'
@@ -111,5 +148,5 @@ void _search_target(SearchResult& rslt,
             else if (read.rank == 'u') rslt.target_statuses.push_back(-1);
             else rslt.target_statuses.push_back(-2);
         }    
-    }
+    }*/
 }   

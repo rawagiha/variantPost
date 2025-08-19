@@ -1,13 +1,24 @@
-#include <random>
-//#include <iostream>
-
-#include "eval.h"
 #include "util.h"
-#include "merge.h"
 #include "reads.h"
 #include "contig.h"
 
 
+
+
+//------------------------------------------------------------------------------
+void Contig::setSequenceFromTarget(const Reads& supportings)
+{
+    std::unordered_map<std::string_view, int> freq;
+   
+    for (const auto& read : supportings)
+        if (read.qc_passed) freq[read.non_ref_sig]++;
+
+    auto commonest 
+        = std::max_element(freq.begin(), freq.end(),
+            [] (const auto& x, const auto& y) { return x.second < y.second; });
+    std::cout << commonest->first << " " << commonest->second << std::endl; 
+}
+/*
 Contig::Contig() {}
 
 
@@ -497,13 +508,13 @@ void prefilter_cplx_candidates(
         {
             (*i).is_deprioritized = true;
             
-            /* judge on kmer = 0 may be too harsh
+             judge on kmer = 0 may be too harsh
             non_targets.insert(
                 non_targets.end(), 
                 std::make_move_iterator(candidates.rbegin()), 
                 std::make_move_iterator(candidates.rbegin() + 1)
             );
-            candidates.pop_back();*/  
+            candidates.pop_back();  
         }
     }
     
@@ -626,11 +637,11 @@ void suggest_contig(
         
         if (!pseudo_only) sort_by_kmer(prioritized);
        
-        /*
+        
         for (size_t i= 0; i < max_size; ++i)
         {
             transfer_elem(top_tens, prioritized, i);
-        }*/
+        }
         
         sort_by_start(top_tens);
         for (const auto& read : top_tens)
@@ -779,8 +790,10 @@ void extend_contig(
         }
         case 'R':
         {
+            std::cout << "i am here " << std::endl;
             if (rt_matches.empty()) return;
-           
+            std::cout << "i am here 2" << std::endl;
+
             inputs.emplace_back(contig.seq, contig.quals, -1);
             prep_rt_input(rt_matches, ext_coord_end, inputs);
             ext_coord.emplace_back(ext_coord_start, ext_coord_end);
@@ -806,14 +819,16 @@ void extend_contig(
             break;
         }      
     }
-
+    
+    std::cout << "here " << std::endl;
     Seq extended = merge_reads(inputs);
     
     bool is_passed = is_successful_extension(
         contig.coordinates.front().first, ext_coord_start,
         contig.coordinates.back().second, ext_coord_end, contig.seq, extended.seq
     );
-     
+    
+    std::cout << " is passed " << is_passed << std::endl;
     if (is_passed)
     {    
         contig.seq = extended.seq;
@@ -822,4 +837,4 @@ void extend_contig(
 
         set_ref_info(contig, ext_coord, loc_ref);
     }
-}
+}*/

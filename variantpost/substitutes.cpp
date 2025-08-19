@@ -841,8 +841,8 @@ void retarget_to_indel(
     int a_cnt = 0, b_cnt = 0;
     for (auto& read : reads)
     {
-        annot_ref_seq(read, loc_ref);
-        annot_splice_pattern(read);
+        read.setReference(loc_ref);
+        //annot_splice_pattern(read);
         annot_covering_ptrn(read, target, loc_ref, is_retargeted);
         annot_clip_pattern(read, target);
         eval_read_quality(read, user_params);

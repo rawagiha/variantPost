@@ -63,7 +63,7 @@ void LocalReference::setFlankingBoundary(const Variant& target, const size_t win
     }
     
     if (flanking_start > 0 && flanking_end > 0) has_flankings = true;
-    if (!has_flankings) return; 
+    else return; 
         
     // find the length of low 2-mer diversity sequence len
     std::set<int> found; size_t prev_cnt = 0; 
@@ -80,20 +80,22 @@ void LocalReference::setFlankingBoundary(const Variant& target, const size_t win
         found.clear(); prev_cnt = 0; low_cplx_start = i;
         if (i - low_cplx_start > low_cplx_len) low_cplx_len = i - low_cplx_start;
     }      
-            
+    
     if (i - low_cplx_start > low_cplx_len) low_cplx_len = i - low_cplx_start;
 }
 
-inline bool is_rotatable(std::string_view allele)
-{
+//------------------------------------------------------------------------------
+//NonRef::NonRef(const int i, const std::string& ref_, const std::string& alt_)
+//    : idx(i), ref(ref_), alt(alt_) { }
+
+inline bool is_rotatable(std::string_view allele) {
     return (allele.front() == allele.back());   
 }
 
 //------------------------------------------------------------------------------
-Variant::Variant (int pos_, 
-                  const std::string& ref_, const std::string& alt_, std::string_view qual_)
-    : pos(pos_), ref(ref_), alt(alt_), qual(qual_)
-{
+Variant::Variant(int pos_, 
+                 const std::string& ref_, const std::string& alt_, std::string_view qual_)
+    : pos(pos_), ref(ref_), alt(alt_), qual(qual_) {
 
     if (ref.find('N') != std::string_view::npos ||
         alt.find('N') != std::string_view::npos ) has_n = true;
@@ -102,7 +104,8 @@ Variant::Variant (int pos_,
     if (alt_len == ref_len) 
     {
         is_substitute = true; event_len = ref_len;
-        is_complex = (ref_len > 1); // MNVs
+        is_snv = (ref_len == 1);
+        if (!is_snv) { is_mnv = true; is_complex = true; }
     }
     else if (ref_len < alt_len)
     {
@@ -143,7 +146,6 @@ inline void to_left(
     shorter_allele = prev_base;
     is_failed = false;
 }
-
 
 void left_align(
     int& pos,
@@ -392,31 +394,31 @@ bool Variant::isEquivalent(const Variant& other, const LocalReference& loc_ref) 
     return (pos == _pos && ref == _ref && alt == _alt);
 } 
 
-
-bool operator == (const Variant& lhs, const Variant& rhs)
-{
+bool operator == (const Variant& lhs, const Variant& rhs) {
     return (lhs.pos == rhs.pos && lhs.ref == rhs.ref && lhs.alt == rhs.alt);
 }
 
-
-bool operator != (const Variant& lhs, const Variant& rhs)
-{
+bool operator != (const Variant& lhs, const Variant& rhs) {
     return !(lhs == rhs);
 }
 
-
-bool operator < (const Variant& lhs, const Variant& rhs)
-{
-    if (lhs.pos < rhs.pos) return true;
+bool operator < (const Variant& lhs, const Variant& rhs) {
+    if (lhs.pos < rhs.pos) return true; 
     else if (rhs.pos < lhs. pos) return false;
-    else // lhs.pos == rhs.pos
-    {
-        if (lhs.ref.size() < rhs.ref.size()) return true;
-        else if (rhs.ref.size() < lhs.ref.size()) return false;
-        else return (lhs.alt < rhs.alt); //same ref deleted
+    else {
+        // smaller event end pos
+        // snv, ins < del
+        if (lhs.ref_len < rhs.ref_len) return true;
+        else if (rhs.ref_len < lhs.ref_len) return false;
+        else {
+            // snv < ins
+            if (lhs.alt_len < rhs.alt_len) return true;
+            else if (rhs.alt_len < lhs.alt_len) return false;
+            // ref>A < ref>C < ref>G < ref>T (lexigraphical)
+            else return (lhs.alt < rhs.alt); 
+        }
     }
 }
-
 
 std::string to_tandem_rep(std::string_view seq)
 {
@@ -861,26 +863,24 @@ void fill_cigar_vector(const std::vector<uint32_t>& cigar, CigarVec& cigar_vecto
 void read2variants(const int aln_start, std::string_view ref_seq, 
                    std::string_view read_seq, std::string_view base_qualities,
                    const CigarVec& cigar_vector, const Dict& ref_dict,
-                   std::vector<Variant>& variants, Coord& idx2pos)
-{
+                   Vars& variants, Ints& var_idx, Coord& idx2pos) {
     char op = '\0'; 
     std::string_view ref, alt, qual;
     bool is_padding_base_supported = false; // relavant to skips
     int op_len = 0, ref_idx = 0, read_idx = 0, pos = aln_start;
-    for (const auto & cigar : cigar_vector)
-    {
+    for (const auto& cigar : cigar_vector) {
         op = cigar.first; op_len = cigar.second;
-        switch (op)
-        {
+        switch (op) {
             case 'M': case 'X': case '=':
-                for (int i = 0; i < op_len; ++i)
-                {
+                for (int i = 0; i < op_len; ++i) {
                     ref = ref_seq.substr(ref_idx, 1);
                     alt = read_seq.substr(read_idx, 1);
                     qual = base_qualities.substr(read_idx, 1);
-                    if (ref != alt)
+                    if (ref != alt) {
                         variants.emplace_back(pos, 
                                               std::string(ref), std::string(alt), qual);
+                        var_idx.push_back(read_idx);
+                    }
                     idx2pos.emplace_back(read_idx, pos);
                     ++ref_idx; ++read_idx; ++pos;
                 }
@@ -889,8 +889,7 @@ void read2variants(const int aln_start, std::string_view ref_seq,
             case 'I':
                 if (is_padding_base_supported) 
                     ref = ref_seq.substr(ref_idx - 1, 1);
-                else
-                {
+                else {
                     auto it = ref_dict.find(pos - 1);
                     if (it != ref_dict.cend()) 
                         ref = it->second;
@@ -903,16 +902,15 @@ void read2variants(const int aln_start, std::string_view ref_seq,
                                       + std::string(read_seq.substr(read_idx, op_len)),
                                       base_qualities.substr(read_idx, op_len));
                 
-                for (int i = 0; i < op_len; ++i)
+                for (int i = 0; i < op_len; ++i) {
+                    if (i) var_idx.push_back(read_idx + 1); // index for inserted seq (excl. padding) 
                     idx2pos.emplace_back(read_idx + i, pos - 1);
-                
+                }
                 read_idx += op_len; break; 
-            case 'D':
-            {
+            case 'D': {
                 if (is_padding_base_supported) 
                      alt = ref_seq.substr(ref_idx - 1, 1);
-                else
-                {
+                else {
                     auto it = ref_dict.find(pos - 1);
                     if (it != ref_dict.cend()) 
                         alt = it->second;
@@ -923,7 +921,6 @@ void read2variants(const int aln_start, std::string_view ref_seq,
                                       std::string(alt) 
                                       + std::string(ref_seq.substr(ref_idx, op_len)), 
                                       std::string(alt));
-                
                 ref_idx += op_len; pos += op_len; 
                 is_padding_base_supported = true; break;
             }
@@ -937,34 +934,397 @@ void read2variants(const int aln_start, std::string_view ref_seq,
      }
 }
 
+//TODO test for ridiculous input such as NNNNN
+// make a prep func 
+
+//(idx, ref, alt)
+/*
+void sw2nonrefs(const std::string& ref, const std::string& query, 
+                Alignment& aln, NonRefs& nrs) {
+    CigarVec cigar_vector; fill_cigar_vector(aln.cigar, cigar_vector);
+    char op = '\0'; int op_len = 0, ri = aln.ref_begin, qi = aln.query_begin;
+    for (const auto& cigar : cigar_vector) {
+        op = cigar.first; op_len = cigar.second;
+        switch (op) {
+            case '=':
+                ri += op_len; qi += op_len; break;
+            case 'X':
+                nrs.emplace_back(ri, ref.substr(ri, op_len), query.substr(qi, op_len));
+                ri += op_len; qi += op_len; break;
+            case 'D':
+                nrs.emplace_back(ri - 1, ref.substr(ri - 1 , op_len + 1), ref.substr(ri - 1 , 1));
+                ri += op_len; break;
+            case 'I':
+                nrs.emplace_back(ri - 1, ref.substr(ri - 1 , 1), ref.substr(ri - 1 , 1).append(query.substr(qi, op_len)));
+                qi += op_len; break;
+        }     
+    }     
+}*/ 
 
 //------------------------------------------------------------------------------
+bool swappable_old(LocalReference& loc_ref, 
+               const Variant& vlt, const Variant& vrt, const Variant& target) {
+    //LOGIC:
+    //     Suppoe that vlt is a deletion of S and vrt is an insertion of T.
+    //     vlt.pos < vrt.pos 
+    //     
+    //     target is an insertion of T but found at vlt.pos
+    //     There exists an equivalent alignemt with target + deletion of S near vrt.pos
+    //     If the sequence between vrt and vlt satisfies the following:
+    //
+    //     ref:  xxxS(TS)^nSxxx
+    //     A: insertion T before the front S & deletion of the back S
+    //     B: deletion of the front S & insertion of T before the back S
+    //
+    //     A and B give equilvant alignment
+    //
+    //     A: xxxS(TS)^nSxxx ->  xxxTS(TS)^nSxxx -> xxxTS(TS)^nxxx
+    //     B: xxxS(TS)^nSDxxx ->  xxx(TS)^nSxxx -> xxx(TS)^nTSxxx 
+    //
+    //     SPECIAL CASE (may be most frequent?)
+    //     ref: xxxSTSxxxx
+    //     A': insertion of T before the front S & deletion of the back S
+    //     B': deletion of the front S & insertion of T to the last (append)  
+    //
+    //     A': xxxSTSxxx -> xxxTSTSxxx -> xxxTSTxxx
+    //     B': xxxSTSxxx -> xxxTSxxx   -> xxxTSTxxx
+    //      
+    
+    // sequence between vlt/vtr (i.e., S(TS)^S or STS)   
+    std::string_view inter_ref = loc_ref.seq.substr(vlt.pos - loc_ref.start + 1, 
+                                                    vrt._end_pos - vlt.pos - 1);
+    
+    // must be a pair of ins/del 
+    std::string_view s, t;
+    if (vlt.is_ins && vrt.is_del) {
+        //wrong: s = vrt.ref.subtr(1)
+        // -> s is undefined as vrt.ref.substr(1) only temporarily exists
+        s = std::string_view(vrt.ref).substr(1); t = std::string_view(vlt.alt).substr(1);
+    } else if (vlt.is_del && vrt.is_ins) {
+        s = std::string_view(vlt.ref).substr(1); t = std::string_view(vrt.alt).substr(1);
+    } else { return false; }
+     
+    // implement for special case only for now
+    // 
+    // hint for general case; 
+    // 1. check the length of interseq
+    // 2. check len(S) + len(TS) x int + len(S) is satisfied
+    // 3. chekc the actual seq units.
+    //
+    // test if the inter seq is STS
+    if (inter_ref.substr(0, s.size()) != s) return false;
+    if (inter_ref.substr(s.size(), t.size()) != t) return false;
+    if (inter_ref.substr(s.size()+ t.size()) != s) return false;
+    
+    int expected_rt_ins_pos = vlt.pos + static_cast<int>(inter_ref.size());
+    int expected_rt_del_pos = vlt.pos + static_cast<int>(s.size() + t.size()); 
+    if (target.is_ins) {
+        if (t != target.alt.substr(1)) return false;
+        if (target.pos == expected_rt_ins_pos){
+            if (vlt.is_ins && vrt.pos == expected_rt_del_pos) return true;
+        } else if (target.pos == vlt.pos) {
+            if (vlt.is_del && vrt.pos == expected_rt_ins_pos) return true;        
+        }
+    } else {
+        if (s != target.ref.substr(1)) return false;
+        if (target.pos == expected_rt_del_pos) {
+            if (vlt.is_del && vrt.pos == expected_rt_ins_pos) return true;
+        } else if (target.pos == vlt.pos) {
+            if (vlt.is_ins && vrt.pos == expected_rt_del_pos) return true;
+        }
+    }
+    return false;
+} 
+
+//------------------------------------------------------------------------------
+// Edge case 01
+bool swappable(LocalReference& loc_ref, 
+               const Variant& vlt, const Variant& vrt, const Variant& target) {
+    std::bitset<4> cases;
+    if (vlt.is_ins && vrt.is_del) {
+        if (target.is_ins && vlt.pos < target.pos 
+            && target.indel_len == vlt.indel_len) cases.set(0);
+        if (target.is_del && target.pos < vrt.pos 
+            && target.indel_len == vrt.indel_len) cases.set(1);
+    } else if (vlt.is_del && vrt.is_ins) {
+        if (target.is_ins && target.pos < vrt.pos
+            && target.indel_len == vrt.indel_len) cases.set(2);
+        if (target.is_del && vlt.pos < target.pos
+            && target.indel_len == vlt.indel_len) cases.set(3);
+    } else return false;
+     
+    if (!cases.count()) return false;
+    
+    int inter_len = vrt._end_pos - vlt.pos - 1; if (inter_len <= 0) return false;
+    std::string inter_ref = loc_ref._seq.substr(vlt.pos - loc_ref.start + 1,
+                                                inter_len);
+    std::string obs, tmp;
+    if (cases.test(0) || cases.test(1)) {
+        
+        obs = vlt.alt.substr(1); obs.append(inter_ref);
+        if (vrt.indel_len >= static_cast<int>(obs.size())) return false;
+        
+        obs.erase(obs.size() - vrt.indel_len);
+        if (cases.test(0)) {
+            inter_ref.append(target.alt.substr(1));
+            if (vrt.indel_len + 1> static_cast<int>(inter_ref.size())) return false;
+            return (obs == inter_ref.substr(vrt.indel_len)); 
+        } else {
+            if (target.indel_len + 1 > static_cast<int>(inter_ref.size())) return false;
+
+            tmp = inter_ref.substr(target.indel_len);
+            tmp.append(vlt.alt.substr(1));
+            if (obs == tmp) return true;
+            
+            // edge case 
+            //  T       GCC     TGC       C
+            //  T(CTATA)G-C  -> T-C(TATAG)C
+            //  delted seq is the padding in new ins
+            if (vrt.indel_len == 1 
+                && vlt.indel_len > 1 && vrt.ref.substr(1) == vlt.alt.substr(1, 1)) { 
+                
+                tmp = inter_ref.substr(target.indel_len);
+
+                std::string new_ins = vlt.alt.substr(2); // remove padding + one
+                new_ins.append(target.ref.substr(1));
+                tmp.append(new_ins);
+                return (obs == tmp);
+            }
+            return false;  
+        }
+    } else {
+        // pass for now, no actual examples...
+    }
+    
+    return false;
+}
+
+bool is_homoply_del(const Variant& target, int& hom_start, int& hom_end) {
+    if (!target.is_del || target.ref_len < 3) return false;
+
+    std::set<char> bases;
+    for (int i = 1; i < target.ref_len; ++i) bases.insert(target.ref[i]);
+
+    if (bases.size() == 1) { 
+        hom_start = target.pos + 1; hom_end = target.end_pos - 1; return true;    
+    } else return false;
+}
+
+//------------------------------------------------------------------------------
+// Edge case 02
+// MNVs in homopolymer may be called as del + ins at any pos in the deleted 
+// homopolymer
+//
+//  01 23456
+//  GC CCAAT
+//  GCTGGAAT -> GCC>C@0+ C>CTGG@1 or @2 or @3 
+bool del_of_hmp_to_mnv(const int del_len, 
+                       const Ints& snvs_in_hmp, const Vars& vars) {
+    if (del_len != static_cast<int>(snvs_in_hmp.size())) return false; 
+    
+    for (size_t i = 0; i + 1 < snvs_in_hmp.size(); ++i)
+        if (vars[i].pos + 1 != vars[i + 1].pos) return false;  
+    return true;
+}
+
+//------------------------------------------------------------------------------
+// Edge case 03
+// ins folloed by subsitutions
+int enumerate_possible_ins(const int i, const int j, const Vars& vars,
+                           LocalReference& loc_ref, const Variant& target) { 
+    int n = -1, m = -1;
+    if (vars[i].is_snv) {
+        if (i) { n = i; m = i; } else return -1;
+    } else if (vars[j].is_snv) {
+        if (j) { n = j; m = j; } else return -1;
+    } else return -1;
+    
+    bool is_consecutive = true;
+    while (0 < n && is_consecutive) {
+        if (vars[n - 1].pos + 1 == vars[n].pos || !vars[n - 1].is_snv)
+            is_consecutive = false;
+        --n;
+    }
+    
+    std::string ext;
+    if (n > 0 && vars[n - 1].is_ins) {
+        for (int k = n; k <= m; ++k) ext.append(vars[k].alt);
+        --n;     
+    } else return -1;
+
+    std::string ins_seq = vars[n].alt.substr(1), new_alt = vars[m].ref;
+    if (ext.size() == 1) {
+         auto idx = ins_seq.find(ext);
+         if (idx == std::string::npos)
+             new_alt.append(ins_seq).append(ext);
+         else
+             new_alt.append(ins_seq.substr(idx)).append(ext);
+    } else { new_alt.append(ins_seq).append(ext); }
+    
+    Variant new_ins(vars[m].pos, vars[m].ref, new_alt);
+    
+    if (target.isEquivalent(new_ins, loc_ref)) return n;
+    else return -1;
+} 
+
+//------------------------------------------------------------------------------
+// Find target in a  list of variant making the haplotype 
+// swappable ins/del considered
+int find_target(LocalReference& loc_ref, const Variant& target, Vars& vars) {
+    
+    int hom_start = -1, hom_end = -1; 
+    bool del_of_hmp = is_homoply_del(target, hom_start, hom_end);
+    Ints snvs_in_hmp; 
+      
+    int i = -1, j = -1, di = INT_MAX, dj = INT_MAX, d = INT_MAX; 
+    for (int idx = 0; idx < static_cast<int>(vars.size()); ++idx) {
+        const auto& v = vars[idx];
+        if (target.isEquivalent(v, loc_ref)) return idx;
+        
+        // std::cout << vars[idx].pos << " " << vars[idx].ref << " " << vars[idx].alt << std::endl;
+        // possible edge_case_02 loci
+        if (del_of_hmp && v.is_snv && hom_start <= v.pos && v.pos <= hom_end)
+            snvs_in_hmp.push_back(idx);
+         
+        // finding 1st/2nd nearest locis
+        d = std::abs(target.pos - v.pos);
+        if (d < di) {j = i; dj = di; i = idx; di = d;} 
+        else if (di < d && d < dj) {j = idx; dj = d;}      
+    }
+    
+    // testing edge_case_02
+    if (del_of_hmp && del_of_hmp_to_mnv(target.indel_len, snvs_in_hmp, vars))
+        return snvs_in_hmp[0];
+     
+    if (target.is_substitute || i < 0 || j < 0) return -1;
+    
+    int edge_case_03 = enumerate_possible_ins(i, j, vars, loc_ref, target);
+    if (edge_case_03 > -1) return edge_case_03;
+
+    int lt = -1, rt = -1;
+    if (vars[i].pos < vars[j].pos) { lt = i; rt = j; } else { lt = j; rt = i; }
+    auto& vlt = vars[lt]; auto& vrt = vars[rt];
+    
+    if (vlt.pos != target.pos 
+        && !(vrt.pos <= target.pos && target.pos <= vrt._end_pos)) return -1;  
+    
+    // testubg edge_case_01
+    if (swappable(loc_ref, vlt, vrt, target)) {
+        if (target.is_ins) return (vlt.is_ins) ? lt : rt; 
+        if (target.is_del) return (vlt.is_del) ? lt : rt; 
+    } 
+    
+    return -1;
+} 
+
+//------------------------------------------------------------------------------
+// [start, end): end exclusive
+// HOWEVER, [start, end] : end inclusive if end == variants.back.pos
+// -> special usage for swappable ins/del cases
+//
+// Vars should be pre-sorted. 
 void make_sequence(LocalReference& loc_ref, const Vars& variants, const int start, 
                    const int end, std::string& seq, Coord* p_idx2pos) {
-    if (variants.empty()) return;
+    if (end <= start) return; 
     
     int idx = 0, pos = start;
+    if (variants.empty()) {
+        seq.append(loc_ref._seq.substr(pos - loc_ref.start, end - pos));
+        if (p_idx2pos)
+            for (/**/; pos < end; pos++) p_idx2pos->emplace_back(idx++, pos);
+        return; 
+    }
+
+    if (variants.front().pos < start || end < variants.back().pos) return;
+    
     seq.append(loc_ref._seq.substr(start - loc_ref.start, variants.front().pos - start));
     if (p_idx2pos)
         for (/**/; pos < variants.front().pos; pos++) p_idx2pos->emplace_back(idx++, pos); 
     
-    for (size_t i = 0; i < variants.size(); ++i) {
+    for (size_t i = 0; i < variants.size();/* */) {
         
-        seq.append(variants[i].alt);
-        if (p_idx2pos)
-            for (size_t j = 0; j < variants[i].alt.size(); ++j) p_idx2pos->emplace_back(idx++, pos);
-        pos = variants[i]._end_pos;
-         
-        if (i < variants.size() - 1) {
-            seq.append(loc_ref._seq.substr(pos - loc_ref.start, variants[i + 1].pos - pos));
+        if (i + 1 ==  variants.size() || variants[i]._end_pos < variants[i + 1].pos) {
+            seq.append(variants[i].alt);
             if (p_idx2pos)
-                for (/**/; pos < variants[i + 1].pos; pos++) p_idx2pos->emplace_back(idx++, pos);
+                for (int k = 0; k < variants[i].alt_len; ++k) p_idx2pos->emplace_back(idx++, pos);
+            pos = variants[i]._end_pos;
+        } else {
+        // not the last && overlapping with next
+            size_t j = i; //end of overlap
+            while (j + 1 < variants.size()){
+                if (variants[j]._end_pos < variants[j + 1].pos) break;
+                ++j;
+            }
+            
+            std::string alt; int prev = pos;
+            while (i <= j) {
+                if (pos <= variants[i].pos) {
+                    alt.append(variants[i].alt);
+                    if (p_idx2pos)
+                        for (int k = 0; k < variants[i].alt_len; ++k) p_idx2pos->emplace_back(idx++, pos);
+                } else {
+                    if (variants[i].alt_len > 1) {
+                        alt.append(variants[i].alt.substr(1));
+                        if (p_idx2pos)
+                            for (int k = 0; k + 1 < variants[i].alt_len; ++k) p_idx2pos->emplace_back(idx++, prev);
+                    }                
+                }
+                prev = pos; pos = variants[i]._end_pos; ++i;
+            }
+            i = j; seq.append(alt);
         }
+        
+        if (i + 1 ==  variants.size()) break;
+        
+        seq.append(loc_ref._seq.substr(pos - loc_ref.start, variants[i + 1].pos - pos));
+        if (p_idx2pos)
+            for (/**/; pos < variants[i + 1].pos; pos++) p_idx2pos->emplace_back(idx++, pos);
+        ++i;
     }
-    seq.append(loc_ref._seq.substr(pos - loc_ref.start, end - pos));
+    if (end > pos)
+        seq.append(loc_ref._seq.substr(pos - loc_ref.start, end - pos));
+    
     if (p_idx2pos)
         for (/* */; pos < end; ++pos) p_idx2pos->emplace_back(idx++, pos);
 }
+
+//------------------------------------------------------------------------------
+void mutate_sequence(const Variant& variant, std::string& seq, Coord& idx2pos) {
+    int idx = -1;
+    for (auto elem : idx2pos)
+        if (elem.second == variant.pos) {idx = elem.first; break;}
+    if (idx == -1) return;
+    
+    // previouly mutated
+    if (seq.substr(idx, variant.ref_len) != variant.ref) return;
+    
+    std::string _seq = seq.substr(0, idx);
+    _seq.append(variant.alt); _seq.append(seq.substr(idx + variant.ref_len));  
+    
+    // no changes in coodinate for subs
+    if (variant.is_substitute) { seq = _seq; return; }
+    
+    // indels
+    Coord _idx2pos;
+    const int diff = variant.alt_len - variant.ref_len;
+    for (auto elem: idx2pos) {
+        if (elem.first < idx) { 
+            _idx2pos.push_back(elem);
+        } else if (elem.first == idx) {
+            for (int i = 0; i < variant.alt_len; ++i) 
+                _idx2pos.emplace_back(idx + i, elem.second);
+        } else {
+            _idx2pos.emplace_back(elem.first + diff, elem.second);
+        }
+    }
+    seq = _seq; idx2pos = _idx2pos;
+} 
+
+//------------------------------------------------------------------------------
+// grid
+
+
+
 
 
 // merge ins and del at same pos to a cplx indel

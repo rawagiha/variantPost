@@ -73,7 +73,10 @@ void Read::setVariants(LocalReference& loc_ref) {
     
     // from util.h
     read2variants(aln_start, ref_seq, seq, base_quals, 
-                   cigar_vector, loc_ref.dict, variants, idx2pos);
+                   cigar_vector, loc_ref.dict, variants, var_idx, idx2pos);
+
+    if (variants.size() > 1)
+        std::sort(variants.begin(), variants.end()); 
 }
 
 //------------------------------------------------------------------------------
@@ -116,8 +119,14 @@ void Read::parseCoveringPattern(LocalReference& loc_ref, const Variant& target) 
     if (is_partial) covering_ptrn = 'B';
 }
 
+inline bool is_variant(const int idx, const Ints& var_idx) {
+    auto it = std::find(var_idx.begin(), var_idx.end(), idx);
+    return (it != var_idx.end()); 
+}
+
 //------------------------------------------------------------------------------
-void Read::qualityCheck(const int start, const int end, const UserParams& params) {   
+void Read::qualityCheck(const int start, const int end, 
+                        const int qual_thresh, const double freq_thresh) {   
     
     const int last_ = static_cast<int>(base_quals.size()) - 1;
     
@@ -130,8 +139,9 @@ void Read::qualityCheck(const int start, const int end, const UserParams& params
     
     int cnt = 0;
     for (int k = i; k <= j; ++k)
-        if (base_quals[k] < params.base_q_thresh ) ++cnt;
-    qc_passed = (static_cast<double>(cnt) / (j - i) <= params.lq_rate_thresh); 
+        //LOGIC: low qual ref base is likely ref (correctly sequenced)
+        if (base_quals[k] < qual_thresh && is_variant(k, var_idx)) ++cnt;
+    qc_passed = (static_cast<double>(cnt) / (j - i) <= freq_thresh); 
 }
 
 //------------------------------------------------------------------------------
@@ -156,19 +166,28 @@ void Read::parseLocalPattern(LocalReference& loc_ref, const Variant& target) {
             tmp_d = std::abs(v.rpos - target.lpos);
             if (dist_to_non_target > tmp_d) dist_to_non_target = tmp_d;    
         } else { 
-            // target and v overllapped
-            dist_to_non_target = 0; has_local_events = true; return;
+            tmp_d = 0;
         }
+        if (dist_to_non_target > tmp_d) dist_to_non_target = tmp_d;
     }
+    has_positional_overlap = (!dist_to_non_target); 
     
     //clipping
     if (start_offset) {
-        tmp_d = std::abs(target.pos - aln_start);
-        if (dist_to_non_target > tmp_d) dist_to_non_target = tmp_d;
+        if (read_start <= target.pos && target.pos <= aln_start) {
+            dist_to_non_target = 0;
+        } else {
+            tmp_d = std::abs(target.pos - aln_start);
+            if (dist_to_non_target > tmp_d) dist_to_non_target = tmp_d;
+        }
     }
     if (end_offset) {
-        tmp_d = std::abs(target.pos - aln_end); 
-        if (dist_to_non_target > tmp_d) dist_to_non_target = tmp_d;
+        if (aln_end <= target.pos && target.pos <= read_end) {  
+            dist_to_non_target = 0;
+        } else {
+            tmp_d = std::abs(target.pos - aln_end); 
+            if (dist_to_non_target > tmp_d) dist_to_non_target = tmp_d;
+        }
     }
 
     if (dist_to_non_target <= target.event_len + target.rpos - target.lpos) 
@@ -186,7 +205,7 @@ void Read::setSignatureStrings(const UserParams& params) {
     if(!qc_passed) return;
 
     for (const auto& v : variants) {
-        if (is_dirty (v, params.base_q_thresh)) continue;
+        //if (is_dirty(v, params.base_q_thresh)) continue;
         non_ref_sig += (std::to_string(v.pos) + ":" + v.ref + ">" + v.alt + ";");
     }
 

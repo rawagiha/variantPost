@@ -64,7 +64,8 @@ void _search_target(
     const std::vector<std::string>&, 
     const std::vector<std::string>&, 
     //const std::vector<int>&,
-    const std::vector<bool>&
+    const std::vector<bool>&,
+    const bool
 );
 
 #endif

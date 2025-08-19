@@ -33,10 +33,8 @@ SequenceModel::SequenceModel(Pileup& pileup, LocalReference& loc_ref, Variant& t
     if (end <= target._end_pos) end = loc_ref.end;
 
     Vars variants = {target};
-    // from pileup.h
     make_sequence(loc_ref, variants, start, end, seq, &idx2pos);
     
-         
     // set key index 
     target_start = target.pos - start;
     for (auto elem : idx2pos) {
@@ -71,23 +69,35 @@ void SequenceModel::compareToRefByKmer(Pileup& pileup, LocalReference& loc_ref, 
         }
     }
 } 
-
+/*
 //------------------------------------------------------------------------------
 void SequenceModel::reRankByReAlignment(Pileup& pileup, const std::vector<std::string>& read_seqs, UserParams& params) {
     Aligner aligner(params.match_score, params.mismatch_penal, params.gap_open_penal, params.gap_ext_penal);
+    std::cout << seq << std::endl;
     aligner.SetReferenceSequence(seq.c_str(), seq.size()); 
     Alignment aln; Filter filter;
     for (int i = 0; i < pileup.sz; ++i) {
-        
+        //std::cout << pileup.reads[i].smer << " " << pileup.reads[i].nmer << std::endl;
         if (!pileup.reads[i].smer || pileup.reads[i].nmer) continue;
         
         // hereafter smers > 0 with no nmers
         const auto& query = read_seqs[i].c_str(); 
         int32_t mask_len = strlen(query) < 30 ? 15 : strlen(query) / 2;
         aligner.Align(query, filter, &aln, mask_len);
+        
+        //std::cout << query << " " << aln.cigar_string << std::endl;
          
         CF cf; MF mf;
         match_flag(aln, flank_start, target_start, target_end, flank_end, cf, mf);
+        //std::cout << "cov" << std::endl;
+        
+        //for (size_t i = 0; i < 4; ++i)
+        //    std::cout << cf.test(i) << ", ";
+        //std::cout << std::endl;
+        //for (size_t i = 0; i < 3; ++i)
+        //      std::cout << mf.test(i) << ", ";
+        //std::cout << std::endl;
+          
         // no event region overlap
         if (!cf.count()) { pileup.reads[i].rank = '\0'; continue; } 
         // perfect match with smer > 0 
@@ -95,4 +105,4 @@ void SequenceModel::reRankByReAlignment(Pileup& pileup, const std::vector<std::s
         // perfect coverage with perfct event match (allow flanking non-matches)
         //if (cf.count() == 4 && !mf.test(1)) { pileup.reads[i].rank = 's'; continue; }  
     }
-}
+}*/

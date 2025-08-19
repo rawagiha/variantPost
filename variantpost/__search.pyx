@@ -55,7 +55,8 @@ cdef extern from "search.h":
         vector[string]&,
         vector[string]&,
         #vector[int]&,
-        vector[bool_t]&
+        vector[bool_t]&,
+        bool_t
     )
 
 
@@ -208,7 +209,8 @@ cpdef object search_target(
     cdef SearchResult rslt     
     cdef int est_cov = 0
     cdef list fetched_reads = []
-    
+    cdef bool_t has_second = False
+
     # read_fetching from first bam
     est_cov = fetch_reads(
         bam, 
@@ -223,6 +225,7 @@ cpdef object search_target(
     )  
     
     if second_bam:
+        has_second = True
         est_cov = fetch_reads(
             second_bam, 
             bam_chrom, 
@@ -320,6 +323,7 @@ cpdef object search_target(
         qual_seqs,
         #mapqs,
         are_first_bam,
+        has_second,
     )
     
    # contig_dict = OrderedDict()

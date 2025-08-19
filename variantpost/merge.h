@@ -2,14 +2,14 @@
 #define MERGER_H
 
 
-#include <string>
-#include "ssw/ssw_cpp.h"
+//#include <string>
+#include "util.h"
 
-
+/*
 typedef StripedSmithWaterman::Alignment Alignment;
 typedef StripedSmithWaterman::Aligner Aligner;
 typedef StripedSmithWaterman::Filter Filter;
-
+*/
 
 struct Seq
 {

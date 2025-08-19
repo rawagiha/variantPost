@@ -2,16 +2,22 @@
 #define CONTIG_H
 
 #include "util.h"
-#include "merge.h"
 #include "reads.h"
 
 struct Contig
 {
-    std::string seq;
-    std::string quals;
-    std::string ref_seq; 
-    Coord coordinates;
+    //--------------------------------------------------------------------------
+    void setSequenceFromTarget(const Reads& supportings); 
     
+    std::string seq; // seq supporting target event
+    std::string ref_seq; // reference seq
+    std::string hap_1; // non-reference haplotype 1
+    std::string hap_2; // non-reference haplotype 2
+    //std::string quals;
+    //std::string ref_seq; 
+    //Coord coordinates;
+    
+    /*
     //ref len
     size_t ref_len;
     
@@ -60,10 +66,10 @@ struct Contig
     void furnish(
         const Seq& merged_target_reads,
         const Variant& target
-    );
+    );*/
 };
 
-
+/*
 void make_contig(
     Contig& contig,
     const Variant& target, 
@@ -113,6 +119,6 @@ void extend_contig(
     Reads& rt_matches,
     LocalReference& loc_ref
 );
-
+*/
 
 #endif

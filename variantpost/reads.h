@@ -32,7 +32,8 @@ struct Read {
     
     //--------------------------------------------------------------------------
     // find freq. of low quality bases within start/end region
-    void qualityCheck(const int start, const int end, const UserParams& param); 
+    void qualityCheck(const int start, const int end, 
+                      const int qual_thresh, const double freq_thresh); 
      
     //--------------------------------------------------------------------------
     // annotate variants/clip/splice patterns in std::string
@@ -68,6 +69,7 @@ struct Read {
     Coord idx2pos; // maps read idx to aligned genomic position
     Coord aligned_segments; // vector<pair<int, int>> start/end of aligned segments 
     Coord skipped_segments; // vector<pair<int, int>> start/end of skipped segments
+    Ints var_idx; // index at variant pos (excl. clipping)
     int covering_start = 0; // start of unspliced segment covering the target locus
     int covering_end = 0; // end of above segment
                                         
@@ -90,10 +92,12 @@ struct Read {
     bool is_ref = false; // true if seq is identical to ref_seq
     bool has_target = false; // true if supporitng the target
     bool has_local_events = false; // true if non_ref events with event_len (Variant)
-    bool qc_passed = false; // true if local freq of dirty bases < user thresh
+    bool has_positional_overlap = false; // true with variatns overlapping the target
+    bool qc_passed = false; // true if local freq of dirty bases < thresh
     bool fail_to_cover_flankings = false; // if true, classify as ambigous read
     bool is_stable_non_ref = false; // true if bounded by enough 2-mer diversity
     bool is_central_mapped = false; // true if mapped in 2nd of read len tertile
+    bool is_quality_map = false; // true if is_stable_non_ref && is_central_mapped
 
     //--------------------------------------------------------------------------
     // pattern keys
@@ -121,7 +125,7 @@ struct Read {
     int smer = 0, nmer = 0; // supporting and non-supporting kmer count 
       
     //--------------------------------------------------------------------------
-    // rank: 's' supporting target, 'n': non_supprting 'u': undetermined
+    // rank: 's' supporting target, 'y': likely, 'n': non_supprting 'u': undetermined
     char rank = '\0'; 
 };
 

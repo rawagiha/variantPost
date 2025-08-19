@@ -893,7 +893,7 @@ s_align* ssw_align (const s_profile* prof,
 	r->read_begin1 = r->read_end1 - bests_reverse[0].read;
     
     if (UNLIKELY(r->score1 > bests_reverse[0].score)) { // banded_sw result will miss a small part
-		fprintf(stderr, "Warning: The alignment path of one pair of sequences may miss a small part. [ssw.c ssw_align]\n");
+		// fprintf(stderr, "Warning: The alignment path of one pair of sequences may miss a small part. [ssw.c ssw_align]\n");
         r->flag = 2;  
     }
     free(bests_reverse);

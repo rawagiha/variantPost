@@ -78,7 +78,7 @@ class VariantAlignment(object):
         mismatch_penalty=2,
         gap_open_penalty=3,
         gap_extension_penalty=1,
-        kmer_size=32,
+        kmer_size=24,
         dimer_window=6,
         local_threshold=20,
     ):

@@ -1118,9 +1118,11 @@ char eval_by_aln(
         for (const auto& rslt : rslts)
         {
             aln_ptrns.push_back(rslt.cigar_str);
+            std::cout << rslt.cigar_str << std::endl;
         }    
      
         std::string_view common_ptrn = find_commonest_str(aln_ptrns);
+        std::cout << common_ptrn << std::endl;
         auto it = std::find(aln_ptrns.begin(), aln_ptrns.end(), common_ptrn);
         auto rslt = rslts[std::distance(aln_ptrns.begin(), it)];
 
@@ -1133,18 +1135,22 @@ char eval_by_aln(
                 return 'A';
             }
         }
-    
-        //do extension
+        
+        return 'A';
+        //do extension -> abolish
         if (!rslt.lt_well_ref_mapped && rslt.rt_well_ref_mapped)
         {
+            std::cout << " L " << std::endl;
             return 'L';
         }
         else if (rslt.lt_well_ref_mapped && !rslt.rt_well_ref_mapped)
         {
+            std::cout << " R " << std::endl;
             return 'R';
         }
         else
-        {    
+        {   
+            std::cout << " E " << std::endl; 
             return 'E';
         }
     }
@@ -1170,6 +1176,8 @@ void aln_extended_contig(
        contig.seq, contig.ref_seq, filter, aln
    );
 
+   std::cout << aln.cigar_string << std::endl;
+   
    postprocess_alignment(rslt, pos_vec, contig, loc_ref, aln);
    annot_alignment(contig, rslt);
    update_contig_layout(contig, target.pos);
