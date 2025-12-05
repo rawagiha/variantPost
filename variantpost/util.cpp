@@ -43,21 +43,28 @@ inline size_t count_dimers(std::string_view seq) {
 
 //------------------------------------------------------------------------------
 // find nearest genomics pos containing min(16, n - 1) 2-mers in a window of n
+// **** dimer diverse segment  xxx target  s/e flanking start/end
+// 
+//       s                         e 
+//  ......******....xxxx.....******.... 
 void LocalReference::setFlankingBoundary(const Variant& target, const size_t window) {
     // maximum possible number of 2-mers in window
     const size_t max_ = (window - 1 < 16) ? window - 1 : 16;
     
     if (seq.find('N') != std::string_view::npos) return;
 
-    const int last_idx = end - start - static_cast<int>(window) + 1;
+    const int last_idx = end - start - window + 1;
     for (int i = target.end_pos - start; i < last_idx; ++i) {
         if (count_dimers(seq.substr(i, window)) == max_) {
-            flanking_end = i + start + 1; break;
+            //flanking_end = i + start + 1; break;
+            flanking_end = i + start + window;
+            flanking_end = i + start + window; break;
         } 
     }
     
     for (int i = target.lpos - start - window + 1; i > 0; --i) {
         if (count_dimers(seq.substr(i, window)) == max_) {
+            flanking_start = i + start - 1;
             flanking_start = i + start - 1; break;
         }
     }
@@ -1117,7 +1124,7 @@ bool is_homoply_del(const Variant& target, int& hom_start, int& hom_end) {
 //
 //  01 23456
 //  GC CCAAT
-//  GCTGGAAT -> GCC>C@0+ C>CTGG@1 or @2 or @3 
+//  GCTGGAAT -> GCC>G@0+ C>CTGG@1 or @2 or @3 
 bool del_of_hmp_to_mnv(const int del_len, 
                        const Ints& snvs_in_hmp, const Vars& vars) {
     if (del_len != static_cast<int>(snvs_in_hmp.size())) return false; 
@@ -1129,9 +1136,16 @@ bool del_of_hmp_to_mnv(const int del_len,
 
 //------------------------------------------------------------------------------
 // Edge case 03
-// ins folloed by subsitutions
+// ins folloed by subsitutions 
 int enumerate_possible_ins(const int i, const int j, const Vars& vars,
                            LocalReference& loc_ref, const Variant& target) { 
+    
+    //for (auto& v : vars)
+    //    std::cout << v.pos << " " << v.ref << " " << v.alt << std::endl;
+    
+    
+    // i, j: variant idx two closest to target
+    // n, m: starting snv, later n to be moved to the left
     int n = -1, m = -1;
     if (vars[i].is_snv) {
         if (i) { n = i; m = i; } else return -1;
@@ -1139,37 +1153,68 @@ int enumerate_possible_ins(const int i, const int j, const Vars& vars,
         if (j) { n = j; m = j; } else return -1;
     } else return -1;
     
-    bool is_consecutive = true;
-    while (0 < n && is_consecutive) {
-        if (vars[n - 1].pos + 1 == vars[n].pos || !vars[n - 1].is_snv)
-            is_consecutive = false;
+    // moving n to the left over the strech of consecutive snvs
+    while (n > 0) {
+        if (vars[n - 1].pos + 1 != vars[n].pos || !vars[n - 1].is_snv)
+            break;
         --n;
     }
     
+    
+    //std::cout << vars[n - 1].pos << " " << vars[n].pos << std::endl;
+    // testing IXXXX pattern
     std::string ext;
-    if (n > 0 && vars[n - 1].is_ins) {
+    if (n > 0 && vars[n - 1].pos + 1 == vars[n].pos && vars[n - 1].is_ins) {
         for (int k = n; k <= m; ++k) ext.append(vars[k].alt);
-        --n;     
+        --n; // now n is the ins position
     } else return -1;
-
+    
+    // ins swappeble with following snv
+    //   Target
+    // 01      23 
+    // TC      AG
+    // TCgggaggAG ins(gggagg)        
+    // 
+    //   Actual   ins(agggag)@0 + C>G@1            C>A@1 + ins(gggagG)@1 
+    // 0      123                       01      23         target!!
+    // TagggagGAG                       TAgggagGAG 
+    if (n + 1 == m && vars[n].alt.size() > 2) {
+        std::string swp_ins = vars[m].ref;
+        swp_ins.append(vars[n].alt.substr(2)).append(ext);
+        Variant swapped(vars[m].pos, vars[m].ref, swp_ins);
+        //std::cout << swapped.pos << " " << swapped.ref << " " <<  swapped.alt << " " <<  target.isEquivalent(swapped, loc_ref) << " first case  " << std::endl;
+        if (target.isEquivalent(swapped, loc_ref)) return n; 
+    }
+    
     std::string ins_seq = vars[n].alt.substr(1), new_alt = vars[m].ref;
     if (ext.size() == 1) {
-         auto idx = ins_seq.find(ext);
-         if (idx == std::string::npos)
-             new_alt.append(ins_seq).append(ext);
-         else
-             new_alt.append(ins_seq.substr(idx)).append(ext);
-    } else { new_alt.append(ins_seq).append(ext); }
+         auto idx = ins_seq.find(new_alt);
+         if (idx == std::string::npos) {
+             new_alt.append(ins_seq).append(ext); // extended
+         } else {
+             // ins is split into two parts 
+             // CA  *   TT      CA  T    T
+             // CAGCTTGGGT ->   CAGCTTGGGT 
+             if (target.pos == vars[n].pos) {
+                Variant lt_ins(target.pos, target.ref, vars[n].alt.substr(0, idx + 1));
+                if (target.isEquivalent(lt_ins, loc_ref)) return n;
+             } 
+             new_alt = ins_seq.substr(idx); new_alt.append(ext);
+         }
+    } else { new_alt.append(ins_seq).append(ext); } // extened 
     
     Variant new_ins(vars[m].pos, vars[m].ref, new_alt);
-    
+    //std::cout << new_ins.pos << " " << new_ins.ref << " " <<  new_ins.alt << " " <<  target.isEquivalent(new_ins, loc_ref) << " second case  " << std::endl; 
     if (target.isEquivalent(new_ins, loc_ref)) return n;
     else return -1;
 } 
 
+
+
 //------------------------------------------------------------------------------
 // Find target in a  list of variant making the haplotype 
 // swappable ins/del considered
+// input is assumed to be non-complex
 int find_target(LocalReference& loc_ref, const Variant& target, Vars& vars) {
     
     int hom_start = -1, hom_end = -1; 
@@ -1192,14 +1237,19 @@ int find_target(LocalReference& loc_ref, const Variant& target, Vars& vars) {
         else if (di < d && d < dj) {j = idx; dj = d;}      
     }
     
+    //std::cout << i << " " << j << std::endl;
+
     // testing edge_case_02
     if (del_of_hmp && del_of_hmp_to_mnv(target.indel_len, snvs_in_hmp, vars))
         return snvs_in_hmp[0];
      
     if (target.is_substitute || i < 0 || j < 0) return -1;
     
-    int edge_case_03 = enumerate_possible_ins(i, j, vars, loc_ref, target);
-    if (edge_case_03 > -1) return edge_case_03;
+    // edge case 03
+    if (target.is_ins) {
+        int edge_case_03 = enumerate_possible_ins(i, j, vars, loc_ref, target);
+        if (edge_case_03 > -1) return edge_case_03;
+    }
 
     int lt = -1, rt = -1;
     if (vars[i].pos < vars[j].pos) { lt = i; rt = j; } else { lt = j; rt = i; }

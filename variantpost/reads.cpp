@@ -87,10 +87,17 @@ void Read::parseCoveringPattern(LocalReference& loc_ref, const Variant& target) 
     // skipped
     for (const auto& seg : skipped_segments)
         if (seg.first < target.lpos && target.rpos < seg.second) return;
-        
+   
+         
+    if (read_start <= target.lpos && target.lpos <= aln_start)
+        covered_in_clip = true;
+    else if (aln_end <= target.rpos && target.rpos <= read_end)
+        covered_in_clip = true;
+      
+    
     // completly covered
     for (const auto& seg : aligned_segments) {
-        if (seg.first <= target.lpos && target.rpos <= seg.second) {
+        if (seg.first <= target.lpos && target.rpos < seg.second) {
             covering_start = seg.first; covering_end = seg.second; 
             covering_ptrn = 'A'; return;
         }
@@ -145,21 +152,24 @@ void Read::qualityCheck(const int start, const int end,
 }
 
 //------------------------------------------------------------------------------
-void Read::parseLocalPattern(LocalReference& loc_ref, const Variant& target) {
-    int idx = find_target(loc_ref, target, variants); 
-    if (idx != -1) {
-        has_target = true; target_idx = idx;
-        auto& v = variants[idx];
-        target_pos = v.pos; target_ref = v.ref; target_alt = v.alt;
-        return;
+void Read::parseLocalPattern(LocalReference& loc_ref, 
+                             const Variant& target, const int kmer_size) {
+    if (!target.is_complex) {
+        int idx = find_target(loc_ref, target, variants); 
+        if (idx != -1) {
+            has_target = true; target_idx = idx;
+            auto& v = variants[idx];
+            target_pos = v.pos; target_ref = v.ref; target_alt = v.alt;
+            return;
+        }
     }
-    
-    int tmp_d = INT_MAX;
-    for (auto& v : variants) {
+     
+    int tmp_d = INT_MAX, dis_kmer = 0, anti_ptrn = 0;
+    for (size_t i = 0; i < variants.size(); ++i) {
         // distances from target region to non-target variants
         // note this may not be found by pos comparison alone 
         // for example for long deletions
-        v.setEndPos(loc_ref);
+        auto& v = variants[i]; v.setEndPos(loc_ref);
         if (target.end_pos < v.lpos || v.end_pos < target.lpos) {
             tmp_d = std::abs(target.end_pos - v.lpos);
             if (dist_to_non_target > tmp_d) dist_to_non_target = tmp_d;
@@ -169,9 +179,20 @@ void Read::parseLocalPattern(LocalReference& loc_ref, const Variant& target) {
             tmp_d = 0;
         }
         if (dist_to_non_target > tmp_d) dist_to_non_target = tmp_d;
+        
+        if (loc_ref.flanking_start <= v.pos && v._end_pos <= loc_ref.flanking_end)
+            ++anti_ptrn;
+
+        if (i + 1 < variants.size() 
+            && v.pos <= target.pos && target.pos <= variants[i + 1].pos) {
+            
+            if (target.pos - v.pos <= kmer_size 
+                && variants[i + 1].pos - target.pos <= kmer_size) ++dis_kmer; 
+        }
     }
-    has_positional_overlap = (!dist_to_non_target); 
-    
+    has_positional_overlap = (!dist_to_non_target); ineffective_kmer = (dis_kmer); 
+    has_anti_pattern = (anti_ptrn == 1); // > 1 may be complex 
+
     //clipping
     if (start_offset) {
         if (read_start <= target.pos && target.pos <= aln_start) {

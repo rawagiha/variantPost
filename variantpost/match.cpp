@@ -95,6 +95,36 @@ void aln2variants(Alignment& aln, Vars& vars, const int start,
         }
     }
 } 
+
+void check_match_pattern(Alignment& aln, 
+                         std::bitset<3>& check_points,
+                         const int fss, const int fse, 
+                         const int ts, const int te,
+                         const int fes, const int fee) {
+    if (!aln.cigar_string.size()) return;
+
+    CigarVec cigar_vec; fill_cigar_vector(aln.cigar, cigar_vec);
+    //std::cout << aln.cigar_string << std::endl;
+    char op = '\0'; int op_len = 0, idx = aln.ref_begin;
+    for (const auto& cigar : cigar_vec) {
+        op = cigar.first; op_len = cigar.second;
+        switch (op) {
+            case '=':
+                //std::cout << idx << " " << idx + op_len << std::endl;
+                if (idx <= fss && fse <= idx + op_len) check_points.set(0);
+                if (idx <= ts && te <= idx + op_len) check_points.set(1); 
+                if (idx <= fes && fee <= idx + op_len) check_points.set(2);
+                idx += op_len; break;
+            case 'X': case 'D':
+                idx += op_len; break;
+            case 'I': case 'S':
+                break;
+        }
+    }
+    
+}
+
+
 /*
 //------------------------------------------------------------------------------
 int find_target(const int start, const NMS& nms, 
@@ -119,8 +149,10 @@ void gap_grid(const UserParams& params, std::vector<Ints>& grid) {
     int max_go = (params.gap_open_penal * 2 <= 255) ? params.gap_open_penal * 2 : 255;
     int max_ge = (params.gap_ext_penal * 2 <= 255) ? params.gap_ext_penal * 2 : 255; 
     for (int go = 1; go <= max_go; go +=2) 
-        for (int ge = 0; ge <= max_ge; ++ge) 
+        for (int ge = 0; ge <= max_ge; ++ge) {
             grid.push_back({params.match_score, params.mismatch_penal, go, ge}); 
+            grid.push_back({params.match_score, params.mismatch_penal * 3, go, ge});
+        } 
 }
 
 bool search_over_grid(const int start, LocalReference& loc_ref,
@@ -353,6 +385,7 @@ void rerank_by_realn(Pileup& pileup, const Strs& read_seqs,
     }
 }
 
+*/
 
 //------------------------------------------------------------------------------
 void match2haplotypes(Pileup& pileup, const Strs& read_seqs, const UserParams& params) {
@@ -394,4 +427,4 @@ void match2haplotypes(Pileup& pileup, const Strs& read_seqs, const UserParams& p
             pileup.reads[i].rank = 'n'; ++pileup.n_cnt; --pileup.u_cnt;
         }
     }
-}*/
+}

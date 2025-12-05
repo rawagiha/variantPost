@@ -3,7 +3,7 @@
 
 #include <bitset>
 #include "util.h"
-//#include "pileup.h"
+#include "pileup.h"
 
 //------------------------------------------------------------------------------
 struct NonMatch {
@@ -23,6 +23,10 @@ bool search_over_grid(const int start, LocalReference& loc_ref,
                       const std::string& refseq, const std::string& query,
                       const std::vector<Ints>& grid, const Variant& target);
 
+void check_match_pattern(Alignment& aln, std::bitset<3>& check_points,
+                         const int fss, const int fse, 
+                         const int ts, const int te,
+                         const int fes, const int fee);
 //------------------------------------------------------------------------------
 // fs/fe: flanking start/end defined by 2-mer complexity
 // es/ee: event start/end defined by left/right realignment and variant length
@@ -49,10 +53,10 @@ void match_flag(Alignment& aln, const int fl_start, const int event_start,
 
 void rerank_by_realn(Pileup& pileup, const Strs& read_seqs, 
                      const UserParams& params, Variant& target);
-
+*/
 void match2haplotypes(Pileup& pileup, const Strs& read_seqs,
                       //const std::string& seq_t, const std::string& seq_nt0,
                       //const std::string& seq_nt1, const std::string& seq_nt2,
                       const UserParams& params);
-*/
+
 #endif

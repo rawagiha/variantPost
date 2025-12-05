@@ -28,7 +28,8 @@ struct Read {
         
     //--------------------------------------------------------------------------
     // find target and non-target variations
-    void parseLocalPattern(LocalReference& loc_ref, const Variant& target);
+    void parseLocalPattern(LocalReference& loc_ref, 
+                           const Variant& target, const int kmer_size);
     
     //--------------------------------------------------------------------------
     // find freq. of low quality bases within start/end region
@@ -89,15 +90,18 @@ struct Read {
     bool is_reverse = false; // true if aligned to the complementary stran
     bool is_control = false; // true for second BAM reads. always true for single BAM
     bool is_na_ref = false; // true if no ref_seq is available for this read
+    bool covered_in_clip = false; // true if target pos is clipped
     bool is_ref = false; // true if seq is identical to ref_seq
     bool has_target = false; // true if supporitng the target
     bool has_local_events = false; // true if non_ref events with event_len (Variant)
+    bool has_anti_pattern = false; // true if a single non-target variant btw flnk-start/end
     bool has_positional_overlap = false; // true with variatns overlapping the target
     bool qc_passed = false; // true if local freq of dirty bases < thresh
     bool fail_to_cover_flankings = false; // if true, classify as ambigous read
     bool is_stable_non_ref = false; // true if bounded by enough 2-mer diversity
     bool is_central_mapped = false; // true if mapped in 2nd of read len tertile
     bool is_quality_map = false; // true if is_stable_non_ref && is_central_mapped
+    bool ineffective_kmer = false; // true if target is between variants < kmer_size
 
     //--------------------------------------------------------------------------
     // pattern keys

@@ -23,6 +23,9 @@ struct Pileup {
     void differentialKmerAnalysis(const UserParams& params,
                                   LocalReference& loc_ref, const Variant& target); 
     
+    void searchByRealignment(const UserParams& params,
+                             LocalReference& loc_ref, const Variant& target);
+
     
     //--------------------------------------------------------------------------
     //void setHaploTypeByFrequency();
@@ -46,7 +49,7 @@ struct Pileup {
     
     //--------------------------------------------------------------------------
     //Freq freq_s_h, freq_s, freq_u; // s_h: supporiting hiconf, u: undetermined
-    Idx sig_s_hiconf, sig_s, sig_u; 
+    Idx sig_s_hiconf, sig_s, sig_u, u_sig_annot;
      
     //--------------------------------------------------------------------------
     // metrics
@@ -98,8 +101,8 @@ struct Pileup {
     bool has_likely_support = false; // reads likely supporting the target
     bool has_ref_hap = false; // reference haplotype likely exists in background
     bool vs_ref_hap = false; // true to perform kmer analysis vs ref hap
-    bool has_valid_boundary = false; // valid flanking start/end event start/end 
-    
+    bool no_non_target_haps = false; // non-target haplotypes not inferred
+    bool has_valid_boundary = false; // valid flanking start/end event start/end   
     //bool with_surrounding_event = false;
 };
 

@@ -56,31 +56,35 @@ void _search_target(SearchResult& rslt,
                   params, loc_ref, target);
     
     pileup.gridSearch(params, loc_ref, target);
-   
     if (pileup.u_cnt) {
         pileup.setHaploTypes(loc_ref, target);
         pileup.differentialKmerAnalysis(params, loc_ref, target);
-        
-        //if (pileup.has_hiconf_support)
-        //     match2haplotypes(pileup, read_seqs, params); 
+        pileup.searchByRealignment(params, loc_ref, target);
+  
+        std::cout << pileup.s_cnt << std::endl;
+        if (pileup.has_hiconf_support)
+             match2haplotypes(pileup, read_seqs, params); 
         
     
 
         for (const auto& read : pileup.reads) {
             //std::cout << read.cigar_str << " " << read.smer << " " << read.nmer << " " << read.dist_to_non_target << std::endl;
             if (read.rank == 's') rslt.target_statuses.push_back(1);
-            else if (read.rank == 'n') rslt.target_statuses.push_back(0);
+            else if (read.rank == 'n' && !read.covered_in_clip) { 
+                rslt.target_statuses.push_back(0); 
+                //std::cout << read.name << " " << read.cigar_str << std::endl; 
+                }
             else if (read.rank == 'u' || read.rank == 'y') rslt.target_statuses.push_back(-1);
             else rslt.target_statuses.push_back(-2);
         }
     } else {
     
-         std::cout << "here no u " << std::endl; 
+       // std::cout << "here no u " << std::endl; 
 
         for (const auto& read : pileup.reads) {
             //std::cout << read.cigar_str << " " << read.smer << " " << read.nmer << " " << read.dist_to_non_target << std::endl;
             if (read.rank == 's') rslt.target_statuses.push_back(1);
-            else if (read.rank == 'n') rslt.target_statuses.push_back(0);
+            else if (read.rank == 'n' && !read.covered_in_clip) rslt.target_statuses.push_back(0);
             else if (read.rank == 'u' || read.rank == 'y') rslt.target_statuses.push_back(-1);
             else rslt.target_statuses.push_back(-2);
         }
