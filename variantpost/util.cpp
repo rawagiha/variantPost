@@ -118,13 +118,15 @@ Variant::Variant(int pos_,
     {
         is_ins = true; 
         indel_len = alt_len - ref_len; event_len = alt_len;
-        if (alt.substr(0, ref_len) != ref) is_complex = true; 
+        if (alt.substr(0, ref_len) != ref) is_complex = true;
+        else indel_seq = alt.substr(1); 
     }
     else
     {
         is_del = true; 
         indel_len = ref_len - alt_len; event_len = ref_len;
         if (ref.substr(0, alt_len) != alt) is_complex = true;
+        else indel_seq = ref.substr(1);
     }
 }
 
@@ -357,7 +359,7 @@ void Variant::setEndPos(const LocalReference& loc_ref)
 //------------------------------------------------------------------------------
 void Variant::setFlankingSequences(const LocalReference& loc_ref)
 {
-    if (!is_complex || !loc_ref.has_flankings) return;
+    if (!loc_ref.has_flankings || !is_complex) return; 
 
     lt_seq = loc_ref.seq.substr(loc_ref.flanking_start - loc_ref.start, 
                                 pos - loc_ref.flanking_start);
@@ -365,6 +367,23 @@ void Variant::setFlankingSequences(const LocalReference& loc_ref)
     rt_seq = loc_ref.seq.substr(pos - loc_ref.start + ref_len, 
                                 loc_ref.flanking_end - end_pos);
     has_flankings = true;
+}
+
+//------------------------------------------------------------------------------
+void Variant::countRepeats(const LocalReference& loc_ref)
+{
+    if (is_substitute || !is_shiftable || is_complex) return; 
+    
+    std::string_view rt_ref_sv = loc_ref.seq.substr(pos - loc_ref.start + ref_len);
+    const int rt_len = static_cast<int>(rt_ref_sv.size());
+    if (indel_len > rt_len) return;
+    
+    std::string_view indel_seq_sv = indel_seq;
+    for (int i = 0; rt_len - i >= indel_len; i += indel_len) {
+        if (rt_ref_sv.substr(i, indel_len) == indel_seq_sv) ++repeats; else break;
+    } 
+
+    if (is_ins) ++repeats; //including self
 }
 
 //------------------------------------------------------------------------------

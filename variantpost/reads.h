@@ -31,6 +31,8 @@ struct Read {
     void parseLocalPattern(LocalReference& loc_ref, 
                            const Variant& target, const int kmer_size);
     
+    void checkByRepeatCount(const Variant& target, bool& has_excess_ins_hap);
+    
     //--------------------------------------------------------------------------
     // find freq. of low quality bases within start/end region
     void qualityCheck(const int start, const int end, 
@@ -99,7 +101,7 @@ struct Read {
     bool qc_passed = false; // true if local freq of dirty bases < thresh
     bool fail_to_cover_flankings = false; // if true, classify as ambigous read
     bool is_stable_non_ref = false; // true if bounded by enough 2-mer diversity
-    bool is_central_mapped = false; // true if mapped in 2nd of read len tertile
+    bool is_central_mapped = false; // true if mapped in 2nd/3rd of read len quartile
     bool is_quality_map = false; // true if is_stable_non_ref && is_central_mapped
     bool ineffective_kmer = false; // true if target is between variants < kmer_size
 

@@ -215,6 +215,41 @@ void Read::parseLocalPattern(LocalReference& loc_ref,
         has_local_events = true;
 }
 
+void Read::checkByRepeatCount(const Variant& target, bool& has_excess_ins_hap) {
+    if (!target.repeats || has_target) return;
+    
+    int idx = -1;
+    for (const auto& elem : idx2pos)  
+        if (elem.second == target.pos + 1) { idx = elem.first; break; }
+    if (idx < 0) return;
+
+    std::string_view rt_side = seq.substr(idx), 
+                     lt_side = seq.substr(0, idx),
+                     indel_seq_sv = target.indel_seq;
+    
+    const int rt_len = static_cast<int>(rt_side.size());
+    const int indel_len = target.indel_len;
+    
+    int rep = 0;
+    for (int i = 0; rt_len - i >= indel_len; i += indel_len) {
+        if (rt_side.substr(i, indel_len) == indel_seq_sv) ++rep; else break;
+    } 
+   
+    for (int i = idx - indel_len; i >= 0; i -= indel_len) {
+        if (lt_side.substr(i, indel_len) == indel_seq_sv) ++rep; else break;
+    }
+    
+    if (rep != target.repeats) { 
+        has_anti_pattern = true; 
+        //repeats are counted regardless of clipping -> deactivated
+        covered_in_clip = false; 
+        //more ins repeats -> relative read loc. does not matter  
+        if (target.is_ins && rep > target.repeats) {
+            is_central_mapped = true; has_excess_ins_hap = true; 
+        }
+    }
+}
+
 inline bool is_dirty(const Variant& v, const char thresh) {
     for (const auto& q : v.qual) { if (q < thresh) return true; }
     return false; 
@@ -226,7 +261,8 @@ void Read::setSignatureStrings(const UserParams& params) {
     if(!qc_passed) return;
 
     for (const auto& v : variants) {
-        //if (is_dirty(v, params.base_q_thresh)) continue;
+        // use only clean variants for signature
+        if (is_dirty(v, params.base_q_thresh)) continue;
         non_ref_sig += (std::to_string(v.pos) + ":" + v.ref + ">" + v.alt + ";");
     }
 
@@ -259,6 +295,7 @@ void Read::isStableNonReferenceAlignment(LocalReference& loc_ref) {
 
 //------------------------------------------------------------------------------
 // test if target locus is mapped in the middle of mapped read len tertiles
+// RELAXED: test if target locus is mapped in 2nd/3rd quartile
 void Read::isCenterMapped(const Variant& target) {
     int d = INT_MAX, i = -1;
     for (const auto& elem : idx2pos) {
@@ -267,8 +304,8 @@ void Read::isCenterMapped(const Variant& target) {
         }
     }
    
-    int tertile = static_cast<int>(idx2pos.size() / 3);
-    is_central_mapped = (tertile <= i && i <= tertile * 2);             
+    int quantile = static_cast<int>(idx2pos.size() / 4);
+    is_central_mapped = (quantile <= i && i <= quantile * 3);             
 }
 
 //------------------------------------------------------------------------------

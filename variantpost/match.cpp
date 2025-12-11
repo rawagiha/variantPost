@@ -407,12 +407,16 @@ void match2haplotypes(Pileup& pileup, const Strs& read_seqs, const UserParams& p
             if (valid_idx.test(j)) {
                 if (j == 0) {
                     aligner.SetReferenceSequence(pileup.seq0.c_str(), pileup.seq0.size());
+                    std::cout << j << " " << pileup.seq0 << std::endl;
                 } else if (j == 1) {
                     aligner.SetReferenceSequence(pileup.seq1.c_str(), pileup.seq1.size());
+                    std::cout << j << " " << pileup.seq1 << std::endl;
                 } else if (j == 2) {
                     aligner.SetReferenceSequence(pileup.seq2.c_str(), pileup.seq2.size());
+                    std::cout << j << " " << pileup.seq2 << std::endl;
                 } else {
                     aligner.SetReferenceSequence(pileup.rseq.c_str(), pileup.rseq.size());
+                    std::cout << j << " " << pileup.rseq << std::endl;
                 }
                 aligner.Align(query, filter, &aln, mask_len); scores[j] = aln.sw_score;
             } 
@@ -426,5 +430,6 @@ void match2haplotypes(Pileup& pileup, const Strs& read_seqs, const UserParams& p
         } else {
             pileup.reads[i].rank = 'n'; ++pileup.n_cnt; --pileup.u_cnt;
         }
+        std::cout <<  pileup.reads[i].rank << std::endl;
     }
 }

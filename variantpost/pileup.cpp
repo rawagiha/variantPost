@@ -66,12 +66,18 @@ Pileup::Pileup(const Strs& names, const Bools& is_rv, const Strs& cigar_strs,
         } else if (read.has_local_events) {
             read.rank = 'u'; ++u_cnt;
             read.setSignatureStrings(params); 
-            if (read.is_central_mapped && read.has_anti_pattern) {
-                read.rank = 'n'; ++n_cnt; --u_cnt;
+            read.checkByRepeatCount(target, has_excess_ins_hap);
+            if (read.is_central_mapped && read.has_anti_pattern) { 
+                read.rank = 'n'; ++n_cnt; --u_cnt; 
             }
 
             starts.push_back(read.covering_start); ends.push_back(read.covering_end);
-            std::cout << read.has_anti_pattern << " " << read.cigar_str << std::endl;
+            std::cout << read.has_anti_pattern << " " << read.cigar_str << " " << read.is_quality_map << " " << read.is_stable_non_ref << " " << read.is_central_mapped << " " << read.qc_passed << std::endl;
+            
+            // reads are qualified for undetermined sigature profiling if
+            // 1. capped with enough 2-mer diversity (is_stable_non_ref)
+            // 2. mapped in 2nd/3rd readlen quartile (is_central_mapped)
+            // 3. local freq of dirty base < thresh (qc_passed)
             if (read.is_quality_map && read.qc_passed) {
                 sig_u[read.non_ref_sig].push_back(i);
                 int k = 0, o = 0;
@@ -87,8 +93,9 @@ Pileup::Pileup(const Strs& names, const Bools& is_rv, const Strs& cigar_strs,
             if (read.is_quality_map) ++ref_hap_n;                
         }       
     }
+    
     if (!s_cnt && !u_cnt) { has_no_support = true; return; }
-
+    
     int _strt = (loc_ref.flanking_start - kmer_sz > loc_ref.start) 
               ? loc_ref.flanking_start - kmer_sz : loc_ref.start;
     starts.push_back(_strt); 
@@ -172,6 +179,8 @@ void Pileup::setHaploTypes(LocalReference& loc_ref, const Variant& target) {
     }
     
     PatternCnt u_sig_cnt; int idx1 = -1, idx2 = -1;
+    
+    std::cout << "empty " << sig_u.empty() << " " << has_excess_ins_hap << std::endl;
     if (!sig_u.empty()) {
         count_patterns(sig_u, u_sig_cnt);
         hap1 = u_sig_cnt[0].first; idx1 = sig_u[hap1][0];
@@ -181,6 +190,11 @@ void Pileup::setHaploTypes(LocalReference& loc_ref, const Variant& target) {
             hap2 = u_sig_cnt[1].first; idx2 = sig_u[hap2][0];
             make_sequence(loc_ref, reads[idx2].variants, start, end, seq2);
         }
+    } else if (has_excess_ins_hap) {
+    // haplotype with additional ins-repeats may be clipped and may not be captured    
+        std::string alt_added = target.alt + target.alt.substr(1);
+        Vars vlst = {Variant(target.pos, target.ref, alt_added)};
+        make_sequence(loc_ref, vlst, start, end, seq1); idx1 = 0; //pseudo index
     }
     
     if (rseq.empty())
@@ -204,6 +218,7 @@ void Pileup::differentialKmerAnalysis(const UserParams& params,
         make_kmers(rseq, kmer_sz, km12r);
     } else {
         make_kmers(seq1, kmer_sz, km1); 
+        
         make_kmers(seq2, kmer_sz, km2);
         if (has_ref_hap) make_kmers(rseq, kmer_sz, kmr);
         std::set_union(km1.begin(), km1.end(), km2.begin(), km2.end(),
@@ -225,14 +240,14 @@ void Pileup::differentialKmerAnalysis(const UserParams& params,
         for (const auto& kmer : kmers_t) 
             if (read.seq.find(kmer) != std::string_view::npos) ++(read.smer);
         
-        if (read.smer && !read.nmer) { 
+        if (kmers_nt.size() && read.smer && !read.nmer) { 
             if (has_hiconf_support || no_non_target_haps || read.is_quality_map ) { 
                 read.rank = 's'; --u_cnt; ++s_cnt; 
             } 
             else { read.rank = 'y'; --u_cnt; ++y_cnt; } // likel'y' supporting 
         }
         // exclude complex cases? 
-        if (read.nmer && !read.smer) { read.rank = 'n'; --u_cnt; ++n_cnt; }
+        if (kmers_t.size() && read.nmer && !read.smer) { read.rank = 'n'; --u_cnt; ++n_cnt; }
     }
     has_likely_support = (y_cnt); 
 }

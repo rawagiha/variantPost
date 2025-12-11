@@ -37,8 +37,8 @@ void _search_target(SearchResult& rslt,
     UserParams params(base_q_thresh, lq_base_rate_thresh,
                       match_score, mismatch_penal, gap_open_penal, gap_ext_penal, 
                       kmer_size, dimer_window, local_thresh);
-    LocalReference loc_ref(fastafile, chrom, ref_start, ref_end);   
     
+    LocalReference loc_ref(fastafile, chrom, ref_start, ref_end);   
     
     Variant target(pos, ref, alt); target.setEndPos(loc_ref);
     
@@ -46,9 +46,12 @@ void _search_target(SearchResult& rslt,
     loc_ref.setFlankingBoundary(target, params.dimer_window);
     // TODO how to return the result in this case??
     if (!loc_ref.has_flankings) return;
-     
-    target.setFlankingSequences(loc_ref); // for complex indel/MNV
     
+    // for repetitive indels and complex indel/MNV
+    target.setFlankingSequences(loc_ref); 
+    target.countRepeats(loc_ref);
+    std::cout << "repeats " << target.repeats << std::endl;
+
     // pileup setup
     Pileup pileup(read_names, are_reverse, cigar_strs, 
                   aln_starts, aln_ends, read_seqs, quals, 
@@ -57,11 +60,20 @@ void _search_target(SearchResult& rslt,
     
     pileup.gridSearch(params, loc_ref, target);
     if (pileup.u_cnt) {
+        std::cout << "s cnt pre 0 "  << pileup.s_cnt << std::endl;
         pileup.setHaploTypes(loc_ref, target);
+        
+        std::cout << "s cnt pre 1 "  << pileup.s_cnt << std::endl;
+        
+        // less effective for repeats with long unit
         pileup.differentialKmerAnalysis(params, loc_ref, target);
+        
+        std::cout << "s cnt pre "  << pileup.s_cnt << std::endl;
+
         pileup.searchByRealignment(params, loc_ref, target);
   
-        std::cout << pileup.s_cnt << std::endl;
+        std::cout << "s cnt "  << pileup.s_cnt << "  " <<  pileup.n_cnt << std::endl;
+        
         if (pileup.has_hiconf_support)
              match2haplotypes(pileup, read_seqs, params); 
         

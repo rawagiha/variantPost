@@ -96,6 +96,8 @@ struct Variant {
     // set left-flanking, inserted seq (middle), right flanking
     void setFlankingSequences(const LocalReference& loc_ref);
     
+    void countRepeats(const LocalReference& loc_ref);
+
     //--------------------------------------------------------------------------
     // test variant identity after normalization
     bool isEquivalent(const Variant& v, const LocalReference& loc_ref) const;
@@ -103,7 +105,8 @@ struct Variant {
     //--------------------------------------------------------------------------
     // inputs
     int pos; // 1-based genomic pos
-    std::string ref; std::string alt;
+    std::string ref; std::string alt; 
+    std::string indel_seq; // only defined for simple indels
     std::string_view qual; // base qualities, NOT including padding (aln may begin with insertion) 
     
     //--------------------------------------------------------------------------
@@ -116,6 +119,7 @@ struct Variant {
     // numeric data
     int ref_len = 0, alt_len = 0, event_len = 0; // allele len, event = the longer 
     int indel_len = 0; // len of inserted or deleted sequence
+    int repeats = 0; // n of indel sequence repeats 
     int lpos = -1, rpos = -1; // left and right aligned positions
     int _end_pos = pos + ref_len; // end position before right-aligned
     int end_pos = rpos + ref_len; // end postion of event after right-aligned

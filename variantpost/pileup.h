@@ -100,9 +100,11 @@ struct Pileup {
     bool has_no_support = false; // no support no undetermined
     bool has_likely_support = false; // reads likely supporting the target
     bool has_ref_hap = false; // reference haplotype likely exists in background
+    bool has_excess_ins_hap = false; // haplotype with ins-repeat > expected
     bool vs_ref_hap = false; // true to perform kmer analysis vs ref hap
     bool no_non_target_haps = false; // non-target haplotypes not inferred
     bool has_valid_boundary = false; // valid flanking start/end event start/end   
+    
     //bool with_surrounding_event = false;
 };
 
