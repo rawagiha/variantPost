@@ -163,6 +163,9 @@ def read_cut(
     if include_rt_clip:
         _end = len(seq)
 
+    if not quals:
+        quals = ('F' * len(seq))
+    
     # return seq[seq_start_idx : seq_end_idx+1], quals[seq_start_idx : seq_end_idx+1]
     return seq[_start:_end], quals[_start:_end]
 
@@ -207,7 +210,7 @@ def shorten_read(read, cut_start, cut_end, k):
 
     shortend_read_seq, shortend_qual_vec = read_cut(
         read.query_sequence,
-        read.query_qualities,
+        read.query_qualities_str,
         read.cigartuples,
         read.reference_start + 1,
         new_aln_start,

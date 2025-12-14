@@ -123,12 +123,12 @@ cdef inline void pack_to_lists(
     int unspliced_local_reference_start,
     unspliced_local_reference_end,
     int window_len,
-    int k
+    int k,
+    list tags
 ):
     cdef object read = read_tuple[0]
     
-    #if len(read.query_sequence) < window_len:
-    if True:
+    if len(read.query_sequence) < window_len:
         read_names.push_back(read.query_name.encode())
         are_reverse.push_back(read.is_reverse)
         cigar_strings.push_back(read.cigarstring.encode())
@@ -139,14 +139,12 @@ cdef inline void pack_to_lists(
             qual_seqs.push_back(('F'*len(read.query_sequence)).encode())
         else:
             qual_seqs.push_back(read.query_qualities_str.encode())
-        #mapqs.push_back(read.mapping_quality)
-
-        #cb.push_back(read.get_tag("CB").encode())
     
         if read_tuple[1]:
             is_primary.push_back(True) # to be renamed
         else:
             is_primary.push_back(False)
+        tags.append(read.get_tags())
     else:
         res = shorten_read(
             read, 
@@ -162,21 +160,14 @@ cdef inline void pack_to_lists(
             aln_starts.push_back(res[3])
             aln_ends.push_back(res[4])
             read_seqs.push_back(res[0].encode())
-            qual_seqs.push_back(res[1])
+            qual_seqs.push_back(res[1].encode())
             #mapqs.push_back(read.mapping_quality)
 
             if read_tuple[1]:
                 is_primary.push_back(True)
             else:
                 is_primary.push_back(False)
-
-
-#class AnnotatedRead(object):
-#    def __init__(self, read_name, is_reverse, is_first_bam, target_status):
-#        self.read_name = read_name
-#        self.is_reverse = is_reverse
-#        self.is_first_bam = is_first_bam
-#        self.target_status = target_status
+            tags.append(read.get_tags())
 
 
 cpdef object search_target(
@@ -270,6 +261,7 @@ cpdef object search_target(
     #opposite!!!
     are_first_bam.reserve(buff_size)
     
+    tags = []
     cdef int widow_len = unspliced_local_reference_end - unspliced_local_reference_start
     for read in fetched_reads:
         
@@ -292,8 +284,9 @@ cpdef object search_target(
             unspliced_local_reference_end,
             widow_len,
             k,
+            tags
         )
-    
+         
     _search_target(
         rslt,
         fastafile,
@@ -358,6 +351,7 @@ cpdef object search_target(
         rslt.target_statuses,
         are_reverse,
         are_first_bam,
+        tags
      #   cb
     )
     #return (

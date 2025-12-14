@@ -50,7 +50,6 @@ void _search_target(SearchResult& rslt,
     // for repetitive indels and complex indel/MNV
     target.setFlankingSequences(loc_ref); 
     target.countRepeats(loc_ref);
-    std::cout << "repeats " << target.repeats << std::endl;
 
     // pileup setup
     Pileup pileup(read_names, are_reverse, cigar_strs, 
@@ -60,109 +59,29 @@ void _search_target(SearchResult& rslt,
     
     pileup.gridSearch(params, loc_ref, target);
     if (pileup.u_cnt) {
-        std::cout << "s cnt pre 0 "  << pileup.s_cnt << std::endl;
         pileup.setHaploTypes(loc_ref, target);
-        
-        std::cout << "s cnt pre 1 "  << pileup.s_cnt << std::endl;
-        
-        // less effective for repeats with long unit
         pileup.differentialKmerAnalysis(params, loc_ref, target);
-        
-        std::cout << "s cnt pre "  << pileup.s_cnt << std::endl;
-
         pileup.searchByRealignment(params, loc_ref, target);
-  
-        std::cout << "s cnt "  << pileup.s_cnt << "  " <<  pileup.n_cnt << std::endl;
         
         if (pileup.has_hiconf_support)
              match2haplotypes(pileup, read_seqs, params); 
         
-    
-
         for (const auto& read : pileup.reads) {
-            //std::cout << read.cigar_str << " " << read.smer << " " << read.nmer << " " << read.dist_to_non_target << std::endl;
             if (read.rank == 's') rslt.target_statuses.push_back(1);
             else if (read.rank == 'n' && !read.covered_in_clip) { 
                 rslt.target_statuses.push_back(0); 
-                //std::cout << read.name << " " << read.cigar_str << std::endl; 
-                }
+            }
             else if (read.rank == 'u' || read.rank == 'y') rslt.target_statuses.push_back(-1);
             else rslt.target_statuses.push_back(-2);
         }
     } else {
-    
-       // std::cout << "here no u " << std::endl; 
-
         for (const auto& read : pileup.reads) {
-            //std::cout << read.cigar_str << " " << read.smer << " " << read.nmer << " " << read.dist_to_non_target << std::endl;
             if (read.rank == 's') rslt.target_statuses.push_back(1);
             else if (read.rank == 'n' && !read.covered_in_clip) rslt.target_statuses.push_back(0);
             else if (read.rank == 'u' || read.rank == 'y') rslt.target_statuses.push_back(-1);
             else rslt.target_statuses.push_back(-2);
         }
     }
-    
-    
-    /*
-    if (pileup.has_hiconf_support) {
-        if (pileup.u_cnt) {
-            // up to 2nd most frequent haplotypes
-            pileup.setHaploTypeByFrequency(); 
-            pileup.setSequenceFromHaplotype(loc_ref);
-            
-            // w/ kmer specific to target hap & w/o specific to alt haps
-            // -> 's'
-            // w/ kmer specific to alt haps & w/o specific to target hap
-            // -> 'n'
-            pileup.reRankByKmer(params, loc_ref);
-            
-            //Here, the remaining reads are not resolved by kmer analysis
-            
-            // competitive alignment agains to all haplotypes
-            // uniq best aln to target hap -> 's'
-            // uniq best aln to (one of )alt haps -> 'n'
-            // tie exists -> 'u' 
-            match2haplotypes(pileup, read_seqs, params);
-            
-            for (const auto& read : pileup.reads) {
-                if (read.rank == 's') rslt.target_statuses.push_back(1);
-                else if (read.rank == 'n') rslt.target_statuses.push_back(0);
-                else if (read.rank == 'u') rslt.target_statuses.push_back(-1);
-                else rslt.target_statuses.push_back(-2);
-            }
-        } else {
-            // best case 
-            // just make a contig & report
-            for (const auto& read : pileup.reads) {
-                if (read.rank == 's') rslt.target_statuses.push_back(1);
-                else if (read.rank == 'n') rslt.target_statuses.push_back(0);
-                else if (read.rank == 'u') rslt.target_statuses.push_back(-1);
-                else rslt.target_statuses.push_back(-2);
-            }    
-        }
-    } else if (pileup.has_no_support) {
-        //no result case
-    } else {
-        if (pileup.s_cnt) {
-            
-        }
-        
-        if (pileup.u_cnt) {
-            SequenceModel seqm(pileup, loc_ref, target);        
-            seqm.compareToRefByKmer(pileup, loc_ref, params);
-            seqm.reRankByReAlignment(pileup, read_seqs, params);
-        } else {
-            //std::cout << "aho" << std::endl;        
 
-        }
-        //std::cout << seqm.flank_start << " " << seqm.target_start << " " << seqm.target_end << " " << seqm.flank_end << std::endl;
-        
-        //pileup.compareToRefByKmer(loc_ref, params, target);
-        for (const auto& read : pileup.reads) {
-            if (read.rank == 's') rslt.target_statuses.push_back(1);
-            else if (read.rank == 'n') rslt.target_statuses.push_back(0);
-            else if (read.rank == 'u') rslt.target_statuses.push_back(-1);
-            else rslt.target_statuses.push_back(-2);
-        }    
-    }*/
+   
 }   

@@ -114,7 +114,7 @@ class VariantAlignment(object):
             self.target_status, 
             self.are_reverse, 
             self.are_first_bam, 
-            #self.cb
+            self.tags
         ) = search_target(
             bam,
             second_bam,
@@ -143,6 +143,7 @@ class VariantAlignment(object):
             variant.unspliced_local_reference_end,
             variant.k,
         )
+        #print(self.tags)
         # print(a)
         # print(self.contig_dict)
         # self.is_with_target = any([status == 1 for status in self.target_status])

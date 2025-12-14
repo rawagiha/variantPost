@@ -105,6 +105,8 @@ Pileup::Pileup(const Strs& names, const Bools& is_rv, const Strs& cigar_strs,
     ends.push_back(_end);
     
     start = *std::min_element(starts.begin(), starts.end());
+    // iso-seq reads may have covering start < loc_ref.start
+    start = (start < loc_ref.start) ? loc_ref.start : start;
     end = *std::max_element(ends.begin(), ends.end());
         
     has_hiconf_support = (!sig_s_hiconf.empty()); has_ref_hap = (ref_hap_n); 
@@ -199,7 +201,7 @@ void Pileup::setHaploTypes(LocalReference& loc_ref, const Variant& target) {
     
     if (rseq.empty())
         make_sequence(loc_ref, {}, start, end, rseq, &i2p_r);
-   
+    
     if (idx0 < 0) vs_ref_hap = true; //non-target non-ref hap may exist
     if (idx1 == -1 && idx2 == -1) {
         vs_ref_hap = true; no_non_target_haps = true; 
@@ -304,7 +306,4 @@ void Pileup::searchByRealignment(const UserParams& params,
     // next loop over remaining 'u'/'y'-reads
 
     //aligner.SetReferenceSequence(seq0.c_str(), seq0.size());
-    
-     
-
 }
