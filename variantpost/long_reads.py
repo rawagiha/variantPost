@@ -24,10 +24,14 @@ def find_cut_start_idx(cigar_tuple, aln_start, aln_end, cut_start, cut_end, k):
     curr_pos, prev_pos = aln_start, aln_start
     for i, c in enumerate(cigar_tuple):
         op, op_len = c[0], c[1]
-
+        
         prev_pos = curr_pos
         move_len = op_len if op in IS_REF_CONSUMING else 0
         curr_pos += move_len
+
+        if op == 3:
+            if prev_pos < cut_start and cut_end < curr_pos:
+                return (-1,)
 
         # first cut-start mapped pass
         if start_idx == -1 and cut_start < curr_pos:
@@ -171,7 +175,7 @@ def read_cut(
 
 
 def shorten_read(read, cut_start, cut_end, k):
-
+   
     res = find_cut_start_idx(
         read.cigartuples,
         read.reference_start + 1,
@@ -180,7 +184,7 @@ def shorten_read(read, cut_start, cut_end, k):
         cut_end,
         k
     )
-
+    
     check = (i == -1 for i in res)
     if any(check):
         return

@@ -73,7 +73,7 @@ class VariantAlignment(object):
         mapping_quality_threshold=1,
         base_quality_threshold=20,
         low_quality_base_rate_threshold=0.3,
-        downsample_threshold=2000,
+        downsample_threshold=-1,
         match_score=3,
         mismatch_penalty=2,
         gap_open_penalty=3,
@@ -143,6 +143,11 @@ class VariantAlignment(object):
             variant.unspliced_local_reference_end,
             variant.k,
         )
+        for tglst in self.tags:
+            for _ in tglst:
+                if _[0] == "CB":
+                    print(_[1])
+        
         #print(self.tags)
         # print(a)
         # print(self.contig_dict)
@@ -169,8 +174,8 @@ class VariantAlignment(object):
                 else:
                     u2 += 1    
         
-        #return ((s1, s2), (n1, n2), (u1, u2))
-        return (s1+s2, n1+n2, u1+u2)
+        return ((s1, s2), (n1, n2), (u1, u2))
+        #return (s1+s2, n1+n2, u1+u2)
         
         #s_cb, n_cb = [], []
         #s_cnt, n_cnt, u_cnt = 0, 0, 0
@@ -187,6 +192,19 @@ class VariantAlignment(object):
         
        # return s_cnt, n_cnt, u_cnt, ":".join(s_cb), ":".join(n_cb)
     
+         
+    def get_tag(self, tag):
+        s_tags, n_tags, u_tags = [], [], []
+        for taglst, status in zip(self.tags, self.target_status):
+            if not status:
+                n_tags.append(_find_value(taglst, tag))
+            elif status > 0:
+                s_tags.append(_find_value(taglst, tag))
+            elif status == -1:
+                u_tags.append(_find_value(taglst, tag))
+
+        return [s_tags, n_tags, u_tags]
+
     
     def count_alleles(self):
         """returns :class:`AlleleCount` as `namedtuple <https://docs.python.org/3/library/collections.html#collections.namedtuple>`__ of read counts.
@@ -356,6 +374,11 @@ class VariantAlignment(object):
                     self.chrom, self.target_pos, ref_base, ref_base, self.reference
                 )
 
+def _find_value(lst, tag):
+        for elem in lst:
+            if elem[0] == tag:
+                return elem[1]
+        return None
 
 def fill_cnt_data(sf, sr, nf, nr, uf, ur):
     AlleleCount = namedtuple(

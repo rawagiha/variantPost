@@ -64,7 +64,7 @@ struct LocalReference {
     FastaReference fasta;
     std::string chrom;
     
-    int start; int end;
+    int start; int end; // 1-based genomic pos, start/end inclusive
     
     // flanking region defined by 2-mer diversity
     int flanking_start = -1; int flanking_end = -1;
@@ -123,6 +123,7 @@ struct Variant {
     int lpos = -1, rpos = -1; // left and right aligned positions
     int _end_pos = pos + ref_len; // end position before right-aligned
     int end_pos = rpos + ref_len; // end postion of event after right-aligned
+    int mean_qual = INT_MAX; // mean base quality of alt allele sequence
     
     //--------------------------------------------------------------------------
     // boolean flags

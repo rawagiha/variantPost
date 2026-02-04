@@ -100,11 +100,12 @@ def fetch_reads(
     
     for read in reads:
         if is_qualified_read(read, exclude_duplicates):
+            
             fetched_reads.append((read, is_secondary))
             
             if read.reference_start <= pos <= read.reference_end:
                 est_cov += 1 
-    
+
     return est_cov
 
 
@@ -229,7 +230,7 @@ cpdef object search_target(
             True
         )  
     
-    if est_cov > downsample_thresh:
+    if downsample_thresh > 0 and est_cov > downsample_thresh:
         n_sample = int(len(fetched_reads) * (downsample_thresh / est_cov))
         random.seed(123)
         fetched_reads = random.sample(fetched_reads,  n_sample)
@@ -346,7 +347,7 @@ cpdef object search_target(
     #    )
     
     #skips = [(start, end) for start, end in zip(rslt.skip_starts, rslt.skip_ends)]
-    
+    print(len(rslt.target_statuses), len(tags))
     return (
         rslt.target_statuses,
         are_reverse,

@@ -3,6 +3,7 @@
 #include "match.h"
 #include "search.h"
 #include "pileup.h"
+#include "consensus.h"
 #include "sequence_model.h"
 
 SearchResult::SearchResult() {}
@@ -50,13 +51,27 @@ void _search_target(SearchResult& rslt,
     // for repetitive indels and complex indel/MNV
     target.setFlankingSequences(loc_ref); 
     target.countRepeats(loc_ref);
-
+    
     // pileup setup
     Pileup pileup(read_names, are_reverse, cigar_strs, 
                   aln_starts, aln_ends, read_seqs, quals, 
                   are_from_first_bam, has_second, 
                   params, loc_ref, target);
-    
+    if (!pileup.sig_s_hiconf.empty()) {
+        Consensus con;
+        for (const auto& pair : pileup.sig_s_hiconf) {
+            std::cout << pair.first << " " << pair.second.size() << std::endl;
+            for (const auto i : pair.second) {
+                con._from_variants(pileup.reads[i].covering_start, pileup.reads[i].covering_end,  pileup.reads[i].variants, params, loc_ref);
+            }
+        }
+        size_t kk = con.ref.size();
+        for (size_t i = 0; i < kk; ++i){
+            std::cout << con.pos[i] << " " << con.ref[i] << " " << con.alt[i] << std::endl;
+        }
+    }
+
+
     pileup.gridSearch(params, loc_ref, target);
     if (pileup.u_cnt) {
         pileup.setHaploTypes(loc_ref, target);

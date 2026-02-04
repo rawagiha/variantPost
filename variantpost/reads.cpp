@@ -87,7 +87,6 @@ void Read::parseCoveringPattern(LocalReference& loc_ref, const Variant& target) 
     // skipped
     for (const auto& seg : skipped_segments)
         if (seg.first < target.lpos && target.rpos < seg.second) return;
-   
          
     if (read_start <= target.lpos && target.lpos <= aln_start)
         covered_in_clip = true;

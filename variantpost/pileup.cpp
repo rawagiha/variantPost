@@ -35,7 +35,7 @@ Pileup::Pileup(const Strs& names, const Bools& is_rv, const Strs& cigar_strs,
     for (int i = 0; i < sz; ++i) {
         reads.emplace_back(names[i], is_rv[i], cigar_strs[i], aln_starts[i], 
                            aln_ends[i], seqs[i], quals[i], is_first_bam[i]);
-        
+         
         auto& read = reads[i];
         read.setReference(loc_ref); if (read.is_na_ref) continue;
         
@@ -45,6 +45,7 @@ Pileup::Pileup(const Strs& names, const Bools& is_rv, const Strs& cigar_strs,
 
         read.parseLocalPattern(loc_ref, target, kmer_sz);
         read.qualityCheck(qc_start, qc_end, params.base_q_thresh, params.lq_rate_thresh);
+        
         read.isStableNonReferenceAlignment(loc_ref); 
 
         if (read.covering_ptrn == 'A' && !read.idx2pos.empty())
@@ -108,6 +109,8 @@ Pileup::Pileup(const Strs& names, const Bools& is_rv, const Strs& cigar_strs,
     // iso-seq reads may have covering start < loc_ref.start
     start = (start < loc_ref.start) ? loc_ref.start : start;
     end = *std::max_element(ends.begin(), ends.end());
+    // iso 
+    end = (loc_ref.end < end) ? loc_ref.end : end;
         
     has_hiconf_support = (!sig_s_hiconf.empty()); has_ref_hap = (ref_hap_n); 
     
@@ -187,7 +190,6 @@ void Pileup::setHaploTypes(LocalReference& loc_ref, const Variant& target) {
         count_patterns(sig_u, u_sig_cnt);
         hap1 = u_sig_cnt[0].first; idx1 = sig_u[hap1][0];
         make_sequence(loc_ref, reads[idx1].variants, start, end, seq1);
-        
         if (u_sig_cnt.size() > 1) {
             hap2 = u_sig_cnt[1].first; idx2 = sig_u[hap2][0];
             make_sequence(loc_ref, reads[idx2].variants, start, end, seq2);

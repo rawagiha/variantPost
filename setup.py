@@ -43,7 +43,7 @@ extensions = [
             "variantpost/util.cpp",
             #"variantpost/local_reference.cpp",
             #"variantpost/substitutes.cpp",
-            #"variantpost/similarity.cpp",
+            "variantpost/consensus.cpp",
             "variantpost/ssw/ssw.c",
             "variantpost/ssw/ssw_cpp.cpp",
             "variantpost/fasta/Fasta.cpp",

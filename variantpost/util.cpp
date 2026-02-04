@@ -91,13 +91,17 @@ void LocalReference::setFlankingBoundary(const Variant& target, const size_t win
     if (i - low_cplx_start > low_cplx_len) low_cplx_len = i - low_cplx_start;
 }
 
-//------------------------------------------------------------------------------
-//NonRef::NonRef(const int i, const std::string& ref_, const std::string& alt_)
-//    : idx(i), ref(ref_), alt(alt_) { }
-
 inline bool is_rotatable(std::string_view allele) {
     return (allele.front() == allele.back());   
 }
+
+void average_base_qual(std::string_view qual, int& mean_qual) {
+    int n = 0, q_sum = 0;
+    for (const auto q : qual) {
+        q_sum += static_cast<int>(q); ++n;
+    }
+    if (n) mean_qual = q_sum / n;   
+} 
 
 //------------------------------------------------------------------------------
 Variant::Variant(int pos_, 
@@ -128,7 +132,10 @@ Variant::Variant(int pos_,
         if (ref.substr(0, alt_len) != alt) is_complex = true;
         else indel_seq = ref.substr(1);
     }
+
+    average_base_qual(qual, mean_qual);
 }
+
 
 inline void to_left(
     int& pos, 
@@ -946,7 +953,8 @@ void read2variants(const int aln_start, std::string_view ref_seq,
                 variants.emplace_back(pos - 1, 
                                       std::string(alt) 
                                       + std::string(ref_seq.substr(ref_idx, op_len)), 
-                                      std::string(alt));
+                                      std::string(alt),
+                                      base_qualities.substr(read_idx - 1, 1));
                 ref_idx += op_len; pos += op_len; 
                 is_padding_base_supported = true; break;
             }
@@ -1080,6 +1088,7 @@ bool swappable(LocalReference& loc_ref,
     } else return false;
      
     if (!cases.count()) return false;
+    if (loc_ref.start > vlt.pos) return false;
     
     int inter_len = vrt._end_pos - vlt.pos - 1; if (inter_len <= 0) return false;
     std::string inter_ref = loc_ref._seq.substr(vlt.pos - loc_ref.start + 1,
@@ -1343,7 +1352,7 @@ void make_sequence(LocalReference& loc_ref, const Vars& variants, const int star
             i = j; seq.append(alt);
         }
         
-        if (i + 1 ==  variants.size()) break;
+        if (i + 1 ==  variants.size() || pos >= loc_ref.end) break;
         
         seq.append(loc_ref._seq.substr(pos - loc_ref.start, variants[i + 1].pos - pos));
         if (p_idx2pos)
