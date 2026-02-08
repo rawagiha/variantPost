@@ -111,6 +111,7 @@ class VariantAlignment(object):
         #    self.trans_vars,
         # )
         (
+            self.contig_dict,
             self.target_status, 
             self.are_reverse, 
             self.are_first_bam, 
@@ -143,6 +144,13 @@ class VariantAlignment(object):
             variant.unspliced_local_reference_end,
             variant.k,
         )
+
+        #############TODO#################
+        #implement later
+        self.skips = []
+        self.trans_vars = []
+
+
         for tglst in self.tags:
             for _ in tglst:
                 if _[0] == "CB":
@@ -328,10 +336,11 @@ class VariantAlignment(object):
         match_penalty_for_phasing : float
 
         """
-        if self.is_retargeted:
-            self.target_is_indel = True
-            self.target_pos = self.retarget_pos
-
+        #if self.is_retargeted:
+        #    self.target_is_indel = True
+        #    self.target_pos = self.retarget_pos
+        
+        self.is_with_target = True
         try:
             if cis:
                 trans_vars = self.trans_vars

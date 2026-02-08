@@ -13,7 +13,7 @@ UserParams::UserParams(const int _base_q_thresh, const double lq,
     : lq_rate_thresh(lq), local_thresh(loc), match_score(ma), mismatch_penal(mis), 
       gap_open_penal(go), gap_ext_penal(ge), kmer_size(k), dimer_window(d) { 
     base_q_thresh = static_cast<char>(_base_q_thresh + 33);  
-};
+}
 
 //------------------------------------------------------------------------------
 LocalReference::LocalReference(const std::string& fastafile, 
@@ -23,6 +23,10 @@ LocalReference::LocalReference(const std::string& fastafile,
     _seq = fasta.getSubSequence(chrom_, start_ - 1, end_ - start_ + 1); seq = _seq;
     for (int i = 0; i <= end - start; ++i) dict[start + i] = seq.substr(i, 1); 
 }
+
+//-----------------------------------------------------------------------------
+Homopolymer::Homopolymer(const int start_, const int end_, const std::string& base_)
+    : start(start_), end(end_), base(base_) {/* */}
 
 typedef std::unordered_map<std::string_view, int> Dimers;
 Dimers dimers =  {
@@ -74,21 +78,44 @@ void LocalReference::setFlankingBoundary(const Variant& target, const size_t win
         
     // find the length of low 2-mer diversity sequence len
     std::set<int> found; size_t prev_cnt = 0; 
-    int low_cplx_start = flanking_start - start, i = flanking_start - start;
+    low_cplx_start = flanking_start - start;
+    int i = flanking_start - start;
+    int tmp = low_cplx_len;
     for (/* */; i <  flanking_end - start + 1; ++i) {
         found.insert(dimers[seq.substr(i, 2)]);
-        if (found.size() - prev_cnt > 1) {
+        std::cout << i << " " << found.size() << " " << prev_cnt << " " << low_cplx_start << " " << low_cplx_len << std::endl;
+        if ((found.size() - prev_cnt > 1) && ( i - low_cplx_start > low_cplx_len) ) {
+            low_cplx_len = i - low_cplx_start;
             low_cplx_start = i; prev_cnt = found.size();
-            if (i - low_cplx_start > low_cplx_len) low_cplx_len = i - low_cplx_start;
         }
     }
     
+    // dimers have 16 patterns
     if (found.size() == 16) {
         found.clear(); prev_cnt = 0; low_cplx_start = i;
         if (i - low_cplx_start > low_cplx_len) low_cplx_len = i - low_cplx_start;
     }      
     
     if (i - low_cplx_start > low_cplx_len) low_cplx_len = i - low_cplx_start;
+
+    std::cout << flanking_start << " " << low_cplx_start << " " << low_cplx_len << " " << flanking_end << std::endl;
+}
+
+void LocalReference::findLowComplexRegion() {
+    int i = flanking_start - start;
+    for (/* */; i < flanking_end - start + 1;/* */) {
+        int j = i;
+        bool same_base = true;
+        while ((same_base) && (j <  flanking_end - start)) {
+            same_base = (seq[j] == seq[j + 1]);
+            if (same_base) ++j;
+        }
+        if (j > i) {
+            std::string s{_seq[i]};
+            homopoly.emplace_back(i + start, j + start, s);
+            i = j;
+        } else { ++i; }
+    }
 }
 
 inline bool is_rotatable(std::string_view allele) {
@@ -135,7 +162,6 @@ Variant::Variant(int pos_,
 
     average_base_qual(qual, mean_qual);
 }
-
 
 inline void to_left(
     int& pos, 

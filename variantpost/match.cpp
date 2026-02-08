@@ -167,6 +167,11 @@ bool search_over_grid(const int start, LocalReference& loc_ref,
         aligner.SetReferenceSequence(refseq.c_str(), refseq.size());
         aligner.Align(qseq, filter, &aln, mask_len);
         aln2variants(aln, vars, start, refseq, query);
+        std::cout << std::endl;
+        for(auto& v : vars) {
+            std::cout << v.pos << " " << v.ref << " " << v.alt << "- ";
+        }
+        std::cout << std::endl;
         if (find_target(loc_ref, target, vars) > -1) return true;
         vars.clear(); 
     }

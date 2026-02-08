@@ -13,9 +13,9 @@ cdef extern from "search.h":
 
         SearchResult() except +
 
-        #vector[int] positions
-        #vector[string] ref_bases
-        #vector[string] alt_bases
+        vector[int] positions
+        vector[string] ref_bases
+        vector[string] alt_bases
         #vector[string] base_quals
         #vector[int] skip_starts
         #vector[int] skip_ends
@@ -320,10 +320,10 @@ cpdef object search_target(
         has_second,
     )
     
-   # contig_dict = OrderedDict()
-   # for pos, ref_base, alt_base, base_qual in zip(
-   #     rslt.positions, rslt.ref_bases, rslt.alt_bases, rslt.base_quals
-   # ):
+    contig_dict = OrderedDict()
+    for pos, ref_base, alt_base, in zip(
+        rslt.positions, rslt.ref_bases, rslt.alt_bases,
+    ):
         #qual_chars = base_qual.decode("utf-8")
         #qual = -1
         #if len(qual_chars) == 1:
@@ -332,11 +332,11 @@ cpdef object search_target(
         #    quals = [ord(c) - 33 for c in qual_chars]
         #    qual = statistics.median(quals)
         
-    #    contig_dict[pos] = (
-    #        ref_base.decode("utf-8"), 
-    #        alt_base.decode("utf-8"), 
-    #        base_qual.decode("utf-8")
-    #    )
+        contig_dict[pos] = (
+        ref_base.decode("utf-8"), 
+        alt_base.decode("utf-8"), 
+        "F",
+    )
     
     #annot_reads = []
     #for read_name, is_reverse, target_status, is_first_bam in zip(
@@ -349,6 +349,7 @@ cpdef object search_target(
     #skips = [(start, end) for start, end in zip(rslt.skip_starts, rslt.skip_ends)]
     print(len(rslt.target_statuses), len(tags))
     return (
+        contig_dict,
         rslt.target_statuses,
         are_reverse,
         are_first_bam,

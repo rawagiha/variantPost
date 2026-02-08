@@ -5,9 +5,9 @@
 
 struct SearchResult 
 {
-    //std::vector<int> positions;
-    //std::vector<std::string> ref_bases;
-    //std::vector<std::string> alt_bases;
+    std::vector<int> positions;
+    std::vector<std::string> ref_bases;
+    std::vector<std::string> alt_bases;
     //std::vector<std::string> base_quals;
     //std::vector<int> skip_starts;
     //std::vector<int> skip_ends;

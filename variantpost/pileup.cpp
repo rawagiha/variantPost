@@ -68,26 +68,39 @@ Pileup::Pileup(const Strs& names, const Bools& is_rv, const Strs& cigar_strs,
             read.rank = 'u'; ++u_cnt;
             read.setSignatureStrings(params); 
             read.checkByRepeatCount(target, has_excess_ins_hap);
+            
+            // sigle, but non-target mutation closed by complex seq (anti-pattern)
+            // example:
+            //      target    del(C)
+            //                    *
+            //        ref GCTAAAAACAAAATGC
+            //      read  GCTAAAAAAAAAATGC  de-novo homopolymer
             if (read.is_central_mapped && read.has_anti_pattern) { 
                 read.rank = 'n'; ++n_cnt; --u_cnt; 
             }
 
-            starts.push_back(read.covering_start); ends.push_back(read.covering_end);
-            std::cout << read.has_anti_pattern << " " << read.cigar_str << " " << read.is_quality_map << " " << read.is_stable_non_ref << " " << read.is_central_mapped << " " << read.qc_passed << std::endl;
+            if (read.rank != 'n') {
+                starts.push_back(read.covering_start); ends.push_back(read.covering_end);
+            }   
             
-            // reads are qualified for undetermined sigature profiling if
+            // reads are qualified for undetermined signature profiling if
             // 1. capped with enough 2-mer diversity (is_stable_non_ref)
             // 2. mapped in 2nd/3rd readlen quartile (is_central_mapped)
             // 3. local freq of dirty base < thresh (qc_passed)
             if (read.is_quality_map && read.qc_passed) {
-                sig_u[read.non_ref_sig].push_back(i);
-                int k = 0, o = 0;
-                if (read.ineffective_kmer) { ++ineff_kmer; k = 1; }
-                if (read.has_positional_overlap) { ++overlapping; o = 1; }  
-                u_sig_annot[read.non_ref_sig] = {k, o};
-                //if (read.has_anti_pattern) {
-                //    read.rank = 'n'; ++n_cnt; --u_cnt;
-                //}
+                sig_u[read.non_ref_sig].push_back(i); // register sig
+                
+                // annot for signature usage: (kmer, overlap, grid-search)
+                //  kmer: ineffctive kmer if 1
+                //  overlap: positionally overlap non-target if 1
+                //  grid-search: do not use this sig for grid-search
+                if (u_sig_annot.find(read.non_ref_sig) == u_sig_annot.end()) {
+                    u_sig_annot[read.non_ref_sig] = {0, 0, 0};
+                }
+
+                if (read.ineffective_kmer) { ++ineff_kmer; u_sig_annot[read.non_ref_sig][0] = 1; }
+                if (read.has_positional_overlap) { ++overlapping; u_sig_annot[read.non_ref_sig][1] = 1; }  
+                if (read.rank == 'n') { ++overlapping; u_sig_annot[read.non_ref_sig][2] = 1; }
             }
         } else { 
             read.rank = 'n'; ++n_cnt;
@@ -117,7 +130,10 @@ Pileup::Pileup(const Strs& names, const Bools& is_rv, const Strs& cigar_strs,
     // rerank
     if (has_hiconf_support) { 
         for (const auto& elem : sig_u) {
-            for (int i : elem.second) { reads[i].rank = 'n'; ++n_cnt; --u_cnt; }
+            for (int i : elem.second) { 
+                reads[i].rank = 'n'; ++n_cnt; --u_cnt; 
+                u_sig_annot[reads[i].non_ref_sig][2] = 1;
+            }
         }
     }
     //keep sig_u contents to set up non-supporting haplotypes
@@ -137,8 +153,14 @@ void Pileup::gridSearch(const UserParams& params,
     // grid search is applied to reads 
     // 'u'-reads with flanking_start/end covered && central mapped 
     // all reads in sig_u are such quality-mapp reads
+    // but check u_sig_annot 
     std::string query;
     for (const auto& _sig : u_sig_cnts) {
+
+        if (u_sig_annot[_sig.first][2] == 1) continue;    
+        
+        std::cout << _sig.first << std::endl;
+
         const auto& vars = reads[sig_u[_sig.first][0]].variants;
         make_sequence(loc_ref, vars, start, end, query);
 
@@ -147,6 +169,7 @@ void Pileup::gridSearch(const UserParams& params,
         if (res) {
             const auto& read_idxes = sig_u[_sig.first];
             for (int _i : read_idxes) {
+                if ( reads[_i].rank == 'n') continue;
                 reads[_i].rank = 's'; ++s_cnt; --u_cnt;
                 sig_s[_sig.first].push_back(_i);
                 sig_s_hiconf[_sig.first].push_back(_i);
@@ -174,10 +197,11 @@ void Pileup::setHaploTypes(LocalReference& loc_ref, const Variant& target) {
         hap0 = s_sig_cnt[0].first; idx0 = sig_s_hiconf[hap0][0];
     } else if (!sig_s.empty()) {
         count_patterns(sig_s, s_sig_cnt);
-         hap0 = s_sig_cnt[0].first; idx0 = sig_s[hap0][0];
+        hap0 = s_sig_cnt[0].first; idx0 = sig_s[hap0][0];
     }
     
-    if (idx0 > -1) {  
+    if (idx0 > -1) {
+        hiconf_read_idx = idx0; 
         make_sequence(loc_ref, reads[idx0].variants, start, end, seq0, &i2p_0);
     } else {
         make_sequence(loc_ref, {target}, start, end, seq0, &i2p_0);
@@ -238,7 +262,7 @@ void Pileup::differentialKmerAnalysis(const UserParams& params,
     
     for (auto& read : reads) {
         if (read.rank != 'u') continue;
-        
+        std::cout << read.rank << " here " << s_cnt << " " << u_cnt << std::endl;
         for (const auto& kmer : kmers_nt) 
             if (read.seq.find(kmer) != std::string_view::npos) ++(read.nmer);
         for (const auto& kmer : kmers_t) 
@@ -250,6 +274,7 @@ void Pileup::differentialKmerAnalysis(const UserParams& params,
             } 
             else { read.rank = 'y'; --u_cnt; ++y_cnt; } // likel'y' supporting 
         }
+        std::cout << read.rank << " " << s_cnt << " " << u_cnt << std::endl;
         // exclude complex cases? 
         if (kmers_t.size() && read.nmer && !read.smer) { read.rank = 'n'; --u_cnt; ++n_cnt; }
     }

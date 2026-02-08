@@ -74,7 +74,7 @@ struct Read {
     Coord skipped_segments; // vector<pair<int, int>> start/end of skipped segments
     Ints var_idx; // index at variant pos (excl. clipping)
     int covering_start = 0; // start of unspliced segment covering the target locus
-    int covering_end = 0; // end of above segment
+    int covering_end = 0; // end of above segment inclusive
                                         
     //--------------------------------------------------------------------------
     // sequences 

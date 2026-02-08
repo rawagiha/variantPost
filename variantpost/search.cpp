@@ -48,6 +48,11 @@ void _search_target(SearchResult& rslt,
     // TODO how to return the result in this case??
     if (!loc_ref.has_flankings) return;
     
+    loc_ref.findLowComplexRegion();
+    for (const auto& hh : loc_ref.homopoly) {
+        std::cout << hh.start << " " << hh.end << " " << hh.base << std::endl;
+    }
+     
     // for repetitive indels and complex indel/MNV
     target.setFlankingSequences(loc_ref); 
     target.countRepeats(loc_ref);
@@ -57,33 +62,41 @@ void _search_target(SearchResult& rslt,
                   aln_starts, aln_ends, read_seqs, quals, 
                   are_from_first_bam, has_second, 
                   params, loc_ref, target);
-    if (!pileup.sig_s_hiconf.empty()) {
-        Consensus con;
-        for (const auto& pair : pileup.sig_s_hiconf) {
-            std::cout << pair.first << " " << pair.second.size() << std::endl;
-            for (const auto i : pair.second) {
-                con._from_variants(pileup.reads[i].covering_start, pileup.reads[i].covering_end,  pileup.reads[i].variants, params, loc_ref);
+
+    
+    for (auto& read : pileup.reads) {
+        if (read.rank == 's') {
+            std::cout << read.name << " ";
+            for (auto& v : read.variants) {
+                std::cout << v.pos << " " << v.ref << ">" << v.alt << ", ";
             }
-        }
-        size_t kk = con.ref.size();
-        for (size_t i = 0; i < kk; ++i){
-            std::cout << con.pos[i] << " " << con.ref[i] << " " << con.alt[i] << std::endl;
+            std::cout << std::endl;
         }
     }
-
-
+    
+    std::cout << pileup.s_cnt << " " << pileup.n_cnt << " " << pileup.u_cnt << std::endl;
     pileup.gridSearch(params, loc_ref, target);
+    std::cout << "chek " << pileup.s_cnt << " " << pileup.n_cnt << " " << pileup.u_cnt << std::endl;
+    
+    for (auto& read : pileup.reads) {
+        if (read.rank != 's') continue;
+        std::cout << read.name << " " << read.cigar_str << std::endl;
+    } 
     if (pileup.u_cnt) {
         pileup.setHaploTypes(loc_ref, target);
+        std::cout << pileup.s_cnt << " " << pileup.n_cnt << " " << pileup.u_cnt << std::endl;
         pileup.differentialKmerAnalysis(params, loc_ref, target);
+        std::cout << "after dff " << pileup.s_cnt << " " << pileup.n_cnt << " " << pileup.u_cnt << std::endl;
         pileup.searchByRealignment(params, loc_ref, target);
-        
+        std::cout << "after realn " << pileup.s_cnt << " " << pileup.n_cnt << " " << pileup.u_cnt << std::endl;
         if (pileup.has_hiconf_support)
              match2haplotypes(pileup, read_seqs, params); 
         
+        std::cout << pileup.s_cnt << " " << pileup.n_cnt << " " << pileup.u_cnt << std::endl;
         for (const auto& read : pileup.reads) {
             if (read.rank == 's') rslt.target_statuses.push_back(1);
             else if (read.rank == 'n' && !read.covered_in_clip) { 
+                std::cout << "get here " << std::endl;
                 rslt.target_statuses.push_back(0); 
             }
             else if (read.rank == 'u' || read.rank == 'y') rslt.target_statuses.push_back(-1);
@@ -98,5 +111,17 @@ void _search_target(SearchResult& rslt,
         }
     }
 
+    Consensus con;
+    if (pileup.hiconf_read_idx > -1) {
+        con._from_variants(pileup.start, pileup.end,  pileup.reads[pileup.hiconf_read_idx].variants, params, loc_ref);
+        size_t kk = con.ref.size();
+        for (size_t i = 0; i < kk; ++i){
+            std::cout << con.pos[i] << " " << con.ref[i] << " " << con.alt[i] << std::endl;
+        }
+        rslt.positions = con.pos;
+        rslt.ref_bases = con.ref;
+        rslt.alt_bases = con.alt;
+    } 
    
+    
 }   

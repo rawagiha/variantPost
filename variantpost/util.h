@@ -54,13 +54,23 @@ struct UserParams {
 }; 
 
 //------------------------------------------------------------------------------
+// 
+struct Homopolymer {
+    Homopolymer(const int start, const int end, const std::string& base);
+    int start = -1;
+    int end = -1;
+    std::string base;
+};
+
+//------------------------------------------------------------------------------
 // features derived from input reference genome (not from alignment data) 
 struct LocalReference { 
     LocalReference(const std::string& fastafile, 
                    const std::string& chrom, const int start, const int end);
     
     void setFlankingBoundary(const Variant& target, const size_t window);
-     
+    void findLowComplexRegion(); 
+    
     FastaReference fasta;
     std::string chrom;
     
@@ -70,13 +80,16 @@ struct LocalReference {
     int flanking_start = -1; int flanking_end = -1;
     bool has_flankings = false;
     int low_cplx_len = 0; // len of low compex seq within flanking
+    int low_cplx_start = -1;
     
     //--------------------------------------------------------------------------
     // sequences 
     std::string_view seq; // read only
     std::string _seq; // data for string_view
     
-    Dict dict; // dictitionary {pos, base}    
+    Dict dict; // dictitionary {pos, base}   
+    
+    std::vector<Homopolymer> homopoly; 
 };
 
 //------------------------------------------------------------------------------

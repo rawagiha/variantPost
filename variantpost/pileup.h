@@ -25,41 +25,23 @@ struct Pileup {
     
     void searchByRealignment(const UserParams& params,
                              LocalReference& loc_ref, const Variant& target);
-
-    
-    //--------------------------------------------------------------------------
-    //void setHaploTypeByFrequency();
-    
-    
-      
-    //--------------------------------------------------------------------------
-    //c[void setSequenceFromHaplotype(LocalReference& loc_ref, const Variant& target);
-
-    //void reRankByKmer(const UserParams& params, 
-    //                  LocalReference& loc_ref, const Variant& target);
-    //void reRankByAln(const UserParams& params, const Variant& target);
-    
-    //void compareToRefByKmer(LocalReference& loc_ref, 
-    //                        UserParams& params, const Variant& target);
-    
-    //void setBoundaryIndex(LocalReference& loc_ref, const Variant& target); 
     
     //--------------------------------------------------------------------------    
     Reads reads; 
     
     //--------------------------------------------------------------------------
-    //Freq freq_s_h, freq_s, freq_u; // s_h: supporiting hiconf, u: undetermined
     Idx sig_s_hiconf, sig_s, sig_u, u_sig_annot;
-     
+    int hiconf_read_idx = -1; // for index-case read in Pileup.reads
+      
     //--------------------------------------------------------------------------
     // metrics
     int sz = -1; // pileup size
     int s_cnt = 0, n_cnt = 0, u_cnt = 0, y_cnt = 0; //cnt for supporting, non, undetermined
     
     //--------------------------------------------------------------------------
-    Ints starts, ends;
-    int start = -1, end = -1; //haplotype sequence start/end
-    
+    Ints starts, ends; // storing coverings starts/ends
+    int start = -1, end = -1; //typically, start = min(starts), end = max(ends)
+                              
     //--------------------------------------------------------------------------
     // haplotype = any non-reference patterns in a read within target_locus 
     //             +/- target_event_len in a read.
@@ -81,14 +63,6 @@ struct Pileup {
     int es = -1, ee = -1, fs = -1, fe = -1;
 
     //--------------------------------------------------------------------------
-    // set by SequenceModel by inserting the target into reference seq
-    //std::string tseq; // refseq with target 
-
-    //--------------------------------------------------------------------------
-    // set by either of Pileup or SequenceModel if necessary
-    //std::string rseq; // refseq
-    
-    //--------------------------------------------------------------------------
     int kmer_sz = 0;
     Kmers kmers_t; // kmers specific to target
     Kmers kmers_nt; // kmers specific to non_target  
@@ -104,8 +78,6 @@ struct Pileup {
     bool vs_ref_hap = false; // true to perform kmer analysis vs ref hap
     bool no_non_target_haps = false; // non-target haplotypes not inferred
     bool has_valid_boundary = false; // valid flanking start/end event start/end   
-    
-    //bool with_surrounding_event = false;
 };
 
 #endif
