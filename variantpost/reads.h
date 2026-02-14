@@ -10,7 +10,7 @@
 struct Read {   
     //--------------------------------------------------------------------------
     // constructor from inputs passed by Cython wrapper
-    Read(std::string_view name, const bool is_reverse, const std::string&  cigar_str,
+    Read(std::string_view name, const bool is_reverse, const std::string& cigar_str,
          const int aln_start, const int aln_end, std::string_view seq,
          const std::string_view quals, const bool is_from_first_bam);
      
@@ -36,8 +36,10 @@ struct Read {
     //--------------------------------------------------------------------------
     // find freq. of low quality bases within start/end region
     void qualityCheck(const int start, const int end, 
-                      const int qual_thresh, const double freq_thresh); 
-     
+                      const char qual_thresh, const double freq_thresh); 
+   
+    void trimLowQualBases(const char qual_thresh);  
+    
     //--------------------------------------------------------------------------
     // annotate variants/clip/splice patterns in std::string
     void setSignatureStrings(const UserParams& params);
@@ -62,6 +64,8 @@ struct Read {
     //--------------------------------------------------------------------------
     // quality scores 
     std::string_view base_quals; // base quality string 
+    int qs = -1; int qe = -1; // read seq start/end index after trimming low qual bases
+    
     //std::vector<Qual> non_ref_quals; // base quality for variant and clipped bases
 
     //--------------------------------------------------------------------------
@@ -95,7 +99,9 @@ struct Read {
     bool covered_in_clip = false; // true if target pos is clipped
     bool is_ref = false; // true if seq is identical to ref_seq
     bool has_target = false; // true if supporitng the target
-    bool has_local_events = false; // true if non_ref events with event_len (Variant)
+    bool has_local_events = false; // true if non_ref events within event radius (see Variant)
+    bool has_local_clip = false; // true if clip within event radius
+    bool has_smaller_change = false; // tru if n of base changes are smaller than target in flnk-start/end 
     bool has_anti_pattern = false; // true if a single non-target variant btw flnk-start/end
     bool has_positional_overlap = false; // true with variatns overlapping the target
     bool qc_passed = false; // true if local freq of dirty bases < thresh

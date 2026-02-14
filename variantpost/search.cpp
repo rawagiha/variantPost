@@ -48,45 +48,39 @@ void _search_target(SearchResult& rslt,
     // TODO how to return the result in this case??
     if (!loc_ref.has_flankings) return;
     
+    std::cout << loc_ref.flanking_start << " " << loc_ref.flanking_end << std::endl;
     loc_ref.findLowComplexRegion();
     for (const auto& hh : loc_ref.homopoly) {
         std::cout << hh.start << " " << hh.end << " " << hh.base << std::endl;
     }
      
     // for repetitive indels and complex indel/MNV
+    // TODO how to include de-novo homopolymer
     target.setFlankingSequences(loc_ref); 
     target.countRepeats(loc_ref);
     
     // pileup setup
+    // 1. reads are check for target based on the original alignment
+    // 2. non-target/non-ref variations located in read-middle, surrounded 
+    //    with complex sequence (signature-u) are flagged for grid-search/haplotype comparison
     Pileup pileup(read_names, are_reverse, cigar_strs, 
                   aln_starts, aln_ends, read_seqs, quals, 
                   are_from_first_bam, has_second, 
                   params, loc_ref, target);
-
     
-    for (auto& read : pileup.reads) {
-        if (read.rank == 's') {
-            std::cout << read.name << " ";
-            for (auto& v : read.variants) {
-                std::cout << v.pos << " " << v.ref << ">" << v.alt << ", ";
-            }
-            std::cout << std::endl;
-        }
-    }
-    
-    std::cout << pileup.s_cnt << " " << pileup.n_cnt << " " << pileup.u_cnt << std::endl;
+    // grid-seach for target only if no target found in pileup setup
+    // reads with signature-u are tested if 
+    // there exists optimal alignments that explicitly aligns the target
+    // -> if no, such reads are likely non-supporting
+    // -> use for background haplotype construction 
     pileup.gridSearch(params, loc_ref, target);
-    std::cout << "chek " << pileup.s_cnt << " " << pileup.n_cnt << " " << pileup.u_cnt << std::endl;
-    
-    for (auto& read : pileup.reads) {
-        if (read.rank != 's') continue;
-        std::cout << read.name << " " << read.cigar_str << std::endl;
-    } 
+    std::cout << "after grid " << pileup.s_cnt << " " << pileup.n_cnt << " " << pileup.u_cnt << std::endl; 
+    // supporting reads where target is clipped (clipped-target) would be still "undetermied"
     if (pileup.u_cnt) {
         pileup.setHaploTypes(loc_ref, target);
-        std::cout << pileup.s_cnt << " " << pileup.n_cnt << " " << pileup.u_cnt << std::endl;
         pileup.differentialKmerAnalysis(params, loc_ref, target);
-        std::cout << "after dff " << pileup.s_cnt << " " << pileup.n_cnt << " " << pileup.u_cnt << std::endl;
+        std::cout << "after kmer " << pileup.s_cnt << " " << pileup.n_cnt << " " << pileup.u_cnt << std::endl;   
+        // capture clipped-target here based on the differential kmer analysis  
         pileup.searchByRealignment(params, loc_ref, target);
         std::cout << "after realn " << pileup.s_cnt << " " << pileup.n_cnt << " " << pileup.u_cnt << std::endl;
         if (pileup.has_hiconf_support)
@@ -94,7 +88,7 @@ void _search_target(SearchResult& rslt,
         
         std::cout << pileup.s_cnt << " " << pileup.n_cnt << " " << pileup.u_cnt << std::endl;
         for (const auto& read : pileup.reads) {
-            if (read.rank == 's') rslt.target_statuses.push_back(1);
+            if (read.rank == 's') { rslt.target_statuses.push_back(1); std::cout << read.name << " " << read.cigar_str << " " << " why " << std::endl; }
             else if (read.rank == 'n' && !read.covered_in_clip) { 
                 std::cout << "get here " << std::endl;
                 rslt.target_statuses.push_back(0); 

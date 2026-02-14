@@ -111,8 +111,8 @@ void LocalReference::findLowComplexRegion() {
             if (same_base) ++j;
         }
         if (j > i) {
-            std::string s{_seq[i]};
-            homopoly.emplace_back(i + start, j + start, s);
+            std::string base{seq[i]};
+            homopoly.emplace_back(i + start, j + start, base);
             i = j;
         } else { ++i; }
     }
@@ -139,21 +139,16 @@ Variant::Variant(int pos_,
         alt.find('N') != std::string_view::npos ) has_n = true;
     
     ref_len = ref.size(); _end_pos = pos + ref_len; alt_len = alt.size();
-    if (alt_len == ref_len) 
-    {
+    if (alt_len == ref_len) {
         is_substitute = true; event_len = ref_len;
         is_snv = (ref_len == 1);
         if (!is_snv) { is_mnv = true; is_complex = true; }
-    }
-    else if (ref_len < alt_len)
-    {
+    } else if (ref_len < alt_len) {
         is_ins = true; 
         indel_len = alt_len - ref_len; event_len = alt_len;
         if (alt.substr(0, ref_len) != ref) is_complex = true;
         else indel_seq = alt.substr(1); 
-    }
-    else
-    {
+    } else {
         is_del = true; 
         indel_len = ref_len - alt_len; event_len = ref_len;
         if (ref.substr(0, alt_len) != alt) is_complex = true;

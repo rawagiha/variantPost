@@ -92,8 +92,7 @@ void Read::parseCoveringPattern(LocalReference& loc_ref, const Variant& target) 
         covered_in_clip = true;
     else if (aln_end <= target.rpos && target.rpos <= read_end)
         covered_in_clip = true;
-      
-    
+       
     // completly covered
     for (const auto& seg : aligned_segments) {
         if (seg.first <= target.lpos && target.rpos < seg.second) {
@@ -131,24 +130,42 @@ inline bool is_variant(const int idx, const Ints& var_idx) {
 }
 
 //------------------------------------------------------------------------------
+void Read::trimLowQualBases(const char qual_thresh) {
+    int i = 0, n = static_cast<int>(base_quals.size()), j = n - 1;
+    bool is_low_qual = true;
+    while (is_low_qual && i < n) {
+        is_low_qual = (base_quals[i] < qual_thresh); ++i;
+    } qs = (--i);
+    
+    is_low_qual = true;
+    while (is_low_qual && j >= 0) {
+        is_low_qual = (base_quals[j] < qual_thresh); --j;
+    } qe = (++j);
+}
+
+//------------------------------------------------------------------------------
 void Read::qualityCheck(const int start, const int end, 
-                        const int qual_thresh, const double freq_thresh) {   
-    
-    const int last_ = static_cast<int>(base_quals.size()) - 1;
-    
-    int i = 0, j = last_; //index
+                        const char qual_thresh, const double freq_thresh) {   
+    int i = 0, j = 0; //index
     for (const auto& elem : idx2pos) {    
         if (!i && start <= elem.second) i = elem.first;
-        if (j == last_ && end > elem.second) j = elem.first;  
+        if (elem.second < end) j = elem.first;  
     }
     if (i == j) return;
+     
+    int non_ref_cnt = 0, dirty_non_ref_cnt = 0;
+    for (int k = i; k <= j; ++k) {
+        if (is_variant(k, var_idx)) {
+            ++non_ref_cnt;
+            if (base_quals[k] < qual_thresh) ++dirty_non_ref_cnt; 
+        }
+    }
     
-    int cnt = 0;
-    for (int k = i; k <= j; ++k)
-        //LOGIC: low qual ref base is likely ref (correctly sequenced)
-        if (base_quals[k] < qual_thresh && is_variant(k, var_idx)) ++cnt;
-    qc_passed = (static_cast<double>(cnt) / (j - i) <= freq_thresh); 
+    if (dirty_non_ref_cnt) 
+        qc_passed = (static_cast<double>(dirty_non_ref_cnt) / non_ref_cnt <= freq_thresh);
+    else qc_passed = true;
 }
+
 
 //------------------------------------------------------------------------------
 void Read::parseLocalPattern(LocalReference& loc_ref, 
@@ -163,7 +180,7 @@ void Read::parseLocalPattern(LocalReference& loc_ref,
         }
     }
      
-    int tmp_d = INT_MAX, dis_kmer = 0, anti_ptrn = 0;
+    int tmp_d = INT_MAX, dis_kmer = 0, anti_ptrn = 0, total_base_changes = 0;
     for (size_t i = 0; i < variants.size(); ++i) {
         // distances from target region to non-target variants
         // note this may not be found by pos comparison alone 
@@ -179,39 +196,49 @@ void Read::parseLocalPattern(LocalReference& loc_ref,
         }
         if (dist_to_non_target > tmp_d) dist_to_non_target = tmp_d;
         
-        if (loc_ref.flanking_start <= v.pos && v._end_pos <= loc_ref.flanking_end)
-            ++anti_ptrn;
-
+        if (loc_ref.flanking_start <= v.pos && v._end_pos <= loc_ref.flanking_end) {
+            ++anti_ptrn; total_base_changes += v.event_len;
+        }
+        
+        // ineffective kmer
+        // ....var1..target...var2...
+        // if targer is the middle of complex event cluster, kmers from target + ref
+        // may not be matched
+        // TODO: AS OF 2026.feb.2, not used. keep this? 
         if (i + 1 < variants.size() 
             && v.pos <= target.pos && target.pos <= variants[i + 1].pos) {
-            
             if (target.pos - v.pos <= kmer_size 
                 && variants[i + 1].pos - target.pos <= kmer_size) ++dis_kmer; 
         }
     }
     has_positional_overlap = (!dist_to_non_target); ineffective_kmer = (dis_kmer); 
     has_anti_pattern = (anti_ptrn == 1); // > 1 may be complex 
+    has_smaller_change = (target.event_len > total_base_changes); 
 
     //clipping
+    int dist_to_clip = INT_MAX;
     if (start_offset) {
-        if (read_start <= target.pos && target.pos <= aln_start) {
-            dist_to_non_target = 0;
+        if (read_start <= target.lpos && target.lpos <= aln_start) {
+            dist_to_clip = 0;
         } else {
             tmp_d = std::abs(target.pos - aln_start);
-            if (dist_to_non_target > tmp_d) dist_to_non_target = tmp_d;
+            if (dist_to_clip > tmp_d) dist_to_clip = tmp_d;
         }
     }
     if (end_offset) {
-        if (aln_end <= target.pos && target.pos <= read_end) {  
-            dist_to_non_target = 0;
+        if (aln_end <= target.rpos && target.rpos <= read_end) {  
+            dist_to_clip = 0;
         } else {
-            tmp_d = std::abs(target.pos - aln_end); 
-            if (dist_to_non_target > tmp_d) dist_to_non_target = tmp_d;
+            tmp_d = std::abs(target.rpos - aln_end); 
+            if (dist_to_clip > tmp_d) dist_to_clip = tmp_d;
         }
     }
 
-    if (dist_to_non_target <= target.event_len + target.rpos - target.lpos) 
+    const int event_radius = target.event_len + target.rpos - target.lpos;
+    if (dist_to_non_target <= event_radius) 
         has_local_events = true;
+    if (dist_to_clip <= event_radius)
+        has_local_clip = true;
 }
 
 void Read::checkByRepeatCount(const Variant& target, bool& has_excess_ins_hap) {
@@ -302,7 +329,9 @@ void Read::isCenterMapped(const Variant& target) {
             i = elem.first; d = std::abs(elem.second - target.pos);
         }
     }
-   
+    
+    if (i < qs || qe < i) has_local_events = false; 
+    
     int quantile = static_cast<int>(idx2pos.size() / 4);
     is_central_mapped = (quantile <= i && i <= quantile * 3);             
 }

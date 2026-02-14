@@ -58,7 +58,9 @@ void aln2nms(Alignment& aln, NMS& nms,
 void aln2variants(Alignment& aln, Vars& vars, const int start,
                   const std::string& ref, const std::string& query) {
     if (!aln.cigar_string.size()) return;
-
+    std::cout << aln.cigar_string << " " << aln.ref_begin << std::endl;
+    std::cout << ref << std::endl;
+    std::cout << query << std::endl;
     CigarVec cigar_vec; fill_cigar_vector(aln.cigar, cigar_vec);
     
     char op = '\0'; int pos = start;
@@ -403,7 +405,7 @@ void match2haplotypes(Pileup& pileup, const Strs& read_seqs, const UserParams& p
                     params.gap_open_penal, params.gap_ext_penal);
      
     for (int i = 0; i < pileup.sz; ++i) {
-        if (pileup.reads[i].rank != 'u') continue; 
+        if (!pileup.reads[i].qc_passed || pileup.reads[i].rank != 'u') continue; 
         
         const auto& query = read_seqs[i].c_str();
         int32_t mask_len = strlen(query) < 30 ? 15 : strlen(query) / 2;  
