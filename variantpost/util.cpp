@@ -25,7 +25,7 @@ LocalReference::LocalReference(const std::string& fastafile,
 }
 
 //-----------------------------------------------------------------------------
-Homopolymer::Homopolymer(const int start_, const int end_, const std::string& base_)
+Homopolymer::Homopolymer(const int start_, const int end_, const char base_)
     : start(start_), end(end_), base(base_) {/* */}
 
 typedef std::unordered_map<std::string_view, int> Dimers;
@@ -112,7 +112,7 @@ void LocalReference::findLowComplexRegion() {
         }
         if (j > i) {
             std::string base{seq[i]};
-            homopoly.emplace_back(i + start, j + start, base);
+            homopoly.emplace_back(i + start, j + start, seq[i]);
             i = j;
         } else { ++i; }
     }
@@ -376,12 +376,13 @@ void Variant::setRightPos(const LocalReference& loc_ref)
     rpos = _pos;
 }
 
-
+//------------------------------------------------------------------------------
 void Variant::setEndPos(const LocalReference& loc_ref)
 {
     setLeftPos(loc_ref); setRightPos(loc_ref);
     end_pos = rpos + ref_len;
     is_shiftable = (rpos != lpos);
+    event_radius = event_len + rpos - lpos;
 }
 
 //------------------------------------------------------------------------------
@@ -412,6 +413,57 @@ void Variant::countRepeats(const LocalReference& loc_ref)
     } 
 
     if (is_ins) ++repeats; //including self
+}
+
+//------------------------------------------------------------------------------
+void Variant::testForDeNovoRepeats(LocalReference& loc_ref) 
+{            
+    // sanity check
+    const int _pos_ = (is_substitute) ? pos - 1 : pos;
+    if (_pos_ < loc_ref.start || loc_ref.end < _end_pos) return;
+    
+    // positional overlap
+    bool overlapping = false;
+    // homopolymer extension
+    bool from_lt = false, from_rt = false;
+    for (size_t i = 0; i < loc_ref.homopoly.size(); ++i) {
+        if (_end_pos == loc_ref.homopoly[i].start) {
+             overlapping = true;
+             if (is_substitute && alt[alt.size() - 1] == loc_ref.homopoly[i].base)
+                 from_lt = true;
+             else if (is_del && ref[0] == loc_ref.homopoly[i].base) 
+                 from_lt = true;
+             else if (is_ins && alt[alt.size() - 1] == loc_ref.homopoly[i].base)
+                 from_lt = true;
+        } 
+        
+        if (_pos_ == loc_ref.homopoly[i].end) {
+            overlapping = true;
+            if (is_substitute && alt[0] == loc_ref.homopoly[i].base)
+                 from_rt = true;
+            else if (is_del && loc_ref.dict.at(_end_pos) == loc_ref.dict.at(_pos_)) 
+                from_rt = true;
+            else if (is_ins && alt[alt.size() - 1] == loc_ref.homopoly[i].base)
+                from_rt = true;
+        }
+
+        if (loc_ref.homopoly[i].start < _pos_ && _pos_ < loc_ref.homopoly[i].end)
+            overlapping = true; 
+    }
+    
+    if (from_lt && from_rt) denovo_rep = 4;
+    else if (from_lt || from_rt) denovo_rep = 3;
+    else if (overlapping) denovo_rep = 2;
+
+    // denovo-rep in non-homoplymer cases
+    if (denovo_rep) return; // already set
+    if (is_del && (loc_ref.dict.at(pos) == loc_ref.dict.at(_end_pos)))
+        denovo_rep = 1;
+    else if (is_substitute) {
+        if (loc_ref._seq[pos - 1 - loc_ref.start] == alt[0]
+            || loc_ref._seq[_end_pos - loc_ref.start] == alt.back())
+            denovo_rep = 1;
+    }  
 }
 
 //------------------------------------------------------------------------------
@@ -1264,16 +1316,23 @@ int enumerate_possible_ins(const int i, const int j, const Vars& vars,
 // Find target in a  list of variant making the haplotype 
 // swappable ins/del considered
 // input is assumed to be non-complex
-int find_target(LocalReference& loc_ref, const Variant& target, Vars& vars) {
+int find_target(LocalReference& loc_ref, 
+                const UserParams& params, const Variant& target, Vars& vars) {
     
     int hom_start = -1, hom_end = -1; 
     bool del_of_hmp = is_homoply_del(target, hom_start, hom_end);
     Ints snvs_in_hmp; 
       
-    int i = -1, j = -1, di = INT_MAX, dj = INT_MAX, d = INT_MAX; 
+    int i = -1, j = -1, di = INT_MAX, dj = INT_MAX, d = INT_MAX,
+        indel_cnt = 0, qc_failed = 0;
     for (int idx = 0; idx < static_cast<int>(vars.size()); ++idx) {
         const auto& v = vars[idx];
         if (target.isEquivalent(v, loc_ref)) return idx;
+        
+        if (v.in_target_flnk) {
+            if (v.is_ins || v.is_del) ++indel_cnt;
+            if (v.mean_qual < params.base_q_thresh) ++qc_failed;
+        }   
         
         // std::cout << vars[idx].pos << " " << vars[idx].ref << " " << vars[idx].alt << std::endl;
         // possible edge_case_02 loci
@@ -1285,6 +1344,9 @@ int find_target(LocalReference& loc_ref, const Variant& target, Vars& vars) {
         if (d < di) {j = i; dj = di; i = idx; di = d;} 
         else if (di < d && d < dj) {j = idx; dj = d;}      
     }
+    
+    // Edge cases only apply to high quality cases with indels
+    if (!indel_cnt || qc_failed) return -1;
     
     //std::cout << i << " " << j << std::endl;
 

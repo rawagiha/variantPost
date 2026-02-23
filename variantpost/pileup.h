@@ -30,6 +30,10 @@ struct Pileup {
     Reads reads; 
     
     //--------------------------------------------------------------------------
+    // variants between flank start/end in non-supporting reads
+    std::unordered_map<Variant, int>  ns_vars; 
+    
+    //--------------------------------------------------------------------------
     Idx sig_s_hiconf, sig_s, sig_u, u_sig_annot;
     int hiconf_read_idx = -1; // for index-case read in Pileup.reads
       

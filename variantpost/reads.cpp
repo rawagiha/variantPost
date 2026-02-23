@@ -75,6 +75,9 @@ void Read::setVariants(LocalReference& loc_ref) {
     read2variants(aln_start, ref_seq, seq, base_quals, 
                    cigar_vector, loc_ref.dict, variants, var_idx, idx2pos);
 
+    for (auto& v : variants) 
+        v.in_target_flnk = (loc_ref.flanking_start <= v.pos && v.pos <= loc_ref.flanking_end); 
+    
     if (variants.size() > 1)
         std::sort(variants.begin(), variants.end()); 
 }
@@ -169,9 +172,9 @@ void Read::qualityCheck(const int start, const int end,
 
 //------------------------------------------------------------------------------
 void Read::parseLocalPattern(LocalReference& loc_ref, 
-                             const Variant& target, const int kmer_size) {
+                             const Variant& target, const UserParams& params) {
     if (!target.is_complex) {
-        int idx = find_target(loc_ref, target, variants); 
+        int idx = find_target(loc_ref, params, target, variants); 
         if (idx != -1) {
             has_target = true; target_idx = idx;
             auto& v = variants[idx];
@@ -180,12 +183,15 @@ void Read::parseLocalPattern(LocalReference& loc_ref,
         }
     }
      
-    int tmp_d = INT_MAX, dis_kmer = 0, anti_ptrn = 0, total_base_changes = 0;
+    int kmer_size = params.kmer_size; // TODO consider if this is needed.
+    
+    int tmp_d = INT_MAX, dis_kmer = 0, anti_ptrn = 0, 
+        total_base_changes = 0, sub_cnt = 0, indel_cnt = 0;
     for (size_t i = 0; i < variants.size(); ++i) {
-        // distances from target region to non-target variants
-        // note this may not be found by pos comparison alone 
-        // for example for long deletions
         auto& v = variants[i]; v.setEndPos(loc_ref);
+        
+        if (v.is_substitute) ++sub_cnt; else ++indel_cnt;
+
         if (target.end_pos < v.lpos || v.end_pos < target.lpos) {
             tmp_d = std::abs(target.end_pos - v.lpos);
             if (dist_to_non_target > tmp_d) dist_to_non_target = tmp_d;
@@ -205,6 +211,8 @@ void Read::parseLocalPattern(LocalReference& loc_ref,
         // if targer is the middle of complex event cluster, kmers from target + ref
         // may not be matched
         // TODO: AS OF 2026.feb.2, not used. keep this? 
+        // UPDATE: realn aginst ref with target included only for complex indels 
+        //         with ineffective kmer?? (Feb.23.)
         if (i + 1 < variants.size() 
             && v.pos <= target.pos && target.pos <= variants[i + 1].pos) {
             if (target.pos - v.pos <= kmer_size 
@@ -212,8 +220,6 @@ void Read::parseLocalPattern(LocalReference& loc_ref,
         }
     }
     has_positional_overlap = (!dist_to_non_target); ineffective_kmer = (dis_kmer); 
-    has_anti_pattern = (anti_ptrn == 1); // > 1 may be complex 
-    has_smaller_change = (target.event_len > total_base_changes); 
 
     //clipping
     int dist_to_clip = INT_MAX;
@@ -234,11 +240,23 @@ void Read::parseLocalPattern(LocalReference& loc_ref,
         }
     }
 
-    const int event_radius = target.event_len + target.rpos - target.lpos;
-    if (dist_to_non_target <= event_radius) 
+    if (dist_to_non_target <= target.event_radius) 
         has_local_events = true;
-    if (dist_to_clip <= event_radius)
+    if (dist_to_clip <= target.event_radius)
         has_local_clip = true;
+
+    // No local clip + followind cond. -> unlikely supporting
+    if (!has_local_clip) {
+        // only 1 non-target event in flnk start/end (>1 may be complex-target) 
+        if (anti_ptrn == 1) has_anti_pattern = true; 
+        
+        // smaller N of bases changed than target
+        if (target.event_len > total_base_changes) has_smaller_change = true;
+        
+        // indel target but no indel in flnk start/end
+        if (!target.is_substitute && !indel_cnt && (anti_ptrn == sub_cnt)) 
+            has_anti_pattern = true;
+    }
 }
 
 void Read::checkByRepeatCount(const Variant& target, bool& has_excess_ins_hap) {
@@ -320,8 +338,8 @@ void Read::isStableNonReferenceAlignment(LocalReference& loc_ref) {
 }
 
 //------------------------------------------------------------------------------
-// test if target locus is mapped in the middle of mapped read len tertiles
-// RELAXED: test if target locus is mapped in 2nd/3rd quartile
+// test if target locus is mapped in extreme ends (1/8 or 8/8)
+// TODO use this for long-read cases?
 void Read::isCenterMapped(const Variant& target) {
     int d = INT_MAX, i = -1;
     for (const auto& elem : idx2pos) {
@@ -332,8 +350,8 @@ void Read::isCenterMapped(const Variant& target) {
     
     if (i < qs || qe < i) has_local_events = false; 
     
-    int quantile = static_cast<int>(idx2pos.size() / 4);
-    is_central_mapped = (quantile <= i && i <= quantile * 3);             
+    int quintile = static_cast<int>(idx2pos.size() / 8);
+    is_central_mapped = (quintile <= i && i <= quintile * 7);             
 }
 
 //------------------------------------------------------------------------------

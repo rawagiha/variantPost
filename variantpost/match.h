@@ -20,6 +20,7 @@ typedef std::vector<NonMatch> NMS;
 void gap_grid(const UserParams& params, std::vector<Ints>& grid);
 
 bool search_over_grid(const int start, LocalReference& loc_ref,
+                      const UserParams& params, const size_t n_vars,
                       const std::string& refseq, const std::string& query,
                       const std::vector<Ints>& grid, const Variant& target);
 

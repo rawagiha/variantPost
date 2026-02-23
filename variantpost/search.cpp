@@ -58,7 +58,8 @@ void _search_target(SearchResult& rslt,
     // TODO how to include de-novo homopolymer
     target.setFlankingSequences(loc_ref); 
     target.countRepeats(loc_ref);
-    
+    target.testForDeNovoRepeats(loc_ref);
+    std::cout << target.denovo_rep << std::endl;
     // pileup setup
     // 1. reads are check for target based on the original alignment
     // 2. non-target/non-ref variations located in read-middle, surrounded 
@@ -68,6 +69,13 @@ void _search_target(SearchResult& rslt,
                   are_from_first_bam, has_second, 
                   params, loc_ref, target);
     
+    for (const auto& read : pileup.reads) {
+        if (read.rank == 's')  {std::cout << read.name << " " << read.is_reverse << " " << read.aln_start << std::endl;
+            for (auto& v : read.variants) std::cout << v.pos << " " << v.ref << " " << v.alt << std::endl;
+        }
+    }
+    
+    std::cout << pileup.s_cnt << " s nct " << std::endl; 
     // grid-seach for target only if no target found in pileup setup
     // reads with signature-u are tested if 
     // there exists optimal alignments that explicitly aligns the target

@@ -56,10 +56,11 @@ struct UserParams {
 //------------------------------------------------------------------------------
 // 
 struct Homopolymer {
-    Homopolymer(const int start, const int end, const std::string& base);
+    Homopolymer(const int start, const int end, const char base);
     int start = -1;
     int end = -1;
-    std::string base;
+    //std::string base;
+    char base;
 };
 
 //------------------------------------------------------------------------------
@@ -104,13 +105,14 @@ struct Variant {
     void setLeftPos(const LocalReference& loc_ref);
     void setRightPos(const LocalReference& loc_ref);
     void setEndPos(const LocalReference& loc_ref);
-    
+     
     //--------------------------------------------------------------------------
     // set left-flanking, inserted seq (middle), right flanking
     void setFlankingSequences(const LocalReference& loc_ref);
     
     void countRepeats(const LocalReference& loc_ref);
-
+    void testForDeNovoRepeats(LocalReference& loc_ref);
+    
     //--------------------------------------------------------------------------
     // test variant identity after normalization
     bool isEquivalent(const Variant& v, const LocalReference& loc_ref) const;
@@ -137,7 +139,10 @@ struct Variant {
     int _end_pos = pos + ref_len; // end position before right-aligned
     int end_pos = rpos + ref_len; // end postion of event after right-aligned
     int mean_qual = INT_MAX; // mean base quality of alt allele sequence
-    
+    int denovo_rep = 0; // 0: not denovo rep creating 1: denovo-rep creating 
+                        // 2: extending homopolymer 3: connecting homopolymers
+    int event_radius = 0; // event_len + shiftable range (rpos -lpos) 
+     
     //--------------------------------------------------------------------------
     // boolean flags
     bool has_n = false; // true if "N" base in alleles
@@ -146,6 +151,7 @@ struct Variant {
     bool is_substitute = false;
     bool is_complex = false; // true if complex event
     bool is_shiftable = false; // true if left- and right-positions are different
+    bool in_target_flnk = false; // true if located within target's flnk start/end
 };
 
 //------------------------------------------------------------------------------
@@ -189,7 +195,8 @@ void read2variants(const int aln_start, std::string_view ref_seq,
 //                Alignment& aln, NonRefs& nrs);
 
 //------------------------------------------------------------------------------
-int find_target(LocalReference& loc_ref, const Variant& target, Vars& vars);
+int find_target(LocalReference& loc_ref, 
+                const UserParams& params, const Variant& target, Vars& vars);
 
 //------------------------------------------------------------------------------
 // make seq with Vars and index it

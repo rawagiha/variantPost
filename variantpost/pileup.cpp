@@ -46,7 +46,8 @@ Pileup::Pileup(const Strs& names, const Bools& is_rv, const Strs& cigar_strs,
         read.parseCoveringPattern(loc_ref, target);
         if (read.covering_ptrn == 'C') continue;
 
-        read.parseLocalPattern(loc_ref, target, kmer_sz);
+        read.parseLocalPattern(loc_ref, target, params);
+
         read.qualityCheck(qc_start, qc_end, params.base_q_thresh, params.lq_rate_thresh);
         read.trimLowQualBases(params.base_q_thresh);    
         read.isStableNonReferenceAlignment(loc_ref); 
@@ -72,14 +73,20 @@ Pileup::Pileup(const Strs& names, const Bools& is_rv, const Strs& cigar_strs,
             read.setSignatureStrings(params); 
             read.checkByRepeatCount(target, has_excess_ins_hap);
             
+            std::cout << read.name << " " << read.is_central_mapped << " " << read.is_stable_non_ref << " " << read.qc_passed << " " << read.covered_in_clip << std::endl;
             // sigle, but non-target mutation closed by complex seq (anti-pattern)
             // example:
             //      target    del(C)
             //                    *
             //        ref GCTAAAAACAAAATGC
             //      read  GCTAAAAAAAAAATGC  de-novo homopolymer
-            if (read.is_central_mapped && !read.covered_in_clip && (read.has_anti_pattern || read.has_smaller_change)) { 
+            if (read.is_stable_non_ref && (read.has_anti_pattern || read.has_smaller_change)) { 
                 read.rank = 'n'; ++n_cnt; --u_cnt;
+                for (auto& v : read.variants) { 
+                    if (v.in_target_flnk) { 
+                        v.testForDeNovoRepeats(loc_ref); ns_vars[v]++; 
+                    } 
+                }
             }
 
             if (read.rank != 'n') {
@@ -90,7 +97,7 @@ Pileup::Pileup(const Strs& names, const Bools& is_rv, const Strs& cigar_strs,
             // 1. capped with enough 2-mer diversity (is_stable_non_ref)
             // 2. mapped in 2nd/3rd readlen quartile (is_central_mapped)
             // 3. local freq of dirty base < thresh (qc_passed)
-            if (read.is_quality_map && read.qc_passed && !read.covered_in_clip) {
+            if (read.is_stable_non_ref && read.qc_passed && !read.covered_in_clip) {
                 sig_u[read.non_ref_sig].push_back(i); // register sig
                 
                 // annot for signature usage: (kmer, overlap, grid-search)
@@ -144,32 +151,68 @@ Pileup::Pileup(const Strs& names, const Bools& is_rv, const Strs& cigar_strs,
 
 
 //-----------------------------------------------------------------------------
+// This method tends to overanalyze 
+// -> tighter conditions to apply
+// Should be run when targe is suspected to be a part of complex indels 
 void Pileup::gridSearch(const UserParams& params, 
                         LocalReference& loc_ref, const Variant& target) {
-    if (s_cnt || sig_u.empty()) return;
+    
+    // Condition 0
+    // Skip if target is homopolymer extending 
+    if (s_cnt || sig_u.empty() || target.denovo_rep > 2) return;
 
     make_sequence(loc_ref, {}, start, end, rseq, &i2p_r);
     
     PatternCnt u_sig_cnts;
     count_patterns(sig_u, u_sig_cnts);
     
+    std::cout << ns_vars.size() << " check size " << std::endl;
+    const int tot = s_cnt + n_cnt + u_cnt; 
+    // Condition 1
+    // Skip if background hap involves homoplymer variations
+    //   Step1: check for homopolymer involvment (denovo_rep)
+    //   Step2: define as background hap if freq is > 0.1
+    for (const auto& elem : ns_vars) {
+        std::cout << elem.first.pos << " " << elem.first.ref << " " << elem.first.alt << " " << elem.first.denovo_rep << " " << elem.second << std::endl;
+        if (elem.first.denovo_rep > 1 && elem.second * 10 > tot) return;
+    }
+
     std::string query;
     for (const auto& _sig : u_sig_cnts) {
-        // with anti-pattern/smaller change -> skip 
+        // Condition 3
+        // Skip with anti-pattern/smaller than target changes
         if (u_sig_annot[_sig.first][2] == 1) continue;    
         
-        // prep for grid search
         Vars vars;
-        for (const auto& v : reads[sig_u[_sig.first][0]].variants) {
+        bool skip_this = false;
+        const int target_end = target._end_pos; 
+        for (auto& v : reads[sig_u[_sig.first][0]].variants) {
+            // Condition 4
+            // Skip with variations recurrently found 
+            //           in reads already ranked as 'n' 
+            //           also in target flank start/end                                   
+            if (ns_vars.count(v) && ns_vars[v] > 1) {
+                skip_this = true; break;
+            }
+            
+            // Condition 5
+            // Do not realn with homopolymer extending vars
+            v.testForDeNovoRepeats(loc_ref);
+            if (v.in_target_flnk && v.denovo_rep > 2) {
+                skip_this = true; break;
+            }
+            
+            // Condition 6
+            // Do not use low quality variations
             if (v.mean_qual > params.base_q_thresh) vars.push_back(v);
         }
-        if (vars.empty()) continue;
+        if (skip_this ||vars.empty()) continue;
         
         make_sequence(loc_ref, vars, start, end, query);
 
         // grid-search
         std::vector<Ints> grid; gap_grid(params, grid);
-        const bool res = search_over_grid(start, loc_ref, rseq, query, grid, target);
+        const bool res = search_over_grid(start, loc_ref, params, vars.size(), rseq, query, grid, target);
         
         if (res) {
             const auto& read_idxes = sig_u[_sig.first];
@@ -250,6 +293,9 @@ void Pileup::setHaploTypes(LocalReference& loc_ref, const Variant& target) {
 //------------------------------------------------------------------------------
 void Pileup::differentialKmerAnalysis(const UserParams& params, 
                                       LocalReference& loc_ref, const Variant& target) {
+    
+    if (target.denovo_rep == 3) return;
+    
     Kmers km0, km1, km2, kmr, km12, km12r;   
     
     // target kmers
@@ -300,7 +346,7 @@ void Pileup::differentialKmerAnalysis(const UserParams& params,
             if (read.seq.find(kmer) != std::string_view::npos) {
                 int overlap_start = static_cast<int>(read.seq.find(kmer));
                 if (read.qs <= overlap_start && overlap_start + kmer_sz <= read.qe) ++(read.smer);
-                std::cout << read.name << " " << read.is_reverse << " " << read.cigar_str << std::endl; 
+                std::cout << read.name << " " << read.is_reverse << " " << read.cigar_str << " " << read.has_anti_pattern<< " " << read.has_smaller_change << " " << read.is_central_mapped << " " << read.is_stable_non_ref << std::endl; 
             }
         }
         if (kmers_nt.size() && read.smer > read.nmer) { 

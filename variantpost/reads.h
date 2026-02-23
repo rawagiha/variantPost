@@ -29,7 +29,7 @@ struct Read {
     //--------------------------------------------------------------------------
     // find target and non-target variations
     void parseLocalPattern(LocalReference& loc_ref, 
-                           const Variant& target, const int kmer_size);
+                           const Variant& target, const UserParams& params);
     
     void checkByRepeatCount(const Variant& target, bool& has_excess_ins_hap);
     

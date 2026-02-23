@@ -158,6 +158,7 @@ void gap_grid(const UserParams& params, std::vector<Ints>& grid) {
 }
 
 bool search_over_grid(const int start, LocalReference& loc_ref,
+                      const UserParams& params, const size_t n_vars,
                       const std::string& refseq, const std::string& query, 
                       const std::vector<Ints>& grid, const Variant& target) {
     Alignment aln; Filter filter;
@@ -173,8 +174,9 @@ bool search_over_grid(const int start, LocalReference& loc_ref,
         for(auto& v : vars) {
             std::cout << v.pos << " " << v.ref << " " << v.alt << "- ";
         }
-        std::cout << std::endl;
-        if (find_target(loc_ref, target, vars) > -1) return true;
+        if (vars.size() > n_vars) return false;
+        std::cout << " total " << vars.size() << std::endl;
+        if (find_target(loc_ref, params, target, vars) > -1) return true;
         vars.clear(); 
     }
     return false;    
