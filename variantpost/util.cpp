@@ -75,30 +75,61 @@ void LocalReference::setFlankingBoundary(const Variant& target, const size_t win
     
     if (flanking_start > 0 && flanking_end > 0) has_flankings = true;
     else return; 
-        
-    // find the length of low 2-mer diversity sequence len
-    std::set<int> found; size_t prev_cnt = 0; 
-    low_cplx_start = flanking_start - start;
-    int i = flanking_start - start;
-    int tmp = low_cplx_len;
-    for (/* */; i <  flanking_end - start + 1; ++i) {
-        found.insert(dimers[seq.substr(i, 2)]);
-        std::cout << i << " " << found.size() << " " << prev_cnt << " " << low_cplx_start << " " << low_cplx_len << std::endl;
-        if ((found.size() - prev_cnt > 1) && ( i - low_cplx_start > low_cplx_len) ) {
-            low_cplx_len = i - low_cplx_start;
-            low_cplx_start = i; prev_cnt = found.size();
+    
+    const int start_idx = flanking_start - start;
+    const int sz = flanking_end - flanking_start;
+    
+    // 2-mer set in sequence startig from t and ending at s
+    // dimer(t, s - 1) + seq.substr(s - 1, 2) -> dimer_set(t, s)
+    // dimer(t, s - 1) was memorized and re-used (i.e., DP)   
+    std::vector<std::vector<std::set<int>>> dimer_mtx(sz, std::vector<std::set<int>>(sz));
+    std::set<int> init;
+    dimer_mtx[0][0] = init;
+    for (int s = 1; s < sz; ++s) {
+        for (int t = 0; t < s; ++t) {
+            std::set<int> elem = dimer_mtx[t][s - 1];
+            elem.insert(dimers[seq.substr(start_idx + s - 1, 2)]);
+            dimer_mtx[t][s] = elem;
         }
     }
+   
+    double lowest = 16.0; // There are 16 dimers
+    int n = -1, m = -1;
+    for (int s = 1; s < sz; ++s) {
+        for (int t = 0; t < s; ++t) {
+            double curr = static_cast<double>(dimer_mtx[t][s].size()) / ( s - t );
+            if (curr < lowest) {lowest = curr; n = t; m = s; }
+        }
+    } 
+    
+    if (n > -1 && m > -1) { 
+        low_cplx_start = start_idx + n; low_cplx_len = m - n; 
+        std::cout << seq.substr(start_idx + n, low_cplx_len) << " " << low_cplx_len << std::endl;
+    }
+    
+    // find the length of low 2-mer diversity sequence len
+    //std::set<int> found; size_t prev_cnt = 0; 
+    //low_cplx_start = flanking_start - start;
+    //int i = flanking_start - start;
+    //int tmp = low_cplx_len;
+    //for (/* */; i <  flanking_end - start + 1; ++i) {
+    //    found.insert(dimers[seq.substr(i, 2)]);
+    //    std::cout << i << " " << found.size() << " " << prev_cnt << " " << low_cplx_start << " " << low_cplx_len << std::endl;
+    //    if ((found.size() - prev_cnt > 1) && ( i - low_cplx_start > low_cplx_len) ) {
+    //        low_cplx_len = i - low_cplx_start;
+    //        low_cplx_start = i; prev_cnt = found.size();
+    //    }
+    //}
     
     // dimers have 16 patterns
-    if (found.size() == 16) {
-        found.clear(); prev_cnt = 0; low_cplx_start = i;
-        if (i - low_cplx_start > low_cplx_len) low_cplx_len = i - low_cplx_start;
-    }      
+    //if (found.size() == 16) {
+    //    found.clear(); prev_cnt = 0; low_cplx_start = i;
+    //    if (i - low_cplx_start > low_cplx_len) low_cplx_len = i - low_cplx_start;
+    //}      
     
-    if (i - low_cplx_start > low_cplx_len) low_cplx_len = i - low_cplx_start;
+    //if (i - low_cplx_start > low_cplx_len) low_cplx_len = i - low_cplx_start;
 
-    std::cout << flanking_start << " " << low_cplx_start << " " << low_cplx_len << " " << flanking_end << std::endl;
+    //std::cout << flanking_start << " " << low_cplx_start << " " << low_cplx_len << " " << flanking_end << std::endl;
 }
 
 void LocalReference::findLowComplexRegion() {
@@ -399,6 +430,14 @@ void Variant::setFlankingSequences(const LocalReference& loc_ref)
 }
 
 //------------------------------------------------------------------------------
+void Variant::isInFlanking(const LocalReference& loc_ref) 
+{
+    setEndPos(loc_ref); if (lpos < 0 || rpos < 0) return;
+    if (loc_ref.flanking_start <= rpos && lpos <= loc_ref.flanking_end)
+        in_target_flnk = true;
+}
+
+//------------------------------------------------------------------------------
 void Variant::countRepeats(const LocalReference& loc_ref)
 {
     if (is_substitute || !is_shiftable || is_complex) return; 
@@ -418,6 +457,8 @@ void Variant::countRepeats(const LocalReference& loc_ref)
 //------------------------------------------------------------------------------
 void Variant::testForDeNovoRepeats(LocalReference& loc_ref) 
 {            
+    if (is_complex) return;
+
     // sanity check
     const int _pos_ = (is_substitute) ? pos - 1 : pos;
     if (_pos_ < loc_ref.start || loc_ref.end < _end_pos) return;

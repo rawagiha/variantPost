@@ -21,7 +21,7 @@ Read::Read(std::string_view name_, const bool is_rv,
 void Read::setReference(LocalReference& loc_ref) {
     int loc_ref_len = static_cast<int>(loc_ref.seq.size());
     int pos_2 = read_start; // for coordinate setup    
-  
+ 
     if (cigar_str.find('N') == std::string_view::npos) {
         int _idx = aln_start - loc_ref.start; // idx on local reference 
         int _ref_len = aln_end - aln_start + 1; // expected refseq len
@@ -73,10 +73,9 @@ void Read::setVariants(LocalReference& loc_ref) {
     
     // from util.h
     read2variants(aln_start, ref_seq, seq, base_quals, 
-                   cigar_vector, loc_ref.dict, variants, var_idx, idx2pos);
+                  cigar_vector, loc_ref.dict, variants, var_idx, idx2pos);
 
-    for (auto& v : variants) 
-        v.in_target_flnk = (loc_ref.flanking_start <= v.pos && v.pos <= loc_ref.flanking_end); 
+    for (auto& v : variants) { v.isInFlanking(loc_ref); ++flnk_v_cnt; }
     
     if (variants.size() > 1)
         std::sort(variants.begin(), variants.end()); 
@@ -133,12 +132,16 @@ inline bool is_variant(const int idx, const Ints& var_idx) {
 }
 
 //------------------------------------------------------------------------------
+//Find consecutive low-qaul bases from ends
+//qs: quality segment start 
+//qe: quality segment end
 void Read::trimLowQualBases(const char qual_thresh) {
-    int i = 0, n = static_cast<int>(base_quals.size()), j = n - 1;
+    const int n = static_cast<int>(base_quals.size());
+    int i = 0, j = n - 1;
     bool is_low_qual = true;
     while (is_low_qual && i < n) {
         is_low_qual = (base_quals[i] < qual_thresh); ++i;
-    } qs = (--i);
+    } qs = (--i); 
     
     is_low_qual = true;
     while (is_low_qual && j >= 0) {
@@ -147,6 +150,7 @@ void Read::trimLowQualBases(const char qual_thresh) {
 }
 
 //------------------------------------------------------------------------------
+//Calc. freq of low quality non-ref bases between start/end
 void Read::qualityCheck(const int start, const int end, 
                         const char qual_thresh, const double freq_thresh) {   
     int i = 0, j = 0; //index
@@ -169,7 +173,6 @@ void Read::qualityCheck(const int start, const int end,
     else qc_passed = true;
 }
 
-
 //------------------------------------------------------------------------------
 void Read::parseLocalPattern(LocalReference& loc_ref, 
                              const Variant& target, const UserParams& params) {
@@ -188,8 +191,8 @@ void Read::parseLocalPattern(LocalReference& loc_ref,
     int tmp_d = INT_MAX, dis_kmer = 0, anti_ptrn = 0, 
         total_base_changes = 0, sub_cnt = 0, indel_cnt = 0;
     for (size_t i = 0; i < variants.size(); ++i) {
-        auto& v = variants[i]; v.setEndPos(loc_ref);
-        
+        auto& v  = variants[i];
+
         if (v.is_substitute) ++sub_cnt; else ++indel_cnt;
 
         if (target.end_pos < v.lpos || v.end_pos < target.lpos) {
@@ -202,8 +205,11 @@ void Read::parseLocalPattern(LocalReference& loc_ref,
         }
         if (dist_to_non_target > tmp_d) dist_to_non_target = tmp_d;
         
-        if (loc_ref.flanking_start <= v.pos && v._end_pos <= loc_ref.flanking_end) {
+        if (v.in_target_flnk) {
             ++anti_ptrn; total_base_changes += v.event_len;
+            
+            // TODO Add logic here
+            if (!target.is_complex && v.is_shiftable) has_anti_pattern = true;
         }
         
         // ineffective kmer
@@ -251,8 +257,9 @@ void Read::parseLocalPattern(LocalReference& loc_ref,
         if (anti_ptrn == 1) has_anti_pattern = true; 
         
         // smaller N of bases changed than target
-        if (target.event_len > total_base_changes) has_smaller_change = true;
-        
+        if (!target.is_complex 
+            && target.event_len > total_base_changes) has_smaller_change = true;
+        std::cout << target.event_len << " " <<  total_base_changes << " " << name << " " << cigar_str << "  " << indel_cnt << " " << sub_cnt << " " << anti_ptrn << std::endl;
         // indel target but no indel in flnk start/end
         if (!target.is_substitute && !indel_cnt && (anti_ptrn == sub_cnt)) 
             has_anti_pattern = true;
@@ -328,6 +335,7 @@ void Read::setSignatureStrings(const UserParams& params) {
 // non-ref alignments bounded by steep increase in dimer diversity (flanking)
 void Read::isStableNonReferenceAlignment(LocalReference& loc_ref) {
     // fail to cove flanking boundaries defined by maxinum dimer-diverisity increase
+    std::cout << name << " " << cigar_str << " " << qc_passed << " " << loc_ref.flanking_start << " " << covering_start << " " << covering_end << " " << loc_ref.flanking_end << std::endl;
     if (loc_ref.flanking_start < covering_start || covering_end < loc_ref.flanking_end) {
         fail_to_cover_flankings = true; return;
     } 
@@ -338,9 +346,13 @@ void Read::isStableNonReferenceAlignment(LocalReference& loc_ref) {
 }
 
 //------------------------------------------------------------------------------
-// test if target locus is mapped in extreme ends (1/8 or 8/8)
+// True if flanking start/end is mapped within
+// Test if target locus is mapped in extreme ends (1/8 or 8/8)
 // TODO use this for long-read cases?
 void Read::isCenterMapped(const Variant& target) {
+    
+     
+    
     int d = INT_MAX, i = -1;
     for (const auto& elem : idx2pos) {
         if (std::abs(elem.second - target.pos) < d) {
@@ -357,6 +369,34 @@ void Read::isCenterMapped(const Variant& target) {
 //------------------------------------------------------------------------------
 // use if input is complex indel
 void Read::hasTargetComplexIndel(LocalReference& loc_ref, const Variant& target) {
+    
+    const size_t mid_len = target.mid_seq.size();
+    
+    bool left_match = false;
+    auto left_it = seq.find(target.lt_seq);
+    if (left_it != std::string_view::npos) {
+        left_it += target.lt_seq.size();
+        left_match = (seq.substr(left_it, mid_len) == target.mid_seq);
+        if (left_match) {
+            std::cout << seq.substr(left_it, mid_len) << " lt  " << target.mid_seq << std::endl;
+        }
+    }
+
+    bool right_match = false;
+    auto right_it = seq.find(target.rt_seq);
+    if (right_it != std::string_view::npos && right_it >= mid_len) {
+        right_match = (seq.substr(right_it - mid_len,  mid_len) == target.mid_seq);
+        if (left_match) {
+            std::cout << seq.substr(right_it - mid_len,  mid_len) << " " << target.mid_seq << std::endl;
+        }
+        if (right_match) {
+            std::cout << seq.substr(right_it - mid_len,  mid_len) << " r t " << target.mid_seq << std::endl;
+        }
+    }
+   
+    if (left_match && right_match) { has_target = true; return; }
+    return;
+
     int i = -1;
     for (const auto& elem : idx2pos) {
         if (elem.second == loc_ref.flanking_start) { i = elem.first; break; }
@@ -365,6 +405,14 @@ void Read::hasTargetComplexIndel(LocalReference& loc_ref, const Variant& target)
     
     int lt_len = static_cast<int>(target.lt_seq.size());
     int rt_len = static_cast<int>(target.rt_seq.size());
+    
+    const int seq_len = static_cast<int>(seq.size());
+    
+    if (seq_len < i + lt_len + target.alt_len) return;
+    
+    std::cout << seq.substr(i, lt_len) << " " << target.lt_seq << std::endl;
+    std::cout << seq.substr(i + lt_len, target.alt_len) << " " << target.mid_seq << std::endl;
+    std::cout << seq.substr(i + lt_len + target.alt_len, rt_len) << " " << target.rt_seq << std::endl;
     if (seq.substr(i, lt_len) != target.lt_seq) return;
     if (seq.substr(i + lt_len, target.alt_len) != target.mid_seq) return;
     if (seq.substr(i + lt_len + target.alt_len, rt_len) != target.rt_seq) return;

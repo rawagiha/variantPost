@@ -105,10 +105,15 @@ struct Variant {
     void setLeftPos(const LocalReference& loc_ref);
     void setRightPos(const LocalReference& loc_ref);
     void setEndPos(const LocalReference& loc_ref);
+    
      
     //--------------------------------------------------------------------------
     // set left-flanking, inserted seq (middle), right flanking
     void setFlankingSequences(const LocalReference& loc_ref);
+    
+    //--------------------------------------------------------------------------
+    // test if within flanking start/end after lt/rt-realign
+    void isInFlanking(const LocalReference& loc_ref);
     
     void countRepeats(const LocalReference& loc_ref);
     void testForDeNovoRepeats(LocalReference& loc_ref);

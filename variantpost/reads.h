@@ -120,6 +120,7 @@ struct Read {
     Vars variants;
     int target_idx = -1; // target variant idx in variants (vector<Variants>)
     int target_pos = -1;  // genomic pos in the input (possibly non-normalized)
+    int flnk_v_cnt = 0; // count of variants in flanking start/end
     std::string target_ref = "N"; // ref allele (possibly non-normalized)
     std::string target_alt = "N"; // alt allele (possibly non-normalized)
 

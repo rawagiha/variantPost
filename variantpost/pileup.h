@@ -35,6 +35,7 @@ struct Pileup {
     
     //--------------------------------------------------------------------------
     Idx sig_s_hiconf, sig_s, sig_u, u_sig_annot;
+    std::vector<std::string_view> antis;
     int hiconf_read_idx = -1; // for index-case read in Pileup.reads
       
     //--------------------------------------------------------------------------
