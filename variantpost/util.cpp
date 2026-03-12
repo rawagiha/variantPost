@@ -85,23 +85,18 @@ void LocalReference::setFlankingBoundary(const Variant& target, const size_t win
     std::vector<std::vector<std::set<int>>> dimer_mtx(sz, std::vector<std::set<int>>(sz));
     std::set<int> init;
     dimer_mtx[0][0] = init;
+    int n = -1, m = -1;
+    double lowest = 16.0, curr = 16.0; // theoretical max 
     for (int s = 1; s < sz; ++s) {
         for (int t = 0; t < s; ++t) {
             std::set<int> elem = dimer_mtx[t][s - 1];
             elem.insert(dimers[seq.substr(start_idx + s - 1, 2)]);
             dimer_mtx[t][s] = elem;
+            curr = static_cast<double>(dimer_mtx[t][s].size()) / ( s - t );
+            if (curr < lowest) { lowest = curr; n = t; m = s; }
         }
     }
    
-    double lowest = 16.0; // There are 16 dimers
-    int n = -1, m = -1;
-    for (int s = 1; s < sz; ++s) {
-        for (int t = 0; t < s; ++t) {
-            double curr = static_cast<double>(dimer_mtx[t][s].size()) / ( s - t );
-            if (curr < lowest) {lowest = curr; n = t; m = s; }
-        }
-    } 
-    
     if (n > -1 && m > -1) { 
         low_cplx_start = start_idx + n; low_cplx_len = m - n; 
         std::cout << seq.substr(start_idx + n, low_cplx_len) << " " << low_cplx_len << std::endl;

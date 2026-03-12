@@ -38,6 +38,8 @@ struct Read {
     void qualityCheck(const int start, const int end, 
                       const char qual_thresh, const double freq_thresh); 
    
+    //--------------------------------------------------------------------------
+    // find strech of low qual bases from both ends
     void trimLowQualBases(const char qual_thresh);  
     
     //--------------------------------------------------------------------------
@@ -66,8 +68,6 @@ struct Read {
     std::string_view base_quals; // base quality string 
     int qs = -1; int qe = -1; // read seq start/end index after trimming low qual bases
     
-    //std::vector<Qual> non_ref_quals; // base quality for variant and clipped bases
-
     //--------------------------------------------------------------------------
     // genome coordinates (1-based) 
     int aln_start = 0; int aln_end = 0; // alignment start/end 

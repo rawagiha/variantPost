@@ -77,10 +77,14 @@ Pileup::Pileup(const Strs& names, const Bools& is_rv, const Strs& cigar_strs,
         } else if (read.has_local_events) {
             read.rank = 'u'; ++u_cnt;
             read.setSignatureStrings(params); 
+            
+            //if (target.is_substitute && read.covering_ptrn == 'A') {
+            //    read.rank == 'n'; +n_cnt; --u_cnt;
+            //    continue;
+            //}
+
+
             read.checkByRepeatCount(target, has_excess_ins_hap);
-            
-            //std::cout << read.name << " " << read.is_central_mapped << " " << read.is_stable_non_ref << " " << read.qc_passed << " " << read.has_local_clip << " " << read.has_anti_pattern << " sml " << read.has_smaller_change << std::endl;
-            
             
             // Rank "anti-pattern" & "smaller change" as 'n'
             // Anti-pattern:
@@ -95,7 +99,9 @@ Pileup::Pileup(const Strs& names, const Bools& is_rv, const Strs& cigar_strs,
             // 
             // Store such variants in ns_vars 
             if (read.is_stable_non_ref && (read.has_anti_pattern || read.has_smaller_change)) { 
-                if (read.has_anti_pattern) antis.push_back(read.non_ref_sig);
+                if (read.has_anti_pattern) anti_sigs.push_back(read.non_ref_sig);
+                
+                std::cout << " n reads " << read.name << " " << read.cigar_str << std::endl;
                 read.rank = 'n'; ++n_cnt; --u_cnt;
                 for (auto& v : read.variants) { 
                     if (v.in_target_flnk) { 
@@ -128,8 +134,8 @@ Pileup::Pileup(const Strs& names, const Bools& is_rv, const Strs& cigar_strs,
                 if (read.rank == 'n') { u_sig_annot[read.non_ref_sig][2] = 1; }
             }
         } else { 
-            read.rank = 'n'; ++n_cnt;
-            if (read.is_quality_map) ++ref_hap_n;                
+            if (read.has_local_clip || read.covered_in_clip) { read.rank = 'u'; ++u_cnt; }
+            else { read.rank = 'n'; ++n_cnt; if (read.is_quality_map) ++ref_hap_n; }                
         }       
     }
     
@@ -163,7 +169,13 @@ Pileup::Pileup(const Strs& names, const Bools& is_rv, const Strs& cigar_strs,
             }
         }
     }
-    //keep sig_u contents to set up non-supporting haplotypes
+    
+    if (!sig_s_hiconf.empty()) {
+        PatternCnt s_sig_cnt; 
+        count_patterns(sig_s_hiconf, s_sig_cnt);
+        hap0 = s_sig_cnt[0].first; 
+        hiconf_read_idx = sig_s_hiconf[hap0][0]; 
+    }
     
     std::cout << s_cnt << " " << n_cnt << " " << u_cnt << std::endl;
 }
@@ -259,10 +271,35 @@ void Pileup::gridSearch(const UserParams& params,
 }
 
 
+// LOGIC: target is already found (s_cnt > 0) 
+//        -> other variations are unlikely supporting
+//           (assuming target is supported by a single hap)
+//        
+//        variations found as anti pattern are non-supporting
+bool is_settable(const int s_cnt, 
+                 const std::string_view hap, 
+                 const std::vector<std::string_view>& anti_sigs) {
+    if (s_cnt) return true;
+    if (std::find(anti_sigs.begin(), anti_sigs.end(), hap) 
+        != anti_sigs.end()) return true;
+    return false;
+}
+
 //------------------------------------------------------------------------------
 void Pileup::setHaploTypes(LocalReference& loc_ref, const Variant& target) {
-    PatternCnt s_sig_cnt; int idx0 = -1;
-    if (!sig_s_hiconf.empty()) {
+    PatternCnt s_sig_cnt; 
+    
+    if (hiconf_read_idx > -1) {
+        make_sequence(
+            loc_ref, reads[hiconf_read_idx].variants, start, end, seq0, &i2p_0);
+    } else if (!sig_s.empty()) {
+        PatternCnt s_sig_cnt;
+        count_patterns(sig_s, s_sig_cnt); hap0 = s_sig_cnt[0].first;
+        make_sequence(
+            loc_ref, reads[sig_s[hap0][0]].variants, start, end, seq0, &i2p_0);
+    }
+
+    /*if (!sig_s_hiconf.empty()) {
         count_patterns(sig_s_hiconf, s_sig_cnt);
         hap0 = s_sig_cnt[0].first; idx0 = sig_s_hiconf[hap0][0];
     } else if (!sig_s.empty()) {
@@ -275,64 +312,75 @@ void Pileup::setHaploTypes(LocalReference& loc_ref, const Variant& target) {
         make_sequence(loc_ref, reads[idx0].variants, start, end, seq0, &i2p_0);
     } else {
         make_sequence(loc_ref, {target}, start, end, seq0, &i2p_0);
-    }
+    }*/
     
     PatternCnt u_sig_cnt; int idx1 = -1, idx2 = -1;
     
-    //TODO when we set this ??if (s_cnt && !sig_u.empty()) {
     if (!sig_u.empty()) {
         count_patterns(sig_u, u_sig_cnt);
-        hap1 = u_sig_cnt[0].first; idx1 = sig_u[hap1][0];
         
-        auto it_1 = std::find(antis.begin(), antis.end(), hap1);
-        if (s_cnt || it_1 != antis.end()) { 
+        hap1 = u_sig_cnt[0].first; 
+        std::cout << hap1 << std::endl;
+        if (is_settable(s_cnt, hap1, anti_sigs)) {
+            idx1 = sig_u[hap1][0];  
             make_sequence(loc_ref, reads[idx1].variants, start, end, seq1);
-            if (seq0 == seq1) seq1 = "";
+            if (seq0 == seq1) seq1.clear();
         }
         
         if (u_sig_cnt.size() > 1) {
-            hap2 = u_sig_cnt[1].first; idx2 = sig_u[hap2][0];
-            
-            auto it_2 = std::find(antis.begin(), antis.end(), hap2);
-            if (s_cnt || it_2 != antis.end()) {
+            hap2 = u_sig_cnt[1].first;
+            std::cout << hap2 << std::endl;
+            if (is_settable(s_cnt, hap2, anti_sigs)) {
+                idx2 = sig_u[hap2][0];
                 make_sequence(loc_ref, reads[idx2].variants, start, end, seq2);
-                if (seq0 == seq2) seq2 = "";
-            }  
+                if (seq0 == seq2 || seq1 == seq2 ) seq2.clear();
+            }
         }
     } else if (has_excess_ins_hap) {
-    // haplotype with additional ins-repeats may be clipped and may not be captured    
+    // Haplotype with additional ins-repeats may be clipped and may not be captured    
         std::string alt_added = target.alt + target.alt.substr(1);
         Vars vlst = {Variant(target.pos, target.ref, alt_added)};
         make_sequence(loc_ref, vlst, start, end, seq1); idx1 = 0; //pseudo index
     }
     
-    if (rseq.empty())
-        make_sequence(loc_ref, {}, start, end, rseq, &i2p_r);
-    
-    // do we need this?
-    // ref_hap may always be included
-    //if (idx0 < 0) vs_ref_hap = true; //non-target non-ref hap may exist
-    
-    // no_non_target_haps: comparison against reference hap only
-    if (idx1 == -1 && idx2 == -1) {
-        vs_ref_hap = true; no_non_target_haps = true; 
-    }   
+    if (seq1.empty() && seq2.empty()) no_non_target_haps = true;
+         
+    // Always set reference hap
+    make_sequence(loc_ref, {}, start, end, rseq, &i2p_r);
 }
 
+
+// Only count kmers overlapping target radius 
+bool is_target_covering(const int start, const int end,
+                        const Read& read, const std::string_view& kmer, 
+                        const std::unordered_map<size_t, int>& dict) {
+    const size_t i = read.seq.find(kmer); 
+    if (i == std::string_view::npos) return false;
+    
+    const size_t j = i + kmer.size() - 1;   
+    if (dict.find(i) == dict.end() || dict.find(j) == dict.end()) {
+        // LOGIC lipped segments have no positional info
+        if (read.covered_in_clip || read.has_local_clip) return true;
+        else return false;
+    }
+    if (dict.at(j) < start || end < dict.at(i)) return false;
+
+    return true;
+}
 
 //------------------------------------------------------------------------------
 void Pileup::differentialKmerAnalysis(const UserParams& params, 
                                       LocalReference& loc_ref, const Variant& target) {
     
-    // target connecting homopolymers
+    // Target connecting homopolymers -> skip
     if (target.denovo_rep == 4) return;
     
     Kmers km0, km1, km2, kmr, km12, km12r;   
     
-    // target kmers
+    // Target kmers
     make_kmers(seq0, kmer_sz, km0); 
     
-    // comparators
+    // Comparators
     make_kmers(seq1, kmer_sz, km1);
     make_kmers(seq2, kmer_sz, km2);
     std::set_union(km1.begin(), km1.end(), km2.begin(), km2.end(),
@@ -341,61 +389,62 @@ void Pileup::differentialKmerAnalysis(const UserParams& params,
     std::set_union(km12.begin(), km12.end(), kmr.begin(), kmr.end(),
                    std::inserter(km12r, km12r.begin()));
     
-    // kmer set differences
+    // Kmer set diff
     std::set_difference(km0.begin(), km0.end(), km12r.begin(), km12r.end(),
                         std::inserter(kmers_t, kmers_t.end()));
     std::set_difference(km12r.begin(), km12r.end(), km0.begin(), km0.end(),
                         std::inserter(kmers_nt, kmers_nt.end()));
 
-
-    //if (vs_ref_hap) {
-    //    make_kmers(rseq, kmer_sz, km12r);
-    //} else {
-    //    std::cout << vs_ref_hap << " here " << std::endl;
-    //    make_kmers(seq1, kmer_sz, km1); 
-        
-    //    make_kmers(seq2, kmer_sz, km2);
-    //    if (has_ref_hap) make_kmers(rseq, kmer_sz, kmr);
-    //    std::set_union(km1.begin(), km1.end(), km2.begin(), km2.end(),
-    //                   std::inserter(km12, km12.begin()));
-    //    std::set_union(km12.begin(), km12.end(), kmr.begin(), kmr.end(),
-    //                   std::inserter(km12r, km12r.begin()));
-    //}
-    
-     
     std::cout << "hap0 " << seq0 <<  " " << kmers_t.size() << " " << kmers_nt.size() << std::endl;
     std::cout << "hap1 " << seq1 << std::endl;
     std::cout << "hap2 " << seq2 << std::endl;
     std::cout << "hapr " << rseq << std::endl; 
+    
+    const int rad_start = target.pos - target.event_radius;
+    const int rad_end = target.pos + target.event_radius;
     for (auto& read : reads) {
-        std::cout << read.name << " " << read.cigar_str << " " << read.rank << " " << read.qc_passed << " " << read.has_anti_pattern <<" " << read.has_smaller_change << " " << read.has_local_clip << std::endl;
+        std::cout << read.name << " " << read.cigar_str << " " << read.rank << std::endl;
         if (!read.qc_passed || read.rank != 'u') continue;
-
-        for (const auto& kmer : kmers_nt) 
-            if (read.seq.find(kmer) != std::string_view::npos) ++(read.nmer);
+         
+        std::unordered_map<size_t, int> dict;
+        for (auto& elem : read.idx2pos) 
+            dict[static_cast<size_t>(elem.first)] = elem.second;
+        
+        for (const auto& kmer : kmers_nt) {
+            if (is_target_covering(rad_start, rad_end, read, kmer, dict)) 
+                ++(read.nmer);
+        }
         
         for (const auto& kmer : kmers_t) {
-            if (read.seq.find(kmer) != std::string_view::npos) {
-                int overlap_start = static_cast<int>(read.seq.find(kmer));
-                if (read.qs <= overlap_start && overlap_start + kmer_sz <= read.qe) ++(read.smer);
-                std::cout << read.name << " " << read.is_reverse << " " << read.cigar_str << " " << read.has_anti_pattern<< " " << read.has_smaller_change << " " << read.is_central_mapped << " " << read.is_stable_non_ref << std::endl; 
-            }
+            if (!is_target_covering(rad_start, rad_end, read, kmer, dict)) 
+                continue;
+            
+            // Positive count further must be in quality region
+            int _i = static_cast<int>(read.seq.find(kmer));
+            if (read.qs <= _i && _i + kmer_sz <= read.qe) ++(read.smer);
         }
+
+        
         if (kmers_nt.size() && read.smer > read.nmer) { 
             read.rank = 'y'; --u_cnt; ++y_cnt; // likely supporting
             if (!read.nmer && read.smer > 1) {
-                if (has_hiconf_support || no_non_target_haps || read.is_quality_map) {
+                if (has_hiconf_support 
+                    || no_non_target_haps 
+                    || read.is_quality_map) {
                    read.rank = 's'; --y_cnt; ++s_cnt;
                 }
             }
         } 
         
-        // TODO decide if exclude complex cases? 
-        if (kmers_t.size() && read.nmer && !read.smer) { read.rank = 'n'; --u_cnt; ++n_cnt; }
+        if (kmers_t.size() && read.nmer && !read.smer) { 
+            read.rank = 'n'; --u_cnt; ++n_cnt; 
+        }
     }
+    
     has_likely_support = (y_cnt);
     
     std::cout << " y cnt ! " << y_cnt << std::endl; 
+     
 }
 
 //------------------------------------------------------------------------------

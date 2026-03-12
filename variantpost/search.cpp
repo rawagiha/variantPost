@@ -68,14 +68,15 @@ void _search_target(SearchResult& rslt,
                   aln_starts, aln_ends, read_seqs, quals, 
                   are_from_first_bam, has_second, 
                   params, loc_ref, target);
-    
+    int uu = 0;
     for (const auto& read : pileup.reads) {
         if (read.rank == 's')  {std::cout << read.name << " " << read.is_reverse << " " << read.aln_start << std::endl;
             for (auto& v : read.variants) std::cout << v.pos << " " << v.ref << " " << v.alt << std::endl;
-        }
+        } 
+        if (read.rank == 'u') ++uu;
     }
     
-    std::cout << pileup.s_cnt << " s nct " << std::endl; 
+    std::cout << pileup.s_cnt << " s nct ucnt -> " << uu <<  std::endl; 
     // grid-seach for target only if no target found in pileup setup
     // reads with signature-u are tested if 
     // there exists optimal alignments that explicitly aligns the target
@@ -93,7 +94,7 @@ void _search_target(SearchResult& rslt,
         std::cout << "after realn " << pileup.s_cnt << " " << pileup.n_cnt << " " << pileup.u_cnt << std::endl;
         if (pileup.has_hiconf_support)
              match2haplotypes(pileup, read_seqs, params); 
-        
+        std::cout << "afer hapmatch " << pileup.s_cnt << " " << pileup.n_cnt << " " << pileup.u_cnt << std::endl; 
         std::cout << pileup.s_cnt << " " << pileup.n_cnt << " " << pileup.u_cnt << std::endl;
         for (const auto& read : pileup.reads) {
             if (read.rank == 's') { rslt.target_statuses.push_back(1); std::cout << read.name << " " << read.cigar_str << " " << " why " << std::endl; }

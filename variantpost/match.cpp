@@ -407,7 +407,7 @@ void match2haplotypes(Pileup& pileup, const Strs& read_seqs, const UserParams& p
                     params.gap_open_penal, params.gap_ext_penal);
      
     for (int i = 0; i < pileup.sz; ++i) {
-        if (!pileup.reads[i].qc_passed || pileup.reads[i].rank != 'u') continue; 
+        if (!pileup.reads[i].qc_passed || pileup.reads[i].rank != 'u' || pileup.reads[i].smer == 0) continue; 
         
         const auto& query = read_seqs[i].c_str();
         int32_t mask_len = strlen(query) < 30 ? 15 : strlen(query) / 2;  

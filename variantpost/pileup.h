@@ -34,8 +34,10 @@ struct Pileup {
     std::unordered_map<Variant, int>  ns_vars; 
     
     //--------------------------------------------------------------------------
-    Idx sig_s_hiconf, sig_s, sig_u, u_sig_annot;
-    std::vector<std::string_view> antis;
+    // signature related 
+    Idx sig_s_hiconf, sig_s, sig_u; // {sig : read idx with the sig} 
+    Idx u_sig_annot; // {u_sig : anno flags} 
+    std::vector<std::string_view> anti_sigs; // sigs unlikely supporting target
     int hiconf_read_idx = -1; // for index-case read in Pileup.reads
       
     //--------------------------------------------------------------------------
