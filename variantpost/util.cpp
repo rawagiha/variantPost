@@ -18,9 +18,31 @@ UserParams::UserParams(const int _base_q_thresh, const double lq,
 //------------------------------------------------------------------------------
 LocalReference::LocalReference(const std::string& fastafile, 
                                const std::string& chrom_, const int start_, const int end_) 
-    : chrom(chrom_), start(start_), end(end_) {
+    : chrom(chrom_) {
+    const int seq_sz = end_ - start_ + 1; 
+
     fasta.open(fastafile);
-    _seq = fasta.getSubSequence(chrom_, start_ - 1, end_ - start_ + 1); seq = _seq;
+    _seq = fasta.getSubSequence(chrom_, start_ - 1, seq_sz); 
+    
+    const char nbase = 'N';
+
+    int i = 0; bool is_n = true;
+    while (is_n && i < seq_sz) {
+        is_n = (_seq[i] == nbase); ++i;
+    }
+    start = start_ + i - 1; 
+    
+    i = 0; is_n = true;
+    while (is_n && i <= seq_sz) {
+        is_n = (_seq[seq_sz - (i + 1)] == nbase); ++i;
+    }
+    end = end_ - i + 1;
+    
+    if (start != start_ || end != end_) 
+        _seq = fasta.getSubSequence(chrom_, start - 1, end - start + 1);
+     
+    seq = _seq; 
+
     for (int i = 0; i <= end - start; ++i) dict[start + i] = seq.substr(i, 1); 
 }
 
@@ -28,12 +50,28 @@ LocalReference::LocalReference(const std::string& fastafile,
 Homopolymer::Homopolymer(const int start_, const int end_, const char base_)
     : start(start_), end(end_), base(base_) {/* */}
 
-typedef std::unordered_map<std::string_view, int> Dimers;
-Dimers dimers =  {
+typedef std::unordered_map<std::string_view, int> Mers;
+Mers dimers =  {
     {"AA", 0}, {"AC", 1}, {"AG", 2}, {"AT", 3},
     {"CA", 4}, {"CC", 5}, {"CG", 6}, {"CT", 7},
     {"GA", 8}, {"GC", 9}, {"GG", 10}, {"GT", 11},
-    {"TA", 12}, {"TC", 13}, {"TG", 14}, {"TT", 15}
+    {"TA", 12}, {"TC", 13}, {"TG", 14}, {"TT", 15},
+    {"AAA", 16}, {"AAT", 17}, {"AAC", 18}, {"AAG", 19},
+    {"ATA", 20}, {"ATT", 21}, {"ATC", 22}, {"ATG", 23},
+    {"ACA", 24}, {"ACT", 25}, {"ACC", 26}, {"ACG", 27},
+    {"AGA", 28}, {"AGT", 29}, {"AGC", 30}, {"AGG", 31},
+    {"TAA", 32}, {"TAT", 33}, {"TAC", 34}, {"TAG", 35},
+    {"TTA", 36}, {"TTT", 37}, {"TTC", 38}, {"TTG", 39},
+    {"TCA", 40}, {"TCT", 41}, {"TCC", 42}, {"TCG", 43},
+    {"TGA", 44}, {"TGT", 45}, {"TGC", 46}, {"TGG", 47},
+    {"CAA", 48}, {"CAT", 49}, {"CAC", 50}, {"CAG", 51},
+    {"CTA", 52}, {"CTT", 53}, {"CTC", 54}, {"CTG", 55},
+    {"CCA", 56}, {"CCT", 57}, {"CCC", 58}, {"CCG", 59},
+    {"CGA", 60}, {"CGT", 61}, {"CGC", 62}, {"CGG", 63},
+    {"GAA", 64}, {"GAT", 65}, {"GAC", 66}, {"GAG", 67},
+    {"GTA", 68}, {"GTT", 69}, {"GTC", 70}, {"GTG", 71},
+    {"GCA", 72}, {"GCT", 73}, {"GCC", 74}, {"GCG", 75},
+    {"GGA", 76}, {"GGT", 77}, {"GGC", 78}, {"GGG", 79}
 };
 
 inline size_t count_dimers(std::string_view seq) {
@@ -45,6 +83,23 @@ inline size_t count_dimers(std::string_view seq) {
     return flags.count();
 }
 
+inline double linguistic_cp(std::string_view seq, std::bitset<80>& cnter,
+                            const size_t max_, const size_t window) {
+    
+    // check window size at the user interface
+    //if (len < 3) return 0.0;
+    const size_t len = seq.size();
+    
+    cnter.reset();
+    for (size_t i = 0; i < len - 1; ++i) {
+        cnter.set(dimers[seq.substr(i, 2)]);
+        cnter.set(dimers[seq.substr(i, 3)]); // will safely be handled
+    }
+    
+    return static_cast<double>(cnter.count()) / max_;        
+}
+
+
 //------------------------------------------------------------------------------
 // find nearest genomics pos containing min(16, n - 1) 2-mers in a window of n
 // **** dimer diverse segment  xxx target  s/e flanking start/end
@@ -52,11 +107,37 @@ inline size_t count_dimers(std::string_view seq) {
 //       s                         e 
 //  ......******....xxxx.....******.... 
 void LocalReference::setFlankingBoundary(const Variant& target, const size_t window) {
-    // maximum possible number of 2-mers in window
-    const size_t max_ = (window - 1 < 16) ? window - 1 : 16;
     
-    if (seq.find('N') != std::string_view::npos) return;
+    // max possible N of 2-mers + 3 mers
+    const size_t max_ = 2 * window - 3; 
+    
+    std::bitset<80> cnter;
+    const double thresh = 0.9;
+    const int last_idx = end - start - window + 1;
+    for (int i = target.end_pos - start; i < last_idx; ++i) {
+        std::cout << seq.substr(i, window) << " lc right " << linguistic_cp(seq.substr(i, window), cnter, max_, window) << std::endl; 
+        if (linguistic_cp(seq.substr(i, window), cnter, max_, window) >= thresh) {
+            flanking_end = i + start + window; break;
+        }
+    }
+    
+    for (int i = target.lpos - start - window + 1; i > 0; --i) {
+        std::cout << seq.substr(i, window) << " lc LEFT " << linguistic_cp(seq.substr(i, window), cnter, max_, window) << std::endl;
+        if (linguistic_cp(seq.substr(i, window), cnter, max_, window) >= thresh) {
+            flanking_start = i + start - 1; break;
+        }
+    }
 
+
+    // maximum possible number of 2-mers in window
+    
+    //const size_t max_ = (window - 1 < 16) ? window - 1 : 16;
+    
+      
+    
+    //if (seq.find('N') != std::string_view::npos) return;
+
+    /*
     const int last_idx = end - start - window + 1;
     for (int i = target.end_pos - start; i < last_idx; ++i) {
         if (count_dimers(seq.substr(i, window)) == max_) {
@@ -71,7 +152,7 @@ void LocalReference::setFlankingBoundary(const Variant& target, const size_t win
             flanking_start = i + start - 1;
             flanking_start = i + start - 1; break;
         }
-    }
+    }*/
     
     if (flanking_start > 0 && flanking_end > 0) has_flankings = true;
     else return; 
