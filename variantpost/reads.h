@@ -110,7 +110,8 @@ struct Read {
     bool is_central_mapped = false; // true if mapped in 2nd/3rd of read len quartile
     bool is_quality_map = false; // true if is_stable_non_ref && is_central_mapped
     bool ineffective_kmer = false; // true if target is between variants < kmer_size
-
+    bool high_ambiguity = false; // true if read end in low complex region
+    
     //--------------------------------------------------------------------------
     // pattern keys
     char covering_ptrn = 'C'; // 'A':complete coverage, 'B":partial, 'C':none (default)   

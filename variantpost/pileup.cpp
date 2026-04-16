@@ -3,7 +3,6 @@
 
 typedef std::vector<std::pair<std::string_view, size_t>> PatternCnt;
 
-
 //------------------------------------------------------------------------------
 inline auto less = [](const auto& x, const auto& y) { return x.second < y.second; };
 inline auto more = [](const auto& x, const auto& y) { return x.second > y.second; };
@@ -15,15 +14,38 @@ inline void count_patterns(const Idx& ptrn_read_idx, PatternCnt& ptrn_cnts) {
     std::sort(ptrn_cnts.begin(), ptrn_cnts.end(), more);
 }
 
+//-----------------------------------------------------------------------------
+// Long spliced reads (e.g., Iso-Seq) can have covering start < loc_ref.start
+// -> Set pileup start to be >= loc_ref.start
+int set_start(Ints& starts, LocalReference& loc_ref, const int kmer_sz) {
+    int s = (loc_ref.flanking_start - kmer_sz > loc_ref.start)
+          ? loc_ref.flanking_start - kmer_sz : loc_ref.start;
+    starts.push_back(s);
+    
+    // Make sure loc_ref.start <= start
+    int start = *std::min_element(starts.begin(), starts.end());
+    start = (start < loc_ref.start) ? loc_ref.start : start; 
+    return start;     
+}
+
+//-----------------------------------------------------------------------------
+// Pileup end counterpart
+int set_end(Ints& ends, LocalReference& loc_ref, const int kmer_sz) {
+    int e = (loc_ref.flanking_end + kmer_sz < loc_ref.end)
+          ? loc_ref.flanking_end + kmer_sz : loc_ref.end;
+    ends.push_back(e);
+
+    int end = *std::max_element(ends.begin(), ends.end());
+    end = (loc_ref.end < end) ? loc_ref.end : end;
+    return end;
+}
 
 //------------------------------------------------------------------------------
 Pileup::Pileup(const Strs& names, const Bools& is_rv, const Strs& cigar_strs,
                const Ints& aln_starts, const Ints& aln_ends, const Strs& seqs,
                const Strs& quals, const Bools& is_first_bam, const bool has_scnd,
                const UserParams& params, LocalReference& loc_ref, Variant& target) {
-     
-    has_second = has_scnd; // may not need
-             
+    
     kmer_sz = (loc_ref.low_cplx_len > params.kmer_size)
             ? loc_ref.low_cplx_len : params.kmer_size;
 
@@ -39,7 +61,9 @@ Pileup::Pileup(const Strs& names, const Bools& is_rv, const Strs& cigar_strs,
     }
     
     int ref_hap_n = 0, ineff_kmer = 0, overlapping = 0; 
-    sz = static_cast<int>(names.size()); reads.reserve(sz);
+    
+    sz = static_cast<int>(names.size()); Ints starts, ends; 
+    reads.reserve(sz); starts.reserve(sz); ends.reserve(sz);
     for (int i = 0; i < sz; ++i) {
         reads.emplace_back(names[i], is_rv[i], cigar_strs[i], aln_starts[i], 
                            aln_ends[i], seqs[i], quals[i], is_first_bam[i]);
@@ -61,29 +85,23 @@ Pileup::Pileup(const Strs& names, const Bools& is_rv, const Strs& cigar_strs,
             read.isCenterMapped(target);
 
         read.is_quality_map = (read.is_stable_non_ref && read.is_central_mapped);
-         
-        //consider multipl vars in flnk
+
+        // Search target complex variant in reads with multiple events in flanking
+        // region (flnk_v_cnt > 1)
         if (target.is_complex 
             && read.covering_ptrn == 'A' && read.qc_passed && read.flnk_v_cnt > 1) {
             if (target.is_substitute) read.hasTargetComplexSubstitute(target);
             else read.hasTargetComplexIndel(loc_ref, target);
         }
                 
-        // assign rank
+        // Rank reads
         if (read.has_target) {
             read.rank = 's'; ++s_cnt;
             read.setSignatureStrings(params); sig_s[read.non_ref_sig].push_back(i);
             if (read.is_quality_map) sig_s_hiconf[read.non_ref_sig].push_back(i); 
         } else if (read.has_local_events) {
             read.rank = 'u'; ++u_cnt;
-            read.setSignatureStrings(params); 
-            
-            //if (target.is_substitute && read.covering_ptrn == 'A') {
-            //    read.rank == 'n'; +n_cnt; --u_cnt;
-            //    continue;
-            //}
-
-
+            read.setSignatureStrings(params);             
             read.checkByRepeatCount(target, has_excess_ins_hap);
             
             // Rank "anti-pattern" & "smaller change" as 'n'
@@ -100,13 +118,9 @@ Pileup::Pileup(const Strs& names, const Bools& is_rv, const Strs& cigar_strs,
             // Store such variants in ns_vars 
             if (read.is_stable_non_ref && (read.has_anti_pattern || read.has_smaller_change)) { 
                 if (read.has_anti_pattern) anti_sigs.push_back(read.non_ref_sig);
-                
-                std::cout << " n reads " << read.name << " " << read.cigar_str << std::endl;
                 read.rank = 'n'; ++n_cnt; --u_cnt;
                 for (auto& v : read.variants) { 
-                    if (v.in_target_flnk) { 
-                        v.testForDeNovoRepeats(loc_ref); ns_vars[v]++; 
-                    } 
+                    if (v.in_target_flnk) { v.testForDeNovoRepeats(loc_ref); ns_vars[v]++; } 
                 }
             }
 
@@ -119,7 +133,7 @@ Pileup::Pileup(const Strs& names, const Bools& is_rv, const Strs& cigar_strs,
             // 2. mapped in 2nd/3rd readlen quartile (is_central_mapped)
             // 3. local freq of dirty base < thresh (qc_passed)
             if (read.is_stable_non_ref && read.qc_passed && !read.has_local_clip) {
-                sig_u[read.non_ref_sig].push_back(i); // register sig
+                sig_u[read.non_ref_sig].push_back(i);
                 
                 // annot for signature usage: (kmer, overlap, grid-search)
                 // kmer: ineffctive kmer if 1
@@ -135,49 +149,51 @@ Pileup::Pileup(const Strs& names, const Bools& is_rv, const Strs& cigar_strs,
             }
         } else { 
             if (read.has_local_clip || read.covered_in_clip) { read.rank = 'u'; ++u_cnt; }
-            else { read.rank = 'n'; ++n_cnt; if (read.is_quality_map) ++ref_hap_n; }                
+            else { read.rank = 'n'; ++n_cnt; } 
+            
+            // Catch reference haplotype in control BAM here
+            if (read.is_control && read.is_quality_map) ++ref_hap_n;              
         }       
     }
-    
+    // No supporting and no undetermined reads (e.g., all non-supporting or no coverage)
     if (!s_cnt && !u_cnt) { has_no_support = true; return; }
     
-    int _strt = (loc_ref.flanking_start - kmer_sz > loc_ref.start) 
-              ? loc_ref.flanking_start - kmer_sz : loc_ref.start;
-    starts.push_back(_strt); 
+    // Local reference start <= Pileup start
+    start = set_start(starts, loc_ref, kmer_sz); 
     
-    int _end = (loc_ref.flanking_end + kmer_sz < loc_ref.end)
-             ? loc_ref.flanking_end + kmer_sz : loc_ref.end;  
-    ends.push_back(_end);
+    // Pileup end <= Local reference end
+    end = set_end(ends, loc_ref, kmer_sz);
+     
+    // Set reference sequence to Pileup
+    make_sequence(loc_ref, {}, start, end, rseq, &i2p_r);
     
-    start = *std::min_element(starts.begin(), starts.end());
-    // iso-seq reads may have covering start < loc_ref.start
-    start = (start < loc_ref.start) ? loc_ref.start : start;
-    end = *std::max_element(ends.begin(), ends.end());
-    // iso 
-    end = (loc_ref.end < end) ? loc_ref.end : end;
-        
-    has_hiconf_support = (!sig_s_hiconf.empty()); has_ref_hap = (ref_hap_n); 
+    // Set if reference haplotype detected in control BAM
+    // (control BAM may not be supplied)
+    has_ref_hap = (ref_hap_n);
     
-    // rerank
-    if (has_hiconf_support) { 
-        for (const auto& elem : sig_u) {
-            for (int i : elem.second) { 
-                if (reads[i].rank != 'n') {
-                    reads[i].rank = 'n'; ++n_cnt; --u_cnt; 
-                    u_sig_annot[reads[i].non_ref_sig][2] = 1;
-                }
-            }
+    // Set if high confidence target has been found
+    has_hiconf_support = (!sig_s_hiconf.empty());
+    if (!has_hiconf_support) return;
+    
+    // Sort high conf. target pattern by occurrence
+    PatternCnt s_sig_cnt; count_patterns(sig_s_hiconf, s_sig_cnt); 
+    // Set the most freq. pattern as target haplotype (hap0)
+    hap0 = s_sig_cnt[0].first; hiconf_read_idx = sig_s_hiconf[hap0][0];
+
+    // Heuristic: Target alignment would be unique 
+    // -> may not be true if mapping algorithms are difference (e.g., DNA vs. RNA)
+    if (!has_scnd) return; 
+
+    // If the target is found in a unambiguously-mapped read,
+    // patters in other unambigously mapped reads (sig_u) would be non-supporting. 
+    for (const auto& elem : sig_u) {
+        const auto& read_indexes =  elem.second; 
+        for (const auto i : read_indexes) {
+            if (reads[i].rank == 'n') continue;
+            reads[i].rank = 'n'; ++n_cnt; --u_cnt;
+            u_sig_annot[reads[i].non_ref_sig][2] = 1; // Don't use for grid-search
         }
-    }
-    
-    if (!sig_s_hiconf.empty()) {
-        PatternCnt s_sig_cnt; 
-        count_patterns(sig_s_hiconf, s_sig_cnt);
-        hap0 = s_sig_cnt[0].first; 
-        hiconf_read_idx = sig_s_hiconf[hap0][0]; 
-    }
-    
-    std::cout << s_cnt << " " << n_cnt << " " << u_cnt << std::endl;
+    } 
 }
 
 
@@ -190,10 +206,8 @@ void Pileup::gridSearch(const UserParams& params,
     
     // Condition 0
     // Skip if target is homopolymer extending 
-    if (s_cnt || sig_u.empty() || target.denovo_rep > 2) return;
+    if (s_cnt || sig_u.empty() || target.denovo_rep > 2) { std::cout << "grid exit 1 target denov "  << target.denovo_rep << std::endl; return;}
 
-    make_sequence(loc_ref, {}, start, end, rseq, &i2p_r);
-    
     PatternCnt u_sig_cnts;
     count_patterns(sig_u, u_sig_cnts);
     
@@ -204,15 +218,15 @@ void Pileup::gridSearch(const UserParams& params,
     //   Step1: check for homopolymer involvment (denovo_rep)
     //   Step2: define as background hap if freq is > 0.1
     for (const auto& elem : ns_vars) {
-        std::cout << elem.first.pos << " " << elem.first.ref << " " << elem.first.alt << " " << elem.first.denovo_rep << " " << elem.second << std::endl;
-        if (elem.first.denovo_rep > 1 && elem.second * 10 > tot) return;
+    //    std::cout << elem.first.pos << " " << elem.first.ref << " " << elem.first.alt << " " << elem.first.denovo_rep << " " << elem.second << " " << tot << std::endl;
+        if (elem.first.denovo_rep > 1 && elem.second * 10 > tot) { std::cout << "grid exit 2 denov " << elem.first.denovo_rep << " freq "  << elem.second << " " << tot << std::endl; return;}
     }
-
+    
     std::string query;
     for (const auto& _sig : u_sig_cnts) {
         // Condition 3
         // Skip with anti-pattern/smaller than target changes
-        if (u_sig_annot[_sig.first][2] == 1) continue;    
+        //if (u_sig_annot[_sig.first][2] == 1) continue;    
         
         Vars vars;
         bool skip_this = false;
@@ -236,14 +250,14 @@ void Pileup::gridSearch(const UserParams& params,
             // Do not use low quality variations
             if (v.mean_qual > params.base_q_thresh) vars.push_back(v);
         }
+        std::cout << "grid skip happedn " << skip_this << " " << _sig.first << std::endl;
         if (skip_this ||vars.empty()) continue;
         
         make_sequence(loc_ref, vars, start, end, query);
 
         // grid-search
         std::vector<Ints> grid; gap_grid(params, grid);
-        const bool res = search_over_grid(start, loc_ref, params, vars.size(), rseq, query, grid, target);
-        
+        const bool res = search_over_grid(start, loc_ref, params, vars.size(), rseq, query, grid, target); 
         if (res) {
             const auto& read_idxes = sig_u[_sig.first];
             for (int _i : read_idxes) {
@@ -276,9 +290,9 @@ void Pileup::gridSearch(const UserParams& params,
 //           (assuming target is supported by a single hap)
 //        
 //        variations found as anti pattern are non-supporting
-bool is_settable(const int s_cnt, 
-                 const std::string_view hap, 
-                 const std::vector<std::string_view>& anti_sigs) {
+inline bool hap_settable(const int s_cnt, 
+                         const std::string_view hap, 
+                         const std::vector<std::string_view>& anti_sigs) {
     if (s_cnt) return true;
     if (std::find(anti_sigs.begin(), anti_sigs.end(), hap) 
         != anti_sigs.end()) return true;
@@ -297,6 +311,8 @@ void Pileup::setHaploTypes(LocalReference& loc_ref, const Variant& target) {
         count_patterns(sig_s, s_sig_cnt); hap0 = s_sig_cnt[0].first;
         make_sequence(
             loc_ref, reads[sig_s[hap0][0]].variants, start, end, seq0, &i2p_0);
+    } else {
+        make_sequence(loc_ref, {target}, start, end, seq0, &i2p_0);
     }
 
     /*if (!sig_s_hiconf.empty()) {
@@ -316,23 +332,37 @@ void Pileup::setHaploTypes(LocalReference& loc_ref, const Variant& target) {
     
     PatternCnt u_sig_cnt; int idx1 = -1, idx2 = -1;
     
+    int cntl_cov = 0;
+    for (const auto& read : reads) {
+        if (!read.fail_to_cover_flankings && read.covering_ptrn == 'A' && read.is_control) ++cntl_cov;
+    }
+    std::cout << cntl_cov << " control coverage " << std::endl; 
+    
+    
     if (!sig_u.empty()) {
         count_patterns(sig_u, u_sig_cnt);
         
+        //TODO this is test purpose
+        const int hap1_cnt = static_cast<int>(u_sig_cnt[0].second);
+        const int hap2_cnt = static_cast<int>(u_sig_cnt[1].second);
+        bool set_hap1 = false, set_hap2 = false;
+        if (hap1_cnt > 4 && hap1_cnt * 5 >= cntl_cov) set_hap1 = true;
+        if (hap2_cnt > 4 && hap2_cnt * 5 >= cntl_cov) set_hap2 = true; 
+
         hap1 = u_sig_cnt[0].first; 
-        std::cout << hap1 << std::endl;
-        if (is_settable(s_cnt, hap1, anti_sigs)) {
+        std::cout << hap1 << " " << u_sig_cnt[0].second << std::endl;
+        if (hap_settable(s_cnt, hap1, anti_sigs) && set_hap1) {
             idx1 = sig_u[hap1][0];  
-            make_sequence(loc_ref, reads[idx1].variants, start, end, seq1);
+            make_sequence(loc_ref, reads[idx1].variants, start, end, seq1, &i2p_1);
             if (seq0 == seq1) seq1.clear();
         }
         
         if (u_sig_cnt.size() > 1) {
             hap2 = u_sig_cnt[1].first;
-            std::cout << hap2 << std::endl;
-            if (is_settable(s_cnt, hap2, anti_sigs)) {
+            std::cout << hap2 << " " << u_sig_cnt[1].second << std::endl;
+            if (hap_settable(s_cnt, hap2, anti_sigs) && set_hap2) {
                 idx2 = sig_u[hap2][0];
-                make_sequence(loc_ref, reads[idx2].variants, start, end, seq2);
+                make_sequence(loc_ref, reads[idx2].variants, start, end, seq2, &i2p_2);
                 if (seq0 == seq2 || seq1 == seq2 ) seq2.clear();
             }
         }
@@ -344,9 +374,6 @@ void Pileup::setHaploTypes(LocalReference& loc_ref, const Variant& target) {
     }
     
     if (seq1.empty() && seq2.empty()) no_non_target_haps = true;
-         
-    // Always set reference hap
-    make_sequence(loc_ref, {}, start, end, rseq, &i2p_r);
 }
 
 
@@ -366,6 +393,11 @@ bool is_target_covering(const int start, const int end,
     if (dict.at(j) < start || end < dict.at(i)) return false;
 
     return true;
+}
+
+inline bool has_the_sig(const std::string& sig, const Strs& anti_sig) {
+    auto it = std::find(anti_sig.begin(), anti_sig.end(), sig);
+    return (it != anti_sig.end());
 }
 
 //------------------------------------------------------------------------------
@@ -400,8 +432,11 @@ void Pileup::differentialKmerAnalysis(const UserParams& params,
     std::cout << "hap2 " << seq2 << std::endl;
     std::cout << "hapr " << rseq << std::endl; 
     
+    const size_t target_kmer_sz = kmers_t.size();
+    const size_t non_target_kmer_sz = kmers_nt.size(); 
     const int rad_start = target.pos - target.event_radius;
     const int rad_end = target.pos + target.event_radius;
+    Strs anti_sig;
     for (auto& read : reads) {
         std::cout << read.name << " " << read.cigar_str << " " << read.rank << std::endl;
         if (!read.qc_passed || read.rank != 'u') continue;
@@ -425,8 +460,9 @@ void Pileup::differentialKmerAnalysis(const UserParams& params,
         }
 
         
-        if (kmers_nt.size() && read.smer > read.nmer) { 
-            read.rank = 'y'; --u_cnt; ++y_cnt; // likely supporting
+        if (non_target_kmer_sz && read.smer > read.nmer) { 
+            std::cout << " this is y " << read.name << " " << read.cigar_str << " " << read.smer << " " << read.nmer << " " << read.non_ref_sig << std::endl;
+            read.rank = 'y'; --u_cnt; ++y_cnt; //Likely supporting
             if (!read.nmer && read.smer > 1) {
                 if (has_hiconf_support 
                     || no_non_target_haps 
@@ -434,13 +470,29 @@ void Pileup::differentialKmerAnalysis(const UserParams& params,
                    read.rank = 's'; --y_cnt; ++s_cnt;
                 }
             }
+        } else if (target_kmer_sz && read.smer <= read.nmer) { 
+            if (!read.smer && read.nmer) {
+                read.rank = 'n'; --u_cnt; ++n_cnt; 
+                anti_sig.push_back(read.non_ref_sig);
+            } else if (read.smer && read.nmer) {
+                read.rank = 'z'; --u_cnt; ++z_cnt; //Unlikely supporting
+            }
         } 
-        
-        if (kmers_t.size() && read.nmer && !read.smer) { 
-            read.rank = 'n'; --u_cnt; ++n_cnt; 
-        }
     }
     
+    // reclassify
+    for (auto& read : reads) {
+        const char rank_ = read.rank;
+        if (rank_ == 's' || rank_ == 'n') continue; 
+        const bool has_it = has_the_sig(read.non_ref_sig, anti_sig);
+        if (has_it){
+            read.rank = 'n'; ++n_cnt;
+            if (rank_ == 'u') --u_cnt;
+            else if (rank_ == 'y') --y_cnt;
+            else --z_cnt;
+        }
+    }
+
     has_likely_support = (y_cnt);
     
     std::cout << " y cnt ! " << y_cnt << std::endl; 
@@ -480,7 +532,7 @@ void Pileup::searchByRealignment(const UserParams& params,
     //std::string u_seq; i
     
     std::bitset<3> check_points;
-    for (const auto& read : reads) {
+    for (auto& read : reads) {
         if (!read.qc_passed) continue;
         if (read.rank != 'y' && !read.covered_in_clip) continue;
         std::string ss{read.seq};
@@ -489,10 +541,21 @@ void Pileup::searchByRealignment(const UserParams& params,
         std::cout << ss << " " << aln.cigar_string << std::endl;
         check_match_pattern(aln, check_points, fss, fse, ts, te, fes, fee); 
         std::cout <<  check_points.count() << std::endl;
+        
+        // perferct match
+        if (check_points.count() == 3) {
+            read.rank = 's'; --y_cnt; ++s_cnt;
+        }
+        
         check_points.reset();
     }
     
-    
+    if (s_cnt) {
+        for (auto& read : reads) { 
+            if (read.rank == 'y') { read.rank = 's'; --y_cnt; ++s_cnt; }
+        }
+    }
+         
     /*
     for (const auto& elem : sig_u) {
         

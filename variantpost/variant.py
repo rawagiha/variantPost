@@ -55,6 +55,7 @@ class Variant(object):
 
         self.reference_len = reference.get_reference_length(self.chrom)
 
+        # this is coeff for ref window
         self.k = 1 if ref_len > window * 4  else 4
 
         # 1-based

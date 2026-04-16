@@ -46,20 +46,18 @@ void _search_target(SearchResult& rslt,
     // additional prep 
     loc_ref.setFlankingBoundary(target, params.dimer_window);
     // TODO how to return the result in this case??
-    if (!loc_ref.has_flankings) return;
+    if (!loc_ref.has_flankings) { std::cout << "no flanking! " << std::endl; return; }
     
-    std::cout << loc_ref.flanking_start << " " << loc_ref.flanking_end << std::endl;
+    // Annotation for low complex tags
     loc_ref.findLowComplexRegion();
-    for (const auto& hh : loc_ref.homopoly) {
-        std::cout << hh.start << " " << hh.end << " " << hh.base << std::endl;
-    }
-     
-    // for repetitive indels and complex indel/MNV
-    // TODO how to include de-novo homopolymer
     target.setFlankingSequences(loc_ref); 
     target.countRepeats(loc_ref);
     target.testForDeNovoRepeats(loc_ref);
-    std::cout << target.denovo_rep << std::endl;
+    if (loc_ref.locplx_start <= target.pos
+        && target.end_pos <= loc_ref.locplx_end)
+    { target.in_homopolymer = true; }
+    
+    
     // pileup setup
     // 1. reads are check for target based on the original alignment
     // 2. non-target/non-ref variations located in read-middle, surrounded 
@@ -68,41 +66,43 @@ void _search_target(SearchResult& rslt,
                   aln_starts, aln_ends, read_seqs, quals, 
                   are_from_first_bam, has_second, 
                   params, loc_ref, target);
+    /*
     int uu = 0;
     for (const auto& read : pileup.reads) {
         if (read.rank == 's')  {std::cout << read.name << " " << read.is_reverse << " " << read.aln_start << std::endl;
             for (auto& v : read.variants) std::cout << v.pos << " " << v.ref << " " << v.alt << std::endl;
         } 
         if (read.rank == 'u') ++uu;
-    }
+    }*/
     
-    std::cout << pileup.s_cnt << " s nct ucnt -> " << uu <<  std::endl; 
+    //std::cout << pileup.s_cnt << " s nct ucnt -> " << uu <<  std::endl; 
     // grid-seach for target only if no target found in pileup setup
     // reads with signature-u are tested if 
     // there exists optimal alignments that explicitly aligns the target
     // -> if no, such reads are likely non-supporting
     // -> use for background haplotype construction 
     pileup.gridSearch(params, loc_ref, target);
-    std::cout << "after grid " << pileup.s_cnt << " " << pileup.n_cnt << " " << pileup.u_cnt << std::endl; 
+    //std::cout << "after grid " << pileup.s_cnt << " " << pileup.n_cnt << " " << pileup.u_cnt << std::endl; 
     // supporting reads where target is clipped (clipped-target) would be still "undetermied"
     if (pileup.u_cnt) {
         pileup.setHaploTypes(loc_ref, target);
         pileup.differentialKmerAnalysis(params, loc_ref, target);
-        std::cout << "after kmer " << pileup.s_cnt << " " << pileup.n_cnt << " " << pileup.u_cnt << std::endl;   
+        //std::cout << "after kmer " << pileup.s_cnt << " " << pileup.n_cnt << " " << pileup.u_cnt << std::endl;   
         // capture clipped-target here based on the differential kmer analysis  
         pileup.searchByRealignment(params, loc_ref, target);
-        std::cout << "after realn " << pileup.s_cnt << " " << pileup.n_cnt << " " << pileup.u_cnt << std::endl;
+        //std::cout << "after realn " << pileup.s_cnt << " " << pileup.n_cnt << " " << pileup.u_cnt << std::endl;
         if (pileup.has_hiconf_support)
              match2haplotypes(pileup, read_seqs, params); 
-        std::cout << "afer hapmatch " << pileup.s_cnt << " " << pileup.n_cnt << " " << pileup.u_cnt << std::endl; 
-        std::cout << pileup.s_cnt << " " << pileup.n_cnt << " " << pileup.u_cnt << std::endl;
+        //std::cout << "afer hapmatch " << pileup.s_cnt << " " << pileup.n_cnt << " " << pileup.u_cnt << std::endl; 
+        //std::cout << pileup.s_cnt << " " << pileup.n_cnt << " " << pileup.u_cnt << std::endl;
         for (const auto& read : pileup.reads) {
-            if (read.rank == 's') { rslt.target_statuses.push_back(1); std::cout << read.name << " " << read.cigar_str << " " << " why " << std::endl; }
+            if (read.rank == 's' ) { rslt.target_statuses.push_back(1); /*std::cout << read.name << " " << read.cigar_str << " " << " why " << std::endl;*/ }
             else if (read.rank == 'n' && !read.covered_in_clip) { 
-                std::cout << "get here " << std::endl;
+                //std::cout << "get here " << std::endl;
                 rslt.target_statuses.push_back(0); 
             }
-            else if (read.rank == 'u' || read.rank == 'y') rslt.target_statuses.push_back(-1);
+            //else if (read.rank == 'u' || read.rank == 'y') rslt.target_statuses.push_back(-1);
+            else if (read.rank == 'y') rslt.target_statuses.push_back(-1);
             else rslt.target_statuses.push_back(-2);
         }
     } else {
@@ -114,17 +114,25 @@ void _search_target(SearchResult& rslt,
         }
     }
 
+    // Realn against personalized genome
+    Variant per(target.pos, target.ref, target.alt);
+    personalize(pileup, loc_ref, params, target, per);    
+    
+    if (per != target) {
+        rslt.retarget_pos = per.pos;
+        rslt.ref = per.ref;
+        rslt.alt = per.alt;
+    }    
+    
     Consensus con;
     if (pileup.hiconf_read_idx > -1) {
         con._from_variants(pileup.start, pileup.end,  pileup.reads[pileup.hiconf_read_idx].variants, params, loc_ref);
         size_t kk = con.ref.size();
-        for (size_t i = 0; i < kk; ++i){
+        /*for (size_t i = 0; i < kk; ++i){
             std::cout << con.pos[i] << " " << con.ref[i] << " " << con.alt[i] << std::endl;
-        }
+        }*/
         rslt.positions = con.pos;
         rslt.ref_bases = con.ref;
         rslt.alt_bases = con.alt;
     } 
-   
-    
 }   

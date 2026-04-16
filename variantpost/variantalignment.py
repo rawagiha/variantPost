@@ -115,7 +115,10 @@ class VariantAlignment(object):
             self.target_status, 
             self.are_reverse, 
             self.are_first_bam, 
-            self.tags
+            self.tags,
+            self.regtarget_pos,
+            self.ref,
+            self.alt
         ) = search_target(
             bam,
             second_bam,
@@ -160,6 +163,9 @@ class VariantAlignment(object):
         # print(a)
         # print(self.contig_dict)
         # self.is_with_target = any([status == 1 for status in self.target_status])
+    
+    def perso(self):
+        return self.regtarget_pos, self.ref, self.alt
 
     def cnt(self):
         #print(len(self.target_status), len(self.are_reverse), len(self.are_first_bam))

@@ -209,7 +209,7 @@ void Read::parseLocalPattern(LocalReference& loc_ref,
             ++anti_ptrn; total_base_changes += v.event_len;
             
             // TODO Add logic here
-            if (!target.is_complex && v.is_shiftable) has_anti_pattern = true;
+            if (!target.is_complex && target.in_homopolymer && v.is_shiftable) has_anti_pattern = true;
         }
         
         // ineffective kmer
@@ -251,7 +251,6 @@ void Read::parseLocalPattern(LocalReference& loc_ref,
     if (dist_to_clip <= target.event_radius)
         has_local_clip = true;
 
-    // No local clip + followind cond. -> unlikely supporting
     if (!has_local_clip) {
         // only 1 non-target event in flnk start/end (>1 may be complex-target) 
         if (anti_ptrn == 1) has_anti_pattern = true; 
@@ -259,7 +258,7 @@ void Read::parseLocalPattern(LocalReference& loc_ref,
         // smaller N of bases changed than target
         if (!target.is_complex 
             && target.event_len > total_base_changes) has_smaller_change = true;
-        std::cout << target.event_len << " " <<  total_base_changes << " " << name << " " << cigar_str << "  " << indel_cnt << " " << sub_cnt << " " << anti_ptrn << std::endl;
+
         // indel target but no indel in flnk start/end
         if (!target.is_substitute && !indel_cnt && (anti_ptrn == sub_cnt)) 
             has_anti_pattern = true;
@@ -335,7 +334,6 @@ void Read::setSignatureStrings(const UserParams& params) {
 // non-ref alignments bounded by steep increase in dimer diversity (flanking)
 void Read::isStableNonReferenceAlignment(LocalReference& loc_ref) {
     // fail to cove flanking boundaries defined by maxinum dimer-diverisity increase
-    std::cout << name << " " << cigar_str << " " << qc_passed << " " << loc_ref.flanking_start << " " << covering_start << " " << covering_end << " " << loc_ref.flanking_end << std::endl;
     if (loc_ref.flanking_start < covering_start || covering_end < loc_ref.flanking_end) {
         fail_to_cover_flankings = true; return;
     } 

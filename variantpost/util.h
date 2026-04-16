@@ -82,7 +82,9 @@ struct LocalReference {
     bool has_flankings = false;
     int low_cplx_len = 0; // len of low compex seq within flanking
     int low_cplx_start = -1;
-    
+    int locplx_start = -1;
+    int locplx_end = -1; 
+      
     //--------------------------------------------------------------------------
     // sequences 
     std::string_view seq; // read only
@@ -157,6 +159,7 @@ struct Variant {
     bool is_complex = false; // true if complex event
     bool is_shiftable = false; // true if left- and right-positions are different
     bool in_target_flnk = false; // true if located within target's flnk start/end
+    bool in_homopolymer = false; // true in homopolymer or btw polymers
 };
 
 //------------------------------------------------------------------------------

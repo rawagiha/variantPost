@@ -43,12 +43,13 @@ struct Pileup {
     //--------------------------------------------------------------------------
     // metrics
     int sz = -1; // pileup size
-    int s_cnt = 0, n_cnt = 0, u_cnt = 0, y_cnt = 0; //cnt for supporting, non, undetermined
+    int s_cnt = 0, n_cnt = 0, u_cnt = 0, y_cnt = 0, z_cnt = 0; //cnt for supporting, non, undetermined
     
     //--------------------------------------------------------------------------
-    Ints starts, ends; // storing coverings starts/ends
+    //Ints starts, ends; // storing coverings starts/ends
     int start = -1, end = -1; //typically, start = min(starts), end = max(ends)
-                              
+    int low_cplx_start = -1, low_cplx_end = -1;
+    
     //--------------------------------------------------------------------------
     // haplotype = any non-reference patterns in a read within target_locus 
     //             +/- target_event_len in a read.
@@ -65,7 +66,7 @@ struct Pileup {
     std::string rseq; // reference hap. this will be set if necessary
 
     //--------------------------------------------------------------------------
-    Coord i2p_0; // index/pos pair for hap0
+    Coord i2p_0, i2p_1, i2p_2; // index/pos pair for hap0
     Coord i2p_r; // index/pos pair for reference hap
     int es = -1, ee = -1, fs = -1, fe = -1;
 

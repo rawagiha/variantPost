@@ -19,8 +19,8 @@ cdef extern from "search.h":
         #vector[string] base_quals
         #vector[int] skip_starts
         #vector[int] skip_ends
-        #int retarget_pos
-        #string ref, alt
+        int retarget_pos
+        string ref, alt
         #vector[string] read_names
         #vector[bool_t] are_reverse
         vector[int] target_statuses
@@ -353,7 +353,10 @@ cpdef object search_target(
         rslt.target_statuses,
         are_reverse,
         are_first_bam,
-        tags
+        tags,
+        rslt.retarget_pos,
+        rslt.ref.decode("utf-8"),
+        rslt.alt.decode("utf-8")
      #   cb
     )
     #return (

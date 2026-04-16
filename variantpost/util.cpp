@@ -99,6 +99,13 @@ inline double linguistic_cp(std::string_view seq, std::bitset<80>& cnter,
     return static_cast<double>(cnter.count()) / max_;        
 }
 
+inline int get_max_idx(const std::vector<double>& v) {
+    if (v.empty()) return -1;
+    auto it = std::max_element(v.begin(), v.end());
+    auto it_ = std::min_element(v.begin(), it);
+    std::cout << " this is min " << *it_ << std::endl;
+    return std::distance(v.begin(), it);
+}
 
 //------------------------------------------------------------------------------
 // find nearest genomics pos containing min(16, n - 1) 2-mers in a window of n
@@ -111,51 +118,43 @@ void LocalReference::setFlankingBoundary(const Variant& target, const size_t win
     // max possible N of 2-mers + 3 mers
     const size_t max_ = 2 * window - 3; 
     
+    double lc = 0.0, cp_thresh = 0.9;
     std::bitset<80> cnter;
-    const double thresh = 0.9;
+    std::vector<double> scores;
     const int last_idx = end - start - window + 1;
+    //std::cout << last_idx << " " << start << " " << end << " " << window << " " << target.end_pos - start <<  " flanking " << std::endl;
     for (int i = target.end_pos - start; i < last_idx; ++i) {
-        std::cout << seq.substr(i, window) << " lc right " << linguistic_cp(seq.substr(i, window), cnter, max_, window) << std::endl; 
-        if (linguistic_cp(seq.substr(i, window), cnter, max_, window) >= thresh) {
-            flanking_end = i + start + window; break;
-        }
+        lc = linguistic_cp(seq.substr(i, window), cnter, max_, window);
+        std::cout << lc << " at " << i << std::endl;
+        scores.push_back(lc); 
+        if (lc >= cp_thresh) break;
+        std::cout << linguistic_cp(seq.substr(i, window), cnter, max_, window) << " " << seq.substr(i, window) << std::endl;
     }
     
+    int rt_peak = get_max_idx(scores);
+    if (rt_peak > -1) {
+        flanking_end = target.end_pos + rt_peak + window;
+        scores.clear();
+    }
+    std::cout << " this is flanking end " << flanking_end << std::endl;
+
     for (int i = target.lpos - start - window + 1; i > 0; --i) {
-        std::cout << seq.substr(i, window) << " lc LEFT " << linguistic_cp(seq.substr(i, window), cnter, max_, window) << std::endl;
-        if (linguistic_cp(seq.substr(i, window), cnter, max_, window) >= thresh) {
-            flanking_start = i + start - 1; break;
-        }
-    }
-
-
-    // maximum possible number of 2-mers in window
-    
-    //const size_t max_ = (window - 1 < 16) ? window - 1 : 16;
-    
-      
-    
-    //if (seq.find('N') != std::string_view::npos) return;
-
-    /*
-    const int last_idx = end - start - window + 1;
-    for (int i = target.end_pos - start; i < last_idx; ++i) {
-        if (count_dimers(seq.substr(i, window)) == max_) {
-            //flanking_end = i + start + 1; break;
-            flanking_end = i + start + window;
-            flanking_end = i + start + window; break;
-        } 
+        lc = linguistic_cp(seq.substr(i, window), cnter, max_, window);
+        scores.push_back(lc);
+        if (lc >= cp_thresh) break;  
+        std::cout << "lt-side " << linguistic_cp(seq.substr(i, window), cnter, max_, window) << " " << seq.substr(i, window) << std::endl;
     }
     
-    for (int i = target.lpos - start - window + 1; i > 0; --i) {
-        if (count_dimers(seq.substr(i, window)) == max_) {
-            flanking_start = i + start - 1;
-            flanking_start = i + start - 1; break;
-        }
-    }*/
-    
+    int lt_peak = get_max_idx(scores);
+    if (lt_peak > -1) {
+        flanking_start = target.lpos - lt_peak - window;
+    }
+    std::cout << " this is flanking start " << flanking_start << std::endl;
+
     if (flanking_start > 0 && flanking_end > 0) has_flankings = true;
     else return; 
+    
+    /* characterize low complex segment in flanking region */
     
     const int start_idx = flanking_start - start;
     const int sz = flanking_end - flanking_start;
@@ -174,38 +173,17 @@ void LocalReference::setFlankingBoundary(const Variant& target, const size_t win
             elem.insert(dimers[seq.substr(start_idx + s - 1, 2)]);
             dimer_mtx[t][s] = elem;
             curr = static_cast<double>(dimer_mtx[t][s].size()) / ( s - t );
-            if (curr < lowest) { lowest = curr; n = t; m = s; }
+            if (curr < lowest && dimer_mtx[t][s].size() > 1) { lowest = curr; n = t; m = s; }
         }
     }
    
-    if (n > -1 && m > -1) { 
+    if (n > -1 && m > -1 && dimer_mtx[n][m].size() < 5) { 
         low_cplx_start = start_idx + n; low_cplx_len = m - n; 
-        std::cout << seq.substr(start_idx + n, low_cplx_len) << " " << low_cplx_len << std::endl;
+        std::cout << seq.substr(start_idx + n, low_cplx_len) << " sz " << sz << " " << low_cplx_len << "  size " <<  dimer_mtx[n][m].size() << " " << low_cplx_start << " " << start_idx + m << std::endl;
     }
     
-    // find the length of low 2-mer diversity sequence len
-    //std::set<int> found; size_t prev_cnt = 0; 
-    //low_cplx_start = flanking_start - start;
-    //int i = flanking_start - start;
-    //int tmp = low_cplx_len;
-    //for (/* */; i <  flanking_end - start + 1; ++i) {
-    //    found.insert(dimers[seq.substr(i, 2)]);
-    //    std::cout << i << " " << found.size() << " " << prev_cnt << " " << low_cplx_start << " " << low_cplx_len << std::endl;
-    //    if ((found.size() - prev_cnt > 1) && ( i - low_cplx_start > low_cplx_len) ) {
-    //        low_cplx_len = i - low_cplx_start;
-    //        low_cplx_start = i; prev_cnt = found.size();
-    //    }
-    //}
-    
-    // dimers have 16 patterns
-    //if (found.size() == 16) {
-    //    found.clear(); prev_cnt = 0; low_cplx_start = i;
-    //    if (i - low_cplx_start > low_cplx_len) low_cplx_len = i - low_cplx_start;
-    //}      
-    
-    //if (i - low_cplx_start > low_cplx_len) low_cplx_len = i - low_cplx_start;
-
-    //std::cout << flanking_start << " " << low_cplx_start << " " << low_cplx_len << " " << flanking_end << std::endl;
+    std::cout << flanking_start << " " << low_cplx_start << " " << low_cplx_len << " " << flanking_end << std::endl;
+    std::cout << start + low_cplx_start << " " << start + low_cplx_start + low_cplx_len << " low start end " << std::endl;
 }
 
 void LocalReference::findLowComplexRegion() {
@@ -217,11 +195,39 @@ void LocalReference::findLowComplexRegion() {
             same_base = (seq[j] == seq[j + 1]);
             if (same_base) ++j;
         }
+        
+        // stretch of 4 or longer
         if (j > i) {
             std::string base{seq[i]};
             homopoly.emplace_back(i + start, j + start, seq[i]);
             i = j;
         } else { ++i; }
+    }
+    const size_t sz = homopoly.size();
+    if (!sz) return;
+    
+    // joining homopolymers punctuated by one base (eg, TTTTTACCCCC) 
+    std::vector<std::vector<int>> mtx(sz, std::vector<int>(sz));
+    mtx[0][0] = homopoly[0].end - homopoly[0].start + 1;
+    int n = -1, m = -1, longest = 0; 
+    for (int s = 1; s < sz; ++s) {
+        for (int t = s; t >= 0; --t) {
+            if (homopoly[s].start - homopoly[s - 1].end < 3) {
+                mtx[t][s] = mtx[t][s - 1] +  homopoly[s].end - homopoly[s].start + 1;
+            } else {
+                mtx[t][s] = homopoly[s].end - homopoly[s].start + 1;
+            }
+            if (mtx[t][s] > longest) { longest = mtx[t][s]; n = t; m = s; }
+        }
+    }
+    
+    if (n > -1 && m > -1) {
+        locplx_start =  homopoly[n].start; locplx_end = homopoly[m].end;
+        if (low_cplx_start > -1) {
+            if (start + low_cplx_start < locplx_start) locplx_start = start + low_cplx_start;
+            if (locplx_end < start + low_cplx_start + low_cplx_len) 
+                locplx_end = start + low_cplx_start + low_cplx_len; 
+        }
     }
 }
 
