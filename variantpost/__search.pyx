@@ -74,16 +74,14 @@ cdef inline bint is_qualified_read(read, bint exclude_duplicates):
     
     # 0x100: secondary, 0x800: supplementary, 0x4: unmapped
     # 0x4: unmapped -> this tests if read has a cigerstring
-    if (flag & 0x100) or (flag & 0x800) or (flag & 0x4):
+    # 0x100 | 0x800 | 0x4 -> 0x904
+    if (flag & 0x904):
         return False
-            
     # 0x400: duplicate
     if exclude_duplicates and (flag & 0x400):
         return False
-
     if read.reference_start == -1:
         return False
-
     return True
 
 
@@ -143,22 +141,23 @@ cdef inline void pack_to_lists(
     cdef str q_qual = read.query_qualities_str
 
     if len(q_seq) < window_len:
-        read_names.push_back(read.query_name.encode('ascii'))
-        are_reverse.push_back(read.is_reverse)
-        cigar_strings.push_back(read.cigarstring.encode('ascii'))
-        aln_starts.push_back(read.reference_start + 1)
-        aln_ends.push_back(read.reference_end)
-        read_seqs.push_back(read.query_sequence.encode('ascii'))
+        read_names.push_back(<string>read.query_name.encode('ascii'))
+        are_reverse.push_back(<bool_t>read.is_reverse)
+        cigar_strings.push_back(<string>read.cigarstring.encode('ascii'))
+        aln_starts.push_back(<int>read.reference_start + 1)
+        aln_ends.push_back(<int>read.reference_end)
+        read_seqs.push_back(<string>q_seq.encode('ascii'))
 
         if not q_qual:
             qual_seqs.push_back((b'F' * len(q_seq)))
         else:
-            qual_seqs.push_back(q_qual.encode('ascii'))
+            qual_seqs.push_back(<string>q_qual.encode('ascii'))
     
         is_primary.push_back(secondary_flag)
         if get_tag_flag:
             tags.append(read.get_tags())
     else:
+        #TODO This is basically long-read support. Work on later
         res = shorten_read(
             read, 
             unspliced_local_reference_start, 
@@ -259,7 +258,7 @@ cpdef object search_target(
     _search_target(
         rslt,
         fastafile,
-        chrom.encode(),
+        chrom.encode('ascii'),
         pos,
         ref,
         alt,
