@@ -1,5 +1,11 @@
+# cython: language_level=3
+# cython: boundscheck=False
+# cython: wraparound=False
+# cython: initializedcheck=False
+# cython: cdivision=True
+# cython: nonecheck=False
+
 import random
-#import statistics
 from libcpp.string cimport string
 from libcpp.vector cimport vector
 from libcpp cimport bool as bool_t
@@ -59,51 +65,54 @@ cdef extern from "search.h":
         bool_t
     )
 
+# utilities
+cdef inline int int_max(int a, int b) nogil: return a if a > b else b
+cdef inline int int_min(int a, int b) nogil: return a if a < b else b
 
 cdef inline bint is_qualified_read(read, bint exclude_duplicates):
+    cdef int flag = read.flag
     
-    if exclude_duplicates:
-        if (
-            read.cigarstring 
-            and not read.is_duplicate 
-            and not read.is_secondary 
-            and not read.is_supplementary 
-            and read.reference_end
-        ):
-            return True
-    else:
-        if (
-            read.cigarstring 
-            and not read.is_secondary 
-            and not read.is_supplementary 
-            and read.reference_end
-        ):
-            return True
-    
-    return False
+    # 0x100: secondary, 0x800: supplementary, 0x4: unmapped
+    # 0x4: unmapped -> this tests if read has a cigerstring
+    if (flag & 0x100) or (flag & 0x800) or (flag & 0x4):
+        return False
+            
+    # 0x400: duplicate
+    if exclude_duplicates and (flag & 0x400):
+        return False
+
+    if read.reference_start == -1:
+        return False
+
+    return True
 
 
 def fetch_reads(
-    bam, 
-    chrom, 
-    pos, 
-    chrom_len, 
-    window, 
-    exclude_duplicates, 
-    fetched_reads, 
-    est_cov, 
-    is_secondary
+    object bam, 
+    str chrom, 
+    int pos, 
+    int chrom_len, 
+    int window, 
+    bint exclude_duplicates, 
+    list fetched_reads, 
+    int est_cov, 
+    bint is_secondary
 ):
-    reads = bam.fetch(
-        chrom, max(0, pos - window), min(pos + window, chrom_len), until_eof=False
-    )
+    cdef int start = int_max(0, pos - window)
+    cdef int end = int_min(pos + window, chrom_len)
     
+    reads = bam.fetch(chrom, start, end, until_eof=False)
+    
+    cdef object read
+    cdef int ref_start, ref_end
+
     for read in reads:
-        if is_qualified_read(read, exclude_duplicates):
-            
+        if is_qualified_read(read, exclude_duplicates):        
             fetched_reads.append((read, is_secondary))
             
-            if read.reference_start <= pos <= read.reference_end:
+            ref_start = read.reference_start
+            ref_end = read.reference_end
+            if ref_start <= pos <= ref_end:
                 est_cov += 1 
 
     return est_cov
@@ -122,30 +131,33 @@ cdef inline void pack_to_lists(
     vector[bool_t]& is_primary,
     #vector[string]& cb,             #for isoanalysis
     int unspliced_local_reference_start,
-    unspliced_local_reference_end,
+    int unspliced_local_reference_end,
     int window_len,
     int k,
-    list tags
+    list tags,
+    bint get_tag_flag
 ):
     cdef object read = read_tuple[0]
-    
-    if len(read.query_sequence) < window_len:
-        read_names.push_back(read.query_name.encode())
+    cdef bint secondary_flag = read_tuple[1]
+    cdef str q_seq = read.query_sequence
+    cdef str q_qual = read.query_qualities_str
+
+    if len(q_seq) < window_len:
+        read_names.push_back(read.query_name.encode('ascii'))
         are_reverse.push_back(read.is_reverse)
-        cigar_strings.push_back(read.cigarstring.encode())
+        cigar_strings.push_back(read.cigarstring.encode('ascii'))
         aln_starts.push_back(read.reference_start + 1)
         aln_ends.push_back(read.reference_end)
-        read_seqs.push_back(read.query_sequence.encode())
-        if not read.query_qualities_str:
-            qual_seqs.push_back(('F'*len(read.query_sequence)).encode())
+        read_seqs.push_back(read.query_sequence.encode('ascii'))
+
+        if not q_qual:
+            qual_seqs.push_back((b'F' * len(q_seq)))
         else:
-            qual_seqs.push_back(read.query_qualities_str.encode())
+            qual_seqs.push_back(q_qual.encode('ascii'))
     
-        if read_tuple[1]:
-            is_primary.push_back(True) # to be renamed
-        else:
-            is_primary.push_back(False)
-        tags.append(read.get_tags())
+        is_primary.push_back(secondary_flag)
+        if get_tag_flag:
+            tags.append(read.get_tags())
     else:
         res = shorten_read(
             read, 
@@ -155,20 +167,16 @@ cdef inline void pack_to_lists(
         )
        
         if res:
-            read_names.push_back(read.query_name.encode())
+            read_names.push_back(read.query_name.encode('ascii'))
             are_reverse.push_back(read.is_reverse)
-            cigar_strings.push_back(res[2].encode())
+            cigar_strings.push_back(res[2].encode('ascii'))
             aln_starts.push_back(res[3])
             aln_ends.push_back(res[4])
-            read_seqs.push_back(res[0].encode())
-            qual_seqs.push_back(res[1].encode())
-            #mapqs.push_back(read.mapping_quality)
-
-            if read_tuple[1]:
-                is_primary.push_back(True)
-            else:
-                is_primary.push_back(False)
-            tags.append(read.get_tags())
+            read_seqs.push_back(res[0].encode('ascii'))
+            qual_seqs.push_back(res[1].encode('ascii'))
+            is_primary.push_back(secondary_flag)
+            if get_tag_flag:
+                tags.append(read.get_tags())
 
 
 cpdef object search_target(
@@ -197,6 +205,7 @@ cpdef object search_target(
      int unspliced_local_reference_start,
      int unspliced_local_reference_end,
      int k,
+     bint get_tags_flag=True # user option add later
 ):
     cdef SearchResult rslt     
     cdef int est_cov = 0
@@ -204,89 +213,48 @@ cpdef object search_target(
     cdef bool_t has_second = False
 
     # read_fetching from first bam
-    est_cov = fetch_reads(
-        bam, 
-        bam_chrom, 
-        pos, 
-        chrom_len, 
-        window, 
-        exclude_duplicates, 
-        fetched_reads, 
-        est_cov, 
-        False if second_bam else True
-    )  
+    est_cov = fetch_reads(bam, bam_chrom, pos, chrom_len, window, 
+                          exclude_duplicates, fetched_reads, est_cov, 
+                          False if second_bam else True)  
     
     if second_bam:
         has_second = True
-        est_cov = fetch_reads(
-            second_bam, 
-            bam_chrom, 
-            pos, 
-            chrom_len, 
-            window, 
-            exclude_duplicates, 
-            fetched_reads, 
-            est_cov, 
-            True
-        )  
+        est_cov = fetch_reads(second_bam, bam_chrom, pos, chrom_len, window, 
+                              exclude_duplicates, fetched_reads, est_cov, True)  
     
     if downsample_thresh > 0 and est_cov > downsample_thresh:
         n_sample = int(len(fetched_reads) * (downsample_thresh / est_cov))
         random.seed(123)
-        fetched_reads = random.sample(fetched_reads,  n_sample)
+        fetched_reads = random.sample(fetched_reads, n_sample)
     
     cdef int buff_size = len(fetched_reads);
+    cdef vector[string] read_names, cigar_strings, read_seqs, qual_seqs 
+    cdef vector[bool_t] are_reverse, are_first_bam
+    cdef vector[int] aln_starts, aln_ends
 
-    cdef vector[string] read_names 
     read_names.reserve(buff_size)
-    cdef vector[bool_t] are_reverse 
     are_reverse.reserve(buff_size)
-    cdef vector[string] cigar_strings 
     cigar_strings.reserve(buff_size)
-    cdef vector[int] aln_starts 
     aln_starts.reserve(buff_size)
-    cdef vector[int] aln_ends 
     aln_ends.reserve(buff_size)
-    cdef vector[string] read_seqs
-    read_seqs.reserve(buff_size) 
-    cdef vector[string] qual_seqs
-    qual_seqs.reserve(buff_size) 
-    #cdef vector[int] mapqs 
-    #mapqs.reserve(buff_size)
-    cdef vector[bool_t] are_first_bam
-
-    #isoseq#
-    #cdef vector[string] cb
-    #cb.reserve(buff_size)
-
-    #opposite!!!
+    read_seqs.reserve(buff_size)
+    qual_seqs.reserve(buff_size)
     are_first_bam.reserve(buff_size)
-    
-    tags = []
+   
+    cdef list tags = []
     cdef int widow_len = unspliced_local_reference_end - unspliced_local_reference_start
-    for read in fetched_reads:
-        
-        if read[0].mapping_quality < mapping_quality_threshold:
+    cdef tuple r_tup
+    cdef object r_obj
+
+    for r_tup in fetched_reads:
+        r_obj = r_tup[0]
+        if r_obj.mapping_quality < mapping_quality_threshold:
             continue
         
-        pack_to_lists(
-            read, 
-            read_names, 
-            are_reverse, 
-            cigar_strings,
-            aln_starts, 
-            aln_ends, 
-            read_seqs, 
-            qual_seqs, 
-            #mapqs, 
-            are_first_bam,
-            #cb,
-            unspliced_local_reference_start,
-            unspliced_local_reference_end,
-            widow_len,
-            k,
-            tags
-        )
+        pack_to_lists(r_tup, read_names, are_reverse, cigar_strings,
+                      aln_starts, aln_ends, read_seqs, qual_seqs, 
+                      are_first_bam, unspliced_local_reference_start,
+                      unspliced_local_reference_end, widow_len, k, tags, get_tags_flag)
          
     _search_target(
         rslt,
@@ -321,9 +289,16 @@ cpdef object search_target(
     )
     
     contig_dict = OrderedDict()
-    for pos, ref_base, alt_base, in zip(
-        rslt.positions, rslt.ref_bases, rslt.alt_bases,
-    ):
+    cdef int p
+    cdef string refb, altb
+    for i in range(rslt.positions.size()):
+        p = rslt.positions[i]
+        refb = rslt.ref_bases[i]
+        altb = rslt.alt_bases[i]
+        contig_dict[p] = (refb.decode('ascii'), altb.decode('ascii'), "F")
+    
+    #TODO hard code "F", is this okay?? What if this base in actual data is low qual
+    #here is prev version: keep for now
         #qual_chars = base_qual.decode("utf-8")
         #qual = -1
         #if len(qual_chars) == 1:
@@ -332,12 +307,8 @@ cpdef object search_target(
         #    quals = [ord(c) - 33 for c in qual_chars]
         #    qual = statistics.median(quals)
         
-        contig_dict[pos] = (
-        ref_base.decode("utf-8"), 
-        alt_base.decode("utf-8"), 
-        "F",
-    )
     
+    # KEEP this for later dev
     #annot_reads = []
     #for read_name, is_reverse, target_status, is_first_bam in zip(
     #    rslt.read_names, rslt.are_reverse, rslt.target_statuses, rslt.are_from_first_bam
@@ -347,7 +318,7 @@ cpdef object search_target(
     #    )
     
     #skips = [(start, end) for start, end in zip(rslt.skip_starts, rslt.skip_ends)]
-    print(len(rslt.target_statuses), len(tags))
+    
     return (
         contig_dict,
         rslt.target_statuses,
@@ -355,8 +326,8 @@ cpdef object search_target(
         are_first_bam,
         tags,
         rslt.retarget_pos,
-        rslt.ref.decode("utf-8"),
-        rslt.alt.decode("utf-8")
+        rslt.ref.decode("ascii"),
+        rslt.alt.decode("ascii")
      #   cb
     )
     #return (
