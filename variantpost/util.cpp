@@ -5,6 +5,24 @@
 #include "util.h"
 #include "fasta/Fasta.h"
 
+//------------------------------------------------------------------------------
+// converting base to 2-bit (0-3)
+inline int b2i(char b) {
+    switch (b & 0xDF) { // lower to capital
+        case 'A': return 0; case 'C': return 1;case 'G': return 2; case 'T': return 3;
+        default: return 0; // prefilter n/N
+    }
+}
+
+//------------------------------------------------------------------------------
+// get index of 2-mer (0-15) and 3-mer (16-79)
+inline int get_mer_idx(std::string_view s) {
+    if (s.size() == 2) 
+        return (b2i(s[0]) << 2) | b2i(s[1]);
+    if (s.size() == 3) 
+        return (16 + (b2i(s[0]) << 4)) | (b2i(s[1]) << 2) | b2i(s[2]);
+    return -1;
+}
 
 //------------------------------------------------------------------------------
 UserParams::UserParams(const int _base_q_thresh, const double lq,
@@ -22,28 +40,28 @@ LocalReference::LocalReference(const std::string& fastafile,
     const int seq_sz = end_ - start_ + 1; 
 
     fasta.open(fastafile);
+    
+    // this is raw seq (std::string)
     _seq = fasta.getSubSequence(chrom_, start_ - 1, seq_sz); 
     
-    const char nbase = 'N';
+    // trimming 'N/n' 
+    auto first = _seq.find_first_not_of("Nn"); // first non-N/n (ATCG)
+    auto last = _seq.find_last_not_of("Nn"); // last non-N/n 
 
-    int i = 0; bool is_n = true;
-    while (is_n && i < seq_sz) {
-        is_n = (_seq[i] == nbase); ++i;
+    if (first == std::string::npos) { 
+        // all bases are N/n (Not analyzable)
+        start = start_; 
+        end = end_; 
+        seq = std::string_view(); // set empty string view
+    } else {
+        seq = std::string_view(_seq).substr(first, last - first + 1);
+        start = start_ + static_cast<int>(first);
+        end = start_ + static_cast<int>(last);
     }
-    start = start_ + i - 1; 
-    
-    i = 0; is_n = true;
-    while (is_n && i <= seq_sz) {
-        is_n = (_seq[seq_sz - (i + 1)] == nbase); ++i;
-    }
-    end = end_ - i + 1;
-    
-    if (start != start_ || end != end_) 
-        _seq = fasta.getSubSequence(chrom_, start - 1, end - start + 1);
-     
-    seq = _seq; 
 
-    for (int i = 0; i <= end - start; ++i) dict[start + i] = seq.substr(i, 1); 
+    for (size_t i = 0; i < seq.size(); ++i) {
+        dict[start + i] = seq.substr(i, 1);
+    }
 }
 
 //-----------------------------------------------------------------------------
@@ -83,20 +101,28 @@ inline size_t count_dimers(std::string_view seq) {
     return flags.count();
 }
 
-inline double linguistic_cp(std::string_view seq, std::bitset<80>& cnter,
-                            const size_t max_, const size_t window) {
-    
+inline double linguistic_cp(std::string_view seq, 
+                            std::bitset<80>& cnter, const size_t max_) {
+    cnter.reset();
+    for (size_t i = 0; i < seq.size() - 1; ++i) {
+        cnter.set(get_mer_idx(seq.substr(i, 2)));
+        if (i < seq.size() - 2)
+            cnter.set(get_mer_idx(seq.substr(i, 3)));
+    } 
+
     // check window size at the user interface
     //if (len < 3) return 0.0;
+    
+    /*
     const size_t len = seq.size();
     
     cnter.reset();
     for (size_t i = 0; i < len - 1; ++i) {
         cnter.set(dimers[seq.substr(i, 2)]);
         cnter.set(dimers[seq.substr(i, 3)]); // will safely be handled
-    }
+    }*/
     
-    return static_cast<double>(cnter.count()) / max_;        
+    return static_cast<double>(cnter.count()) / max_;       
 }
 
 inline int get_max_idx(const std::vector<double>& v) {
@@ -116,8 +142,64 @@ inline int get_max_idx(const std::vector<double>& v) {
 void LocalReference::setFlankingBoundary(const Variant& target, const size_t window) {
     
     // max possible N of 2-mers + 3 mers
-    const size_t max_ = 2 * window - 3; 
+    const size_t max_mer_capacity = 2 * window - 3; 
     
+    double cp_thresh = 0.9; //TODO make this configurable
+
+    std::bitset<80> cnter;
+    std::vector<double> scores;
+    double max_cp = -1.0;
+    
+    // flanking end determination (right-boundary)
+    const int search_rt_lim = static_cast<int>(seq.size()) - window;
+    const int search_rt_start = target.end_pos - start;
+    int peak_idx = search_rt_start;
+    for (int i = search_rt_start; i <= search_rt_lim; ++i) {
+        double curr_cp = linguistic_cp(seq.substr(i, window), cnter, max_mer_capacity);
+        scores.push_back(curr_cp);
+
+        // terminate if more complex than thresh
+        if (curr_cp >= cp_thresh) {
+            flanking_end = start + i + window;
+            break;
+        }
+
+        // track peak val for cases of non-thresh exceeding
+        if (curr_cp > max_cp) {
+            max_cp = curr_cp;
+            peak_idx = i;
+        }
+    }
+
+    // set flanking end at the peak complex value (but < cp_thresh)
+    if (flanking_end == -1 && !scores.empty()) {
+        flanking_end = start + peak_idx + window;
+    }
+    
+    // flanking start determination (left-boundary)
+    scores.clear(); max_cp = -1.0;
+    const int search_lt_start = target.lpos - start - window + 1;
+    peak_idx = search_lt_start;
+    for (int i = search_lt_start; i >= 0; --i) {
+        double curr_cp = linguistic_cp(seq.substr(i, window), cnter, max_mer_capacity);
+        scores.push_back(curr_cp);
+
+        if (curr_cp >= cp_thresh) {
+            flanking_start = start + i;
+            break;
+        }
+
+        if (curr_cp > max_cp) {
+            max_cp = curr_cp;
+            peak_idx = i;
+        }
+    }
+
+    if (flanking_start == -1 && !scores.empty()) {
+        flanking_start = start + peak_idx;
+    }
+
+    /*
     double lc = 0.0, cp_thresh = 0.9;
     std::bitset<80> cnter;
     std::vector<double> scores;
@@ -150,6 +232,7 @@ void LocalReference::setFlankingBoundary(const Variant& target, const size_t win
         flanking_start = target.lpos - lt_peak - window;
     }
     std::cout << " this is flanking start " << flanking_start << std::endl;
+    */
 
     if (flanking_start > 0 && flanking_end > 0) has_flankings = true;
     else return; 
@@ -158,10 +241,38 @@ void LocalReference::setFlankingBoundary(const Variant& target, const size_t win
     
     const int start_idx = flanking_start - start;
     const int sz = flanking_end - flanking_start;
-    
+    if (sz < 2 ) return;
+
+    double lowest = 16.0;
+    int best_n = -1, best_m = -1;
+
+    for (int t = 0; t < sz; ++t) {
+        uint16_t seen_dimers = 0;
+        for (int s = t + 1; s < sz; ++s) {
+            seen_dimers |= (1 << get_mer_idx(seq.substr(start_idx + s - 1, 2)));
+            int distinct_count = std::bitset<16>(seen_dimers).count();
+            double curr = static_cast<double>(distinct_count) / (s - t);
+            
+            if (curr < lowest && distinct_count > 1) {
+                lowest = curr;
+                best_n = t;
+                best_m = s;
+            }
+        }
+    }
+
+    if (best_n > -1 && best_m > -1) {
+        int distinct_count = std::bitset<16>(lowest * (best_m - best_n)).count();
+        if (distinct_count < 5) {
+            low_cplx_start = start_idx + best_n;
+            low_cplx_len = best_m - best_n;
+        }
+    }
+
     // 2-mer set in sequence startig from t and ending at s
     // dimer(t, s - 1) + seq.substr(s - 1, 2) -> dimer_set(t, s)
     // dimer(t, s - 1) was memorized and re-used (i.e., DP)   
+    /*
     std::vector<std::vector<std::set<int>>> dimer_mtx(sz, std::vector<std::set<int>>(sz));
     std::set<int> init;
     dimer_mtx[0][0] = init;
@@ -181,7 +292,7 @@ void LocalReference::setFlankingBoundary(const Variant& target, const size_t win
         low_cplx_start = start_idx + n; low_cplx_len = m - n; 
         std::cout << seq.substr(start_idx + n, low_cplx_len) << " sz " << sz << " " << low_cplx_len << "  size " <<  dimer_mtx[n][m].size() << " " << low_cplx_start << " " << start_idx + m << std::endl;
     }
-    
+    */
     std::cout << flanking_start << " " << low_cplx_start << " " << low_cplx_len << " " << flanking_end << std::endl;
     std::cout << start + low_cplx_start << " " << start + low_cplx_start + low_cplx_len << " low start end " << std::endl;
 }
@@ -1081,7 +1192,7 @@ void fill_cigar_vector(const std::string& cigar_str, CigarVec& cigar_vector) {
     
     // exceptional cases -> empty vector to signal failure
     if (ec != std::errc{} || next_ptr >= end) {
-        cigar_vector.empty(); return;
+        cigar_vector.clear(); return;
     }
 
     // next_ptr points to cigar operation char ('D' in 10D)
