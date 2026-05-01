@@ -1068,24 +1068,41 @@ void splice_cigar(
 
 //------------------------------------------------------------------------------
 void fill_cigar_vector(const std::string& cigar_str, CigarVec& cigar_vector) {
-  size_t pos = 0; size_t new_pos; const size_t len = cigar_str.size();
   
-  while (pos < len) {
-    new_pos = cigar_str.find_first_of(MAPSTR, pos) + 1;
-    std::string cigar = cigar_str.substr(pos, new_pos - pos); 
-    cigar_vector.emplace_back(cigar.substr(cigar.size() - 1, 1)[0],
-                              std::stoi(cigar.substr(0, cigar.size() - 1)));
-    pos = new_pos;
-  }
+  // cigar_str non-empty pre-checked  
+  const char* ptr = cigar_str.data();
+  const char* const end = ptr + cigar_str.size();
+
+  while (ptr < end) {
+    int length = 0;
+
+    // length as int (e.g. 10 in 10D)
+    auto [next_ptr, ec] = std::from_chars(ptr, end, length);
+    
+    // exceptional cases -> empty vector to signal failure
+    if (ec != std::errc{} || next_ptr >= end) {
+        cigar_vector.empty(); return;
+    }
+
+    // next_ptr points to cigar operation char ('D' in 10D)
+    char op = *next_ptr;
+
+    cigar_vector.emplace_back(op, length);
+
+    // move to the beginning of next numerical (e.g., 10D400M, ptr->4)
+    ptr = next_ptr + 1;
+ }
 }
 
 //------------------------------------------------------------------------------
 // overloading 
 void fill_cigar_vector(const std::vector<uint32_t>& cigar, CigarVec& cigar_vector) {    
-    for (uint32_t c : cigar) 
-        cigar_vector.emplace_back(
-            MAPSTR[c & ((static_cast<uint32_t>(1) << BAM_CIGAR_SHIFT) - 1)],
-            c >> BAM_CIGAR_SHIFT);
+    cigar_vector.reserve(cigar.size());
+    for (const uint32_t c : cigar) {
+        const uint32_t op_idx = c & 0xF; // extract lower 4 bits (index for cigar op)
+        const uint32_t op_len = c >> BAM_CIGAR_SHIFT;
+        cigar_vector.emplace_back(MAPSTR[op_idx], op_len);
+    }
 }
 
 //------------------------------------------------------------------------------
