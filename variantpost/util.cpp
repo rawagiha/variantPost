@@ -68,6 +68,7 @@ LocalReference::LocalReference(const std::string& fastafile,
 Homopolymer::Homopolymer(const int start_, const int end_, const char base_)
     : start(start_), end(end_), base(base_) {/* */}
 
+/*
 typedef std::unordered_map<std::string_view, int> Mers;
 Mers dimers =  {
     {"AA", 0}, {"AC", 1}, {"AG", 2}, {"AT", 3},
@@ -99,7 +100,7 @@ inline size_t count_dimers(std::string_view seq) {
     for (size_t i = 0; i < len - 1; ++i)
         flags.set(dimers[seq.substr(i, 2)]);
     return flags.count();
-}
+}*/
 
 inline double linguistic_cp(std::string_view seq, 
                             std::bitset<80>& cnter, const size_t max_) {
@@ -125,13 +126,14 @@ inline double linguistic_cp(std::string_view seq,
     return static_cast<double>(cnter.count()) / max_;       
 }
 
+/*
 inline int get_max_idx(const std::vector<double>& v) {
     if (v.empty()) return -1;
     auto it = std::max_element(v.begin(), v.end());
     auto it_ = std::min_element(v.begin(), it);
     std::cout << " this is min " << *it_ << std::endl;
     return std::distance(v.begin(), it);
-}
+}*/
 
 //------------------------------------------------------------------------------
 // find nearest genomics pos containing min(16, n - 1) 2-mers in a window of n
