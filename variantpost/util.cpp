@@ -58,10 +58,6 @@ LocalReference::LocalReference(const std::string& fastafile,
         start = start_ + static_cast<int>(first);
         end = start_ + static_cast<int>(last);
     }
-
-    //for (size_t i = 0; i < seq.size(); ++i) {
-    //    dict[start + i] = seq.substr(i, 1);
-    //}
 }
 
 //-----------------------------------------------------------------------------

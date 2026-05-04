@@ -179,7 +179,20 @@ struct Variant {
 };
 
 //------------------------------------------------------------------------------
+template<> struct std::hash<Variant> {
+    size_t operator () (const Variant& v) const noexcept {
+        auto hash_combine = [](size_t& seed, size_t val) {
+            seed ^= val + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+        };
+        size_t h = std::hash<int>{}(v.pos);
+        hash_combine(h, std::hash<std::string>{}(v.ref));
+        hash_combine(h, std::hash<std::string>{}(v.alt));
+        return h;
+    }
+};
+
 // make Variant hashable
+/*
 template<> struct std::hash<Variant> {
     size_t operator () (const Variant& v) const noexcept {
         size_t h1 = std::hash<int>()(v.pos);
@@ -187,7 +200,7 @@ template<> struct std::hash<Variant> {
         size_t h3 = std::hash<std::string>()(v.alt);
         return h1 ^ h2 ^ h3;
     }
-};
+};*/
 
 //------------------------------------------------------------------------------
 // overloaded operators
