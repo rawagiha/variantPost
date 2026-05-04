@@ -5,6 +5,8 @@
 #include <map>
 #include <string>
 #include <vector>
+#include <optional>
+#include <cstdint>
 #include <utility>
 #include <charconv>
 #include <iterator>
@@ -75,7 +77,9 @@ struct LocalReference {
     
     FastaReference fasta;
     std::string chrom;
-    
+    std::string n_base = "N";
+    std::string_view n_view = n_base;
+
     int start; int end; // 1-based genomic pos, start/end inclusive
     
     // flanking region defined by 2-mer diversity
@@ -91,8 +95,19 @@ struct LocalReference {
     std::string_view seq; // read only
     std::string _seq; // data for string_view
     
-    Dict dict; // dictitionary {pos, base}   
+    //Dict dict; // dictitionary {pos, base}   
     
+    std::optional<char> base_at_safe (int genomic_pos) const {
+        if (genomic_pos < start || genomic_pos > end) {
+            return std::nullopt; 
+        }
+        return _seq[genomic_pos - start];
+    }
+    
+    // faster no boundary check
+    inline char base_at(int genomic_pos) const { return _seq[genomic_pos - start]; }
+    //inline char base_at_view (int genomic_pos) const { return seq[genomic_pos - start]; }
+        
     std::vector<Homopolymer> homopoly; 
 };
 
@@ -196,7 +211,9 @@ void fill_cigar_vector(const std::vector<uint32_t>& cigar, CigarVec& cigar_vecto
 // fill Vars and index variants in the read by parsing CIGAR
 void read2variants(const int aln_start, std::string_view ref_seq, 
                    std::string_view read_seq, std::string_view base_qualities, 
-                   const CigarVec& cigar_vector, const Dict& ref_dict, 
+                   const CigarVec& cigar_vector, 
+                   //const Dict& ref_dict, 
+                   LocalReference& loc_ref,
                    Vars& variants, Ints& var_idx, Coord& idx2pos);
 
 

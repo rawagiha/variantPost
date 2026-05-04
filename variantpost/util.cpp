@@ -9,7 +9,7 @@
 // converting base to 2-bit (0-3)
 inline int b2i(char b) {
     switch (b & 0xDF) { // lower to capital
-        case 'A': return 0; case 'C': return 1;case 'G': return 2; case 'T': return 3;
+        case 'A': return 0; case 'C': return 1; case 'G': return 2; case 'T': return 3;
         default: return 0; // prefilter n/N
     }
 }
@@ -59,9 +59,9 @@ LocalReference::LocalReference(const std::string& fastafile,
         end = start_ + static_cast<int>(last);
     }
 
-    for (size_t i = 0; i < seq.size(); ++i) {
-        dict[start + i] = seq.substr(i, 1);
-    }
+    //for (size_t i = 0; i < seq.size(); ++i) {
+    //    dict[start + i] = seq.substr(i, 1);
+    //}
 }
 
 //-----------------------------------------------------------------------------
@@ -319,28 +319,39 @@ void LocalReference::findLowComplexRegion() {
     const size_t sz = homopoly.size();
     if (!sz) return;
     
-    // joining homopolymers punctuated by one base (eg, TTTTTACCCCC) 
-    std::vector<std::vector<int>> mtx(sz, std::vector<int>(sz));
-    mtx[0][0] = homopoly[0].end - homopoly[0].start + 1;
-    int n = -1, m = -1, longest = 0; 
-    for (int s = 1; s < sz; ++s) {
-        for (int t = s; t >= 0; --t) {
-            if (homopoly[s].start - homopoly[s - 1].end < 3) {
-                mtx[t][s] = mtx[t][s - 1] +  homopoly[s].end - homopoly[s].start + 1;
-            } else {
-                mtx[t][s] = homopoly[s].end - homopoly[s].start + 1;
-            }
-            if (mtx[t][s] > longest) { longest = mtx[t][s]; n = t; m = s; }
+    // joining homopolymers punctuated by one/two base (eg, TTTTTACCCCC)
+    int current_chain_start_idx = 0;  
+    int current_chain_len = 0;
+    
+    int best_chain_start_node = 0; // best so far
+    int best_chain_end_node = 0;
+    int max_total_len = 0; 
+
+    for (size_t s = 0; s < sz; ++s) {
+        int h_len = homopoly[s].end - homopoly[s].start + 1;
+
+        if (s > 0 && (homopoly[s].start - homopoly[s - 1].end < 3)) {
+            current_chain_len += h_len;
+        } else {
+            current_chain_start_idx = s;
+            current_chain_len = h_len;
+        }
+
+        if (current_chain_len > max_total_len) {
+            max_total_len = current_chain_len;
+            best_chain_start_node = current_chain_start_idx;
+            best_chain_end_node = s;
         }
     }
-    
-    if (n > -1 && m > -1) {
-        locplx_start =  homopoly[n].start; locplx_end = homopoly[m].end;
-        if (low_cplx_start > -1) {
-            if (start + low_cplx_start < locplx_start) locplx_start = start + low_cplx_start;
-            if (locplx_end < start + low_cplx_start + low_cplx_len) 
-                locplx_end = start + low_cplx_start + low_cplx_len; 
-        }
+
+    locplx_start = homopoly[best_chain_start_node].start;
+    locplx_end = homopoly[best_chain_end_node].end;
+
+    if (low_cplx_start > -1) {
+        int l_start = start + low_cplx_start;
+        int l_end = l_start + low_cplx_len;
+        if (l_start < locplx_start) locplx_start = l_start;
+        if (l_end > locplx_end) locplx_end = l_end;
     }
 }
 
@@ -390,12 +401,14 @@ inline void to_left(
     std::string& longer_allele,
     std::string& shorter_allele,
     bool& is_failed,
-    const std::unordered_map<int, std::string_view>& ref_dict
+    const LocalReference& loc_ref
+    //const std::unordered_map<int, std::string_view>& ref_dict
 )
 {
     --pos;
     --variant_end_pos;
-    char prev_base = std::string{ref_dict.at(pos)}[0];
+    //char prev_base = std::string{ref_dict.at(pos)}[0];
+    char prev_base = loc_ref.base_at(pos);
     if (prev_base == 'N')
     {
         ++pos;
@@ -417,7 +430,8 @@ void left_align(
     std::string& alt, 
     const bool is_ins,
     const int ref_start,
-    const std::unordered_map<int, std::string_view>& ref_dict
+    const LocalReference& loc_ref
+    //const std::unordered_map<int, std::string_view>& ref_dict
 )
 {
     std::string& longer_allele = (is_ins) ? alt : ref;
@@ -426,15 +440,17 @@ void left_align(
        
     while(is_rotatable(longer_allele) && ref_start < pos) 
     {
-        if (ref_dict.find(pos - 1) == ref_dict.end()) return;
-        
+        //if (ref_dict.find(pos - 1) == ref_dict.end()) return;
+        auto base = loc_ref.base_at_safe(pos - 1);
+        if (!base.has_value()) return;
+
         to_left(
             pos, 
             variant_end_pos, 
             longer_allele, 
             shorter_allele, 
             is_failed, 
-            ref_dict
+            loc_ref
         );
         
         if (is_failed) return;
@@ -484,7 +500,8 @@ void Variant::setLeftPos(const LocalReference& loc_ref)
     std::string _ref = ref, _alt = alt;
 
     left_align(_pos, _end_pos, _ref, _alt, 
-               is_ins, loc_ref.start, loc_ref.dict);
+               is_ins, loc_ref.start, loc_ref);
+               //is_ins, loc_ref.start, loc_ref.dict);
 
     lpos = _pos;
 }
@@ -495,10 +512,12 @@ inline void to_right(
     std::string& longer_allele, 
     std::string& shorter_allele,
     bool& is_failed,
-    const std::unordered_map<int, std::string_view>& ref_dict
+    const LocalReference& loc_ref
+    //const std::unordered_map<int, std::string_view>& ref_dict
 )
 {
-    char next_base = std::string{ref_dict.at(variant_end_pos)}[0];
+    //char next_base = std::string{ref_dict.at(variant_end_pos)}[0];
+    char next_base = loc_ref.base_at(variant_end_pos);
     if (next_base == 'N') 
     {
         is_failed = true;    
@@ -520,7 +539,8 @@ void right_align(
     std::string& alt, 
     const bool is_ins,
     const int ref_end,
-    const std::unordered_map<int, std::string_view>& ref_dict
+    const LocalReference& loc_ref
+    //const std::unordered_map<int, std::string_view>& ref_dict
 )
 {
     std::string& longer_allele = (is_ins) ? alt : ref;
@@ -528,13 +548,16 @@ void right_align(
     bool is_failed = false;
 
     do {
-        if (ref_dict.find(variant_end_pos) == ref_dict.cend()) return;
+        //if (ref_dict.find(variant_end_pos) == ref_dict.cend()) return;
+        auto base = loc_ref.base_at_safe(variant_end_pos);
+        if (!base.has_value()) return;
+
         to_right(
             variant_end_pos, 
             longer_allele, 
             shorter_allele,
             is_failed,
-            ref_dict
+            loc_ref
         );
         if (is_failed) return;
         
@@ -543,14 +566,16 @@ void right_align(
     while (is_rotatable(longer_allele) && pos < ref_end);
     
     // undo the last right shift
-    if (ref_dict.find(pos - 1) != ref_dict.cend())
-    {
+    //if (ref_dict.find(pos - 1) != ref_dict.cend())
+    auto base = loc_ref.base_at_safe(pos - 1);
+    if (base.has_value()) {
         to_left(
             pos, 
             variant_end_pos, 
             longer_allele, 
             shorter_allele, 
-            is_failed, ref_dict
+            is_failed, 
+            loc_ref
         );
     }
 }
@@ -597,7 +622,7 @@ void Variant::setRightPos(const LocalReference& loc_ref)
     std::string _ref = ref, _alt = alt;
     
     right_align(_pos, _end_pos, _ref, _alt, 
-                is_ins, loc_ref.end, loc_ref.dict);
+                is_ins, loc_ref.end, loc_ref);
     
     rpos = _pos;
 }
@@ -677,7 +702,8 @@ void Variant::testForDeNovoRepeats(LocalReference& loc_ref)
             overlapping = true;
             if (is_substitute && alt[0] == loc_ref.homopoly[i].base)
                  from_rt = true;
-            else if (is_del && loc_ref.dict.at(_end_pos) == loc_ref.dict.at(_pos_)) 
+            //else if (is_del && loc_ref.dict.at(_end_pos) == loc_ref.dict.at(_pos_)) 
+            else if (is_del && loc_ref.base_at(_end_pos) == loc_ref.base_at(_pos_)) 
                 from_rt = true;
             else if (is_ins && alt[alt.size() - 1] == loc_ref.homopoly[i].base)
                 from_rt = true;
@@ -693,7 +719,8 @@ void Variant::testForDeNovoRepeats(LocalReference& loc_ref)
 
     // denovo-rep in non-homoplymer cases
     if (denovo_rep) return; // already set
-    if (is_del && (loc_ref.dict.at(pos) == loc_ref.dict.at(_end_pos)))
+    //if (is_del && (loc_ref.dict.at(pos) == loc_ref.dict.at(_end_pos)))
+    if (is_del && (loc_ref.base_at(pos) == loc_ref.base_at(_end_pos)))
         denovo_rep = 1;
     else if (is_substitute) {
         if (loc_ref._seq[pos - 1 - loc_ref.start] == alt[0]
@@ -731,7 +758,7 @@ bool Variant::isEquivalent(const Variant& other, const LocalReference& loc_ref) 
     //if (is_clipped_segment || other.is_clipped_segment) return false;
     //if (is_substitute) return false;
     
-    left_align(_pos, _end_pos, _ref, _alt, other.is_ins, loc_ref.start, loc_ref.dict);
+    left_align(_pos, _end_pos, _ref, _alt, other.is_ins, loc_ref.start, loc_ref);
             
     return (pos == _pos && ref == _ref && alt == _alt);
 } 
@@ -1221,7 +1248,9 @@ void fill_cigar_vector(const std::vector<uint32_t>& cigar, CigarVec& cigar_vecto
 //------------------------------------------------------------------------------
 void read2variants(const int aln_start, std::string_view ref_seq, 
                    std::string_view read_seq, std::string_view base_qualities,
-                   const CigarVec& cigar_vector, const Dict& ref_dict,
+                   const CigarVec& cigar_vector, 
+                   //const Dict& ref_dict,
+                   LocalReference& loc_ref,
                    Vars& variants, Ints& var_idx, Coord& idx2pos) {
     char op = '\0'; 
     std::string_view ref, alt, qual;
@@ -1249,10 +1278,16 @@ void read2variants(const int aln_start, std::string_view ref_seq,
                 if (is_padding_base_supported) 
                     ref = ref_seq.substr(ref_idx - 1, 1);
                 else {
+                    auto base = loc_ref.base_at_safe(pos - 1);
+                    if (base.has_value()) {
+                        ref = std::string_view(&loc_ref._seq[pos - 1 - loc_ref.start], 1);
+                    } else ref = loc_ref.n_view;
+                    /*
                     auto it = ref_dict.find(pos - 1);
                     if (it != ref_dict.cend()) 
                         ref = it->second;
-                    else ref = "N";        
+                    else ref = "N";
+                    */        
                 } 
                 
                 variants.emplace_back(pos - 1, 
@@ -1270,10 +1305,16 @@ void read2variants(const int aln_start, std::string_view ref_seq,
                 if (is_padding_base_supported) 
                      alt = ref_seq.substr(ref_idx - 1, 1);
                 else {
+                    auto base = loc_ref.base_at_safe(pos - 1);
+                    if (base.has_value()) {
+                        ref = std::string_view(&loc_ref._seq[pos - 1 - loc_ref.start], 1);
+                        //ref = loc_ref.base_at_view(pos - 1);
+                    } else ref = loc_ref.n_view;
+                    /*
                     auto it = ref_dict.find(pos - 1);
                     if (it != ref_dict.cend()) 
                         alt = it->second;
-                    else alt = "N";
+                    else alt = "N";*/
                 }
                 
                 variants.emplace_back(pos - 1, 

@@ -73,7 +73,7 @@ void Read::setVariants(LocalReference& loc_ref) {
     
     // from util.h
     read2variants(aln_start, ref_seq, seq, base_quals, 
-                  cigar_vector, loc_ref.dict, variants, var_idx, idx2pos);
+                  cigar_vector, loc_ref, variants, var_idx, idx2pos);
 
     for (auto& v : variants) { v.isInFlanking(loc_ref); ++flnk_v_cnt; }
     

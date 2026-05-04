@@ -52,7 +52,7 @@ void Consensus::_from_variants(const int start_, const int end_, const Vars& var
        //ref.push_back(loc_ref.dict[pair.first]);
        ref_cnt = std::count(pair.second.begin(), pair.second.end(), REF);
        if (ref_cnt * 2 >= cov.back()) {
-           std::string s = std::string(loc_ref.dict[pair.first]);
+           std::string s = std::string(1, loc_ref.base_at(pair.first));
            ref.push_back(s); alt.push_back(ref.back());
        } else {
            std::string refaln = find_commenest_change(pair.second);
