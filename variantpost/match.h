@@ -60,6 +60,6 @@ void match2haplotypes(Pileup& pileup, const Strs& read_seqs,
                       //const std::string& seq_nt1, const std::string& seq_nt2,
                       const UserParams& params);
 
-void personalize(const Pileup& pileup, LocalReference& loc_ref, const UserParams& params, const Variant& target, Variant& per);
+void personalize(const Pileup& pileup, LocalReference& loc_ref, const UserParams& params, const Variant& target, Variant& per, std::string& pltseq, std::string& prtseq);
 
 #endif

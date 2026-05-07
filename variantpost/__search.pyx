@@ -25,8 +25,8 @@ cdef extern from "search.h":
         #vector[string] base_quals
         #vector[int] skip_starts
         #vector[int] skip_ends
-        int retarget_pos
-        string ref, alt
+        int ppos
+        string ref, alt, pref, palt, pltseq, prtseq
         #vector[string] read_names
         #vector[bool_t] are_reverse
         vector[int] target_statuses
@@ -324,7 +324,11 @@ cpdef object search_target(
         are_reverse,
         are_first_bam,
         tags,
-        rslt.retarget_pos,
+        rslt.ppos,
+        rslt.pref.decode("ascii"),
+        rslt.palt.decode("ascii"),
+        rslt.pltseq.decode("ascii"),
+        rslt.prtseq.decode("ascii"),
         rslt.ref.decode("ascii"),
         rslt.alt.decode("ascii")
      #   cb

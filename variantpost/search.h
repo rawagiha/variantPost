@@ -11,9 +11,13 @@ struct SearchResult
     //std::vector<std::string> base_quals;
     //std::vector<int> skip_starts;
     //std::vector<int> skip_ends;
-    int retarget_pos = -1;
+    int ppos = -1;
     std::string ref;
     std::string alt;
+    std::string pref;
+    std::string palt;
+    std::string prtseq;
+    std::string pltseq;
     //std::vector<std::string> read_names;
     //std::vector<bool> are_reverse;
     std::vector<int> target_statuses;

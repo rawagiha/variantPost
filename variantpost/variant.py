@@ -1,8 +1,41 @@
+from typing import Optional, List, Any, Union
 from collections import namedtuple
-from pysam import FastaFile
+from pysam import FastaFile, VariantFile
 
-BASES = {"A", "C", "G", "T", "N"}
-BASESET = set(BASES)
+BASESET = frozenset({"A", "C", "G", "T", "N"})
+
+
+MatchedRecord = namedtuple(
+    "MatchedRecord",
+    [
+        "chrom",
+        "pos",
+        "id",
+        "ref",
+        "alts",
+        "qual",
+        "filter",
+        "info",
+        "format",
+        "samples",
+    ],
+)
+
+def to_tuple(_entry: Any) -> MatchedRecord:
+    """pysam's VariantRecard -> MatchedRecord"""
+    return MatchedRecord(
+        _entry.chrom,
+        _entry.pos,
+        _entry.id,
+        _entry.ref,
+        _entry.alts,
+        _entry.qual,
+        _entry.filter,
+        _entry.info,
+        _entry.format,
+        _entry.samples,
+    )
+
 
 class Variant(object):
     """This class abstracts a variant relative to a linear reference genome.
@@ -33,30 +66,29 @@ class Variant(object):
         if the input alleles contain letters other than A, C, G, T and N.
 
     """
+    
+    __slots__ = (
+        'chrom', 'pos', 'ref', 'alt', 'reference', 'window',
+        'reference_len', 'k', 'unspliced_local_reference_start', 'unspliced_local_reference_end'
+    )
 
-    def __init__(self, chrom, pos, ref, alt, reference, window=50):
-
+    def __init__(self, chrom: str, pos: int, ref: str, alt: str, reference: FastaFile, window: int = 50):
+        
+        # input validation
+        if not set(ref).issubset(BASESET) or not set(alt).issubset(BASESET):
+            raise ValueError("Found characters other than 'A', 'C', 'G', 'T', 'N'.")
+        
         self.chrom = chrom
         self.pos = pos  # 1-based
-
         self.ref = ref
         self.alt = alt
-
-        if not set(list(self.ref)) <= BASES or not set(list(self.alt)) <= BASES:
-            raise ValueError("Found characters other than 'A', 'C', 'G', 'T', 'N'.")
-
         self.reference = reference
 
         ref_len = len(ref)
-        if ref_len < window:
-            self.window = window
-        else:
-            self.window = ref_len + window
-
+        self.window = window if ref_len < window else ref_len + window
         self.reference_len = reference.get_reference_length(self.chrom)
 
-        # this is coeff for ref window
-        self.k = 1 if ref_len > window * 4  else 4
+        self.k = 1 if ref_len > window * 4  else 4 # coefficient for ref window 
 
         # 1-based
         self.unspliced_local_reference_start = max(
@@ -68,45 +100,115 @@ class Variant(object):
         )
 
     @property
-    def is_indel(self):
+    def is_indel(self) -> bool:
         """True for insertions or deletions. False otherwise."""
         return len(self.ref) != len(self.alt)
 
     @property
-    def is_del(self):
+    def is_del(self) -> bool:
         """True for deletions. False for insertions or substitutions.   
         """
         return len(self.ref) > len(self.alt)
 
     @property
-    def is_ins(self):
+    def is_ins(self) -> bool:
         """True for insetions. False for deletions or substitutions."""
         return len(self.ref) < len(self.alt)
 
     @property
-    def is_simple_indel(self):
+    def is_simple_indel(self) -> bool:
         """True for indel that is not complex (co-occurrence of insertion and deletion).
         False for complex indels or substitutions.
         """
-        if self.is_indel:
-            shorter_allele = self.ref if self.is_ins else self.alt
-            longer_allele = self.ref if self.is_del else self.alt
-            return shorter_allele == longer_allele[: len(shorter_allele)]
+        ref_len = len(self.ref)
+        alt_len = len(self.alt)
 
-        return False
+        if ref_len == alt_len:
+            return False
+
+        shorter_allele = self.ref if ref_len < alt_len else self.alt
+        longer_allele = self.ref if ref_len > alt_len else self.alt
+
+        # test prefix by startswith
+        return longer_allele.startswith(shorter_allele)
+
+    
+    @property
+    def indel_seq(self):
+        """returns the inserted/deleted sequence for non-complex indels. None for substitutions.
+        """
+        if self.is_ins:
+            return self.alt[len(self.ref) :]
+        elif self.is_del:
+            return self.ref[len(self.alt) :]
+        else:
+            return ""
 
     @property
-    def is_normalized(self):
+    def is_normalized(self) -> bool:
         """True if left-aligened and the allele representations are minimal."""
-        if self.ref[-1] != self.alt[-1]:
-            if self.ref[0] != self.alt[0]:
+        ref, alt = self.ref, self.alt
+        if ref[-1] != alt[-1]:
+            if ref[0] != alt[0]:
                 return True
-            elif len(self.ref) == 1 or len(self.alt) == 1:
+            if len(ref) == 1 or len(alt) == 1:
                 return True
-
         return False
 
-    def normalize(self, inplace=False):
+    def left_flank(self, window=50, normalize=False):
+        """extracts the left-flanking reference sequence. See also :meth:`~indelpost.Variant.right_flank`.
+
+        Parameters
+        ----------
+        window : integer
+            extract the reference sequence [variant_pos - window, variant_pos].
+        normalize : bool
+            if True, the normalized indel position is used as the end of the flanking sequence.
+        """
+        if normalize:
+            i = Variant(self.chrom, self.pos, self.ref, self.alt, self.reference, skip_validation=True)
+        else:
+            i = self
+
+        if i.is_non_complex_indel():
+            pos = i.pos
+        else:
+            pos = i.pos - 1
+
+        lt_flank = i.reference.fetch(i.chrom, max(0, pos - window), pos)
+
+        return lt_flank
+
+
+    def right_flank(self, window=50, normalize=False):
+        """extracts the right-flanking reference sequence. See also :meth:`~indelpost.Variant.left_flank`.
+
+        Parameters
+        ----------
+        window : integer
+            extract the reference sequence [variant_end_pos, variant_end_pos + window].
+        normalize : bool
+            if True, the normalized indel position is used as the start of the flanking sequence.
+        """
+        if normalize:
+            i = Variant(self.chrom, self.pos, self.ref, self.alt, self.reference, skip_validation=True)
+        else:
+            i = self
+
+        ref_lim = i.reference.get_reference_length(i.chrom)
+        if i.is_non_complex_indel() and i.is_ins:
+            rt_flank = i.reference.fetch(i.chrom, i.pos, min(i.pos + window, ref_lim))
+        else:
+            if i.is_non_complex_indel() and i.is_del:
+                event_len = len(i.indel_seq)
+            else:
+                event_len = len(i.ref) - 1
+            rt_flank = i.reference.fetch(i.chrom, i.pos + event_len, min(i.pos + event_len + window, ref_lim))
+
+        return rt_flank
+
+
+    def normalize(self, inplace: bool = False) -> Optional['Variant']:
         """left-aligns in genomic position and minimize the allele represention.
 
         Parameters
@@ -115,144 +217,174 @@ class Variant(object):
                 normalizes this (self) :class:`~variantpost.Variant` object if True.
                 Otherwise, returns a normalized copy of the object. Default to False.
         """
-        if inplace:
-            i = self
-        else:
-            i = Variant(self.chrom, self.pos, self.ref, self.alt, self.reference)
+        i = self if inplace else Variant(self.chrom, self.pos, self.ref, self.alt, self.reference)
+        
+        # binding to local variables (avoid frequent property access)
+        ref, alt, pos = i.ref, i.alt, i.pos
 
-        condition_1 = i.ref[-1] == i.alt[-1] != "N"
-        lhs = i.reference.fetch(i.chrom, i.unspliced_local_reference_start, i.pos - 1)[
-            ::-1
-        ]
+        condition_1 = ref[-1] == alt[-1] and ref[-1] != "N"
+        if condition_1:
+            lhs = i.reference.fetch(i.chrom, i.unspliced_local_reference_start, pos - 1)
+            n = len(lhs) - 1
 
-        n = 0
-        lhs_len = len(lhs)
-        while condition_1 and n < lhs_len:
+            while condition_1 and n >= 0:
+                left_base = lhs[n]
+                ref = left_base + ref[:-1]
+                alt = left_base + alt[:-1]
+                pos -= 1
+                condition_1 = ref[-1] == alt[-1] and ref[-1] != "N"
+                n -= 1
 
-            left_base = lhs[n]
+        condition_2 = ref[0] == alt[0]
+        condition_3 = len(ref) > 1 and len(alt) > 1
+        
+        condition_2 = ref[0] == alt[0]
+        condition_3 = len(ref) > 1 and len(alt) > 1
 
-            i.ref = left_base + i.ref[:-1]
-            i.alt = left_base + i.alt[:-1]
-            i.pos -= 1
-
-            condition_1 = i.ref[-1] == i.alt[-1] != "N"
-
-            n += 1
-
-        condition_2 = i.ref[0] == i.alt[0]
-        condition_3 = len(i.ref) > 1 and len(i.alt) > 1
         while condition_2 and condition_3:
-            i.ref = i.ref[1:]
-            i.alt = i.alt[1:]
-            i.pos += 1
-            condition_2 = i.ref[0] == i.alt[0]
-            condition_3 = len(i.ref) > 1 and len(i.alt) > 1
+            ref = ref[1:]
+            alt = alt[1:]
+            pos += 1
+            condition_2 = ref[0] == alt[0]
+            condition_3 = len(ref) > 1 and len(alt) > 1
+
+        i.ref, i.alt, i.pos = ref, alt, pos
 
         if inplace:
             return None
-        else:
-            return i
+        return i
 
-    def __eq__(self, other):
-        if (
-            self.chrom == other.chrom
-            and self.pos == other.pos
-            and self.ref == other.ref
-            and self.alt == other.alt
-        ):
+    def __eq__(self, other : Any) -> bool:
+        if not isinstance(other, Variant):
+            return False
+        
+        if self.chrom != other.chrom:
+            return False
+
+        if self.pos == other.pos and self.ref == other.ref and self.alt == other.alt:
             return True
-        else:
-            if self.chrom != other.chrom:
-                return False
 
-            i, j = self.normalize(), other.normalize()
+        i = self.normalize()
+        j = other.normalize()
 
-            return (
-                i.chrom == j.chrom
-                and i.pos == j.pos
-                and i.ref == j.ref
-                and i.alt == j.alt
-            )
+        return i.pos == j.pos and i.ref == j.ref and i.alt == j.alt
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         i = self.normalize()
         return hash((i.chrom, i.pos, i.ref, i.alt))
 
-    def __getstate__(self):
+    def __getstate__(self) -> tuple:
         return (self.chrom, self.pos, self.ref, self.alt, self.reference.filename)
 
-    def __setstate__(self, state):
+    def __setstate__(self, state) -> None:
         self.chrom = state[0]
         self.pos = state[1]
         self.ref = state[2]
         self.alt = state[3]
-
         self.reference = FastaFile(state[4])
 
-    def __bool__(self):
-        if self.ref == self.alt:
-            return False
-        else:
-            return True
+    def __bool__(self) -> bool:
+        return self.ref != self.alt
 
-    def left_pos(self):
+    def left_pos(self) -> int:
         """returns a left-aligned genomic position."""
-
-        if not self.is_indel:
+        if not self.is_indel or not self.is_simple_indel:
             return self.pos
-        else:
-            if self.is_simple_indel:
-                curr_allele = self.alt if self.is_ins else self.ref
-                curr_pos = self.pos
-                if curr_allele[0] != curr_allele[-1]:
-                    return curr_pos
 
-                lt_flank = self.reference.fetch(
-                    self.chrom, self.unspliced_local_reference_start - 1, curr_pos
-                )[::-1]
-                i, n = 0, len(lt_flank)
-                while i < n:
-                    tmp_allele = lt_flank[i] + curr_allele[:-1]
-                    i += 1
+        curr_allele = self.alt if self.is_ins else self.ref
+        curr_pos = self.pos
+        
+        if curr_allele[0] != curr_allele[-1]:
+            return curr_pos
 
-                    if tmp_allele[0] != tmp_allele[-1]:
-                        break
-                    curr_allele = tmp_allele
+        lt_flank = self.reference.fetch(
+            self.chrom, self.unspliced_local_reference_start - 1, curr_pos
+        )
+        
+        idx = len(lt_flank) - 1
+        n_shifted = 0
+        
+        while idx >= 0:
+            tmp_allele = lt_flank[idx] + curr_allele[:-1]
+            if tmp_allele[0] != tmp_allele[-1]:
+                break
+            curr_allele = tmp_allele
+            idx -= 1
+            n_shifted += 1
 
-                return curr_pos - i + 1
-            else:
-                return self.pos
+        return curr_pos - n_shifted
 
-    def right_pos(self):
+    def right_pos(self) -> int:
         """returns the variant-end position after right-aligned."""
-        if not self.is_indel:
+        if not self.is_indel or not self.is_simple_indel:
             return self.pos + len(self.ref) - 1
+
+        if self.is_ins:
+            curr_pos = self.pos
+            curr_allele = self.alt
         else:
-            if self.is_simple_indel:
-                if self.is_ins:
-                    curr_pos = self.pos
-                    curr_allele = self.alt
-                else:
-                    curr_pos = self.pos + len(self.ref) - 1
-                    curr_allele = self.ref
+            curr_pos = self.pos + len(self.ref) - 1
+            curr_allele = self.ref
 
-                rt_flank = self.reference.fetch(
-                    self.chrom, curr_pos, self.unspliced_local_reference_end
-                )
-                i, n = 0, len(rt_flank)
-                while i < n:
-                    tmp_alelle = curr_allele[1:] + rt_flank[i]
-                    i += 1
+        rt_flank = self.reference.fetch(
+            self.chrom, curr_pos, self.unspliced_local_reference_end
+        )
+        
+        i, n = 0, len(rt_flank)
+        while i < n:
+            tmp_allele = curr_allele[1:] + rt_flank[i]
+            i += 1
+            if tmp_allele[0] != tmp_allele[-1]:
+                break
+            curr_allele = tmp_allele
 
-                    if tmp_alelle[0] != tmp_alelle[-1]:
-                        break
-                    curr_allele = tmp_alelle
+        return curr_pos + i - 1
+    
+    
+    def is_non_complex_indel(self):
+        """returns True only if non-complex indel (False if complex indel or substitution).
+        """
+        i = self.normalize()
+        ref, alt = i.ref, i.alt
+        if len(ref) == len(alt):
+            return False
+        
+        if ref[0] != alt[0]:
+            return False
+        
+        the_shorter = ref if i.is_ins else alt
+        if len(the_shorter) > 1:
+            return False
+        
+        return True    
 
-                return curr_pos + i - 1
-            else:
-                return self.pos + len(self.ref) - 1
+    def count_repeats(self, by_repeat_unit=True):
+        """counts indel repeats in the flanking reference sequences. The search window is
+        defined by :meth:`~indelpost.Variant.left_flank` and :meth:`~indelpost.Variant.right_flank`.
+        
+        Parameters
+        ----------
+        by_repeat_unit : bool
+            count by the smallest tandem repeat unit. For example, the indel sequence "ATATATAT" has
+            tandem units "ATAT" and "AT". The occurrence of "AT" will be counted if True (default).
+        """ 
 
-    def query_vcf(self, vcf, chrom_name=None, match_by_equivalence=True):
+        if self.is_non_complex_indel():
+            seq = self.indel_seq
+        else:
+            seq = self.alt
+        
+        if by_repeat_unit:
+            seq = to_minimal_repeat_unit(seq)
+
+        lt_flank = self.left_flank()
+        lr_repeat = repeat_counter(seq, lt_flank[::-1])
+        rt_flank = self.right_flank()
+        rt_repeat = repeat_counter(seq, rt_flank)
+        
+        return lr_repeat + rt_repeat
+
+    def query_vcf(self, vcf: VariantFile, chrom_name: Optional[str] = None, match_by_equivalence: bool = True) -> List[MatchedRecord]:
         """returns a `list <https://docs.python.org/3/library/stdtypes.html#list>`__ of :class:`MatchedRecord`.
         
 
@@ -285,12 +417,13 @@ class Variant(object):
         - **samples** - VCF genotype field. Genotypes are accessible by using sample names as key.
         
         """
-        vcf_chrom = chrom_name if chrom_name else self.chrom
 
+        vcf_chrom = chrom_name or self.chrom
         lt_pos, rt_pos = self.left_pos(), self.right_pos()
 
         if match_by_equivalence:
             search_start, search_end = lt_pos - 1, rt_pos
+            self_norm = self.normalize() 
         else:
             search_start, search_end = (
                 self.unspliced_local_reference_start - 1,
@@ -298,52 +431,38 @@ class Variant(object):
             )
 
         vcf_entries = vcf.fetch(vcf_chrom, search_start, search_end)
-
         hits = []
-        if match_by_equivalence:
-            for _entry in vcf_entries:
-                
-                # may be empty (ALT = .)
-                if not _entry.alts:
+
+        for _entry in vcf_entries:
+            if not _entry.alts:
+                continue
+
+            ref_len = len(_entry.ref)
+
+            for _alt in _entry.alts:
+                if not set(_alt).issubset(BASESET):
                     continue
 
-                for _alt in _entry.alts:
-                    
-                    _bases = set(list(_alt))
-                    
-                    # may contain other than ACTGN
-                    if not _bases <= BASESET:
-                        continue;
-
-                    if self == Variant(
-                        self.chrom, _entry.pos, _entry.ref, _alt, self.reference
-                    ):
+                if match_by_equivalence:
+                    if self.pos == _entry.pos and self.ref == _entry.ref and self.alt == _alt:
                         hits.append(to_tuple(_entry))
                         break
-        else:
-            for _entry in vcf_entries:
-                ref_len = len(_entry.ref)
-                
-                # may be empty (ALT = .)
-                if not _entry.alts:
-                    continue                
-                
-                for _alt in _entry.alts:
+
+                    tmp_variant = Variant(self.chrom, _entry.pos, _entry.ref, _alt, self.reference)
+                    tmp_norm = tmp_variant.normalize()
                     
-                    _bases = set(list(_alt))
-                    
-                    # may contain other than ACTGN
-                    if not _bases <= BASESET:
-                        continue;
-                     
+                    if (self_norm.pos == tmp_norm.pos and 
+                        self_norm.ref == tmp_norm.ref and 
+                        self_norm.alt == tmp_norm.alt):
+                        hits.append(to_tuple(_entry))
+                        break
+                else:
                     if ref_len == len(_alt):
                         if lt_pos <= _entry.pos <= rt_pos:
                             hits.append(to_tuple(_entry))
                             break
                     else:
-                        v = Variant(
-                            self.chrom, _entry.pos, _entry.ref, _alt, self.reference
-                        )
+                        v = Variant(self.chrom, _entry.pos, _entry.ref, _alt, self.reference)
                         _lt_pos, _rt_pos = v.left_pos(), v.right_pos()
 
                         if lt_pos <= _lt_pos <= rt_pos or lt_pos <= _rt_pos <= rt_pos:
@@ -351,6 +470,43 @@ class Variant(object):
                             break
 
         return hits
+
+def to_minimal_repeat_unit(seq):
+    """Find repeat unit in indel sequence
+    """
+    mid = int(len(seq) / 2)
+    min_unit = seq
+    
+    j = 1
+    found = False
+    
+    while j <= mid and not found:
+        tandems = [seq[i : i + j] for i in range(0, len(seq), j)]
+        if len(set(tandems)) == 1:
+            found = True
+            min_unit = list(set(tandems))[0]
+        j += 1
+    
+    return min_unit
+
+def repeat_counter(query_seq, flank_seq):
+    """
+    """
+    qlen, flen = len(query_seq), len(flank_seq)
+    count = 0
+    
+    if flen < qlen:
+        return count
+    try:
+        for i in range(0, flen, qlen):
+            if flank_seq[i  : i + qlen] == query_seq:
+                count += 1
+            else:
+                break
+    except:
+        return -1
+    
+    return count
 
 
 def to_tuple(_entry):

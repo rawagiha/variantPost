@@ -116,13 +116,15 @@ void _search_target(SearchResult& rslt,
 
     // Realn against personalized genome
     Variant per(target.pos, target.ref, target.alt);
-    personalize(pileup, loc_ref, params, target, per);    
+    personalize(pileup, loc_ref, params, target, per, rslt.pltseq, rslt.prtseq);    
     
-    if (per != target) {
-        rslt.retarget_pos = per.pos;
-        rslt.ref = per.ref;
-        rslt.alt = per.alt;
-    }    
+    
+    
+    //if (per != target) {
+    rslt.ppos = per.pos;
+    rslt.pref = per.ref;
+    rslt.palt = per.alt;
+    //}    
     
     Consensus con;
     if (pileup.hiconf_read_idx > -1) {

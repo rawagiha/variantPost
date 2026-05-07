@@ -239,7 +239,7 @@ void match2haplotypes(Pileup& pileup, const Strs& read_seqs, const UserParams& p
 
 // crop_function 
 
-void personalize(const Pileup& pileup, LocalReference& loc_ref, const UserParams& params, const Variant& target, Variant& per) {
+void personalize(const Pileup& pileup, LocalReference& loc_ref, const UserParams& params, const Variant& target, Variant& per, std::string& pltseq, std::string& prtseq) {
     std::cout << " get here hiconf idx " <<  pileup.hiconf_read_idx << std::endl;
     
     
@@ -291,8 +291,15 @@ void personalize(const Pileup& pileup, LocalReference& loc_ref, const UserParams
                 vars.emplace_back(i2p[i].second, background.substr(i, op_len), hiconf_seq.substr(j, op_len));
                 i += op_len; j+= op_len;   
                 break;
-            case 'I':
-                vars.emplace_back(i2p[i - 1].second, background.substr(i - 1, 1), hiconf_seq.substr(j - 1 , op_len +1));
+            case 'I': {
+                Variant v(i2p[i - 1].second, background.substr(i - 1, 1), hiconf_seq.substr(j - 1 , op_len +1));
+                int lt_lim = std::max(i - 1 - 10, 0);
+                v.sample_lt_seq = background.substr(lt_lim - 10, 10);
+                pltseq = v.sample_lt_seq;
+                v.sample_rt_seq = background.substr(i, loc_ref.flanking_end - i2p[i - 1].second);
+                prtseq = v.sample_rt_seq;
+                vars.push_back(v);
+                //vars.emplace_back(i2p[i - 1].second, background.substr(i - 1, 1), hiconf_seq.substr(j - 1 , op_len +1));
                 j += op_len;
                 std::cout << i << " " << i2p[i].first << " " << i2p[i].second << std::endl;
                 std::cout << i2p[i - 2].first << " " << i2p[i - 2].second << std::endl;
@@ -301,9 +308,16 @@ void personalize(const Pileup& pileup, LocalReference& loc_ref, const UserParams
                 std::cout << i2p[i + op_len].first << " " << i2p[i + op_len ].second << std::endl;
                 std::cout << i2p[i + op_len + 1].first << " " << i2p[i + op_len + 1].second << std::endl;
                 break;
-            case 'D':
-                vars.emplace_back(i2p[i - 1].second, background.substr(i - 1, op_len + 1), hiconf_seq.substr(j - 1 , 1));
-
+            }
+            case 'D': {
+                Variant _v(i2p[i - 1].second, background.substr(i - 1, op_len + 1), hiconf_seq.substr(j - 1 , 1));
+                int _lt_lim = std::max(i - 1 - 10, 0);
+                _v.sample_lt_seq = background.substr(_lt_lim - 10, 10);
+                pltseq =  _v.sample_lt_seq;
+                _v.sample_rt_seq = background.substr(i + op_len, loc_ref.flanking_end - i2p[i - 1].second);
+                prtseq = _v.sample_rt_seq;
+                //vars.emplace_back(i2p[i - 1].second, background.substr(i - 1, op_len + 1), hiconf_seq.substr(j - 1 , 1));
+                vars.push_back(_v);
                 std::cout << i << " " << i2p[i].first << " " << i2p[i].second << std::endl;
                 std::cout << i2p[i - 1].first << " " << i2p[i - 1].second << std::endl;
                 std::cout << i2p[i - 1 + op_len].first << " " << i2p[i - 1 + op_len ].second << std::endl;
@@ -311,6 +325,7 @@ void personalize(const Pileup& pileup, LocalReference& loc_ref, const UserParams
                 std::cout << i2p[i + op_len + 1].first << " " << i2p[i + op_len + 1].second << std::endl;
                 i += op_len;
                 break;
+           }
             case 'S':
                 j += op_len;
                 break;
@@ -329,5 +344,8 @@ void personalize(const Pileup& pileup, LocalReference& loc_ref, const UserParams
     if (closest == -1) { per = target; return; }
     bool is_same = (vars[closest] == target);
     std::cout << vars[closest].pos << " " << vars[closest].ref << " " << vars[closest].alt << " " << is_same << std::endl;
+    std::cout << vars[closest].sample_lt_seq << " " << vars[closest].sample_rt_seq << std::endl;
+    pltseq = vars[closest].sample_lt_seq;
+    prtseq = vars[closest].sample_rt_seq;
     if (is_same) { per = target; } else { per = vars[closest]; }
 }

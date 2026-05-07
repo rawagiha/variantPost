@@ -1,7 +1,7 @@
 from collections import namedtuple
 
 
-from .variant import Variant
+from .variant import Variant, to_minimal_repeat_unit, repeat_counter
 from .phaser import _phase, loss
 from variantpost.__search import search_target
 
@@ -116,7 +116,11 @@ class VariantAlignment(object):
             self.are_reverse, 
             self.are_first_bam, 
             self.tags,
-            self.regtarget_pos,
+            self.ppos,
+            self.pref,
+            self.palt,
+            self.pltseq,
+            self.prtseq,
             self.ref,
             self.alt
         ) = search_target(
@@ -148,6 +152,11 @@ class VariantAlignment(object):
             variant.k,
         )
 
+        ###########################
+        #testing
+
+        
+        
         #############TODO#################
         #implement later
         self.skips = []
@@ -165,7 +174,12 @@ class VariantAlignment(object):
         # self.is_with_target = any([status == 1 for status in self.target_status])
     
     def perso(self):
-        return self.regtarget_pos, self.ref, self.alt
+        if len(self.pref) >  len(self.palt):
+            unit = to_minimal_repeat_unit(self.pref[1:])
+        else:
+            unit = to_minimal_repeat_unit(self.palt[1:])
+        rep_n = repeat_counter(unit, self.prtseq)
+        return self.ppos, self.pref, self.palt, self.pltseq, self.prtseq, unit, rep_n, self.variant.count_repeats()
 
     def cnt(self):
         #print(len(self.target_status), len(self.are_reverse), len(self.are_first_bam))

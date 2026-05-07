@@ -152,6 +152,9 @@ struct Variant {
     std::string_view lt_seq; // left flanking
     std::string_view mid_seq; // middle (inserted seq)
     std::string_view rt_seq; // right flanking
+    
+    std::string sample_lt_seq;
+    std::string sample_rt_seq;
 
     //--------------------------------------------------------------------------
     // numeric data
