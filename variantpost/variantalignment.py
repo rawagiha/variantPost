@@ -1,9 +1,19 @@
 from collections import namedtuple
-
+from typing import Optional, List, Tuple, Any
 
 from .variant import Variant, to_minimal_repeat_unit, repeat_counter
 from .phaser import _phase, loss
 from variantpost.__search import search_target
+
+AlleleCount = namedtuple(
+    "AlleleCount",
+    [
+        "s", "s_names", "s_fw", "s_fw_names", "s_rv", "s_rv_names",
+        "n", "n_names", "n_fw", "n_fw_names", "n_rv", "n_rv_names",
+        "u", "u_names", "u_fw", "u_fw_names", "u_rv", "u_rv_names",
+    ],
+)
+PairedAlleleCount = namedtuple("PairedAlleleCount", ["first", "second"])
 
 
 class VariantAlignment(object):
@@ -63,6 +73,15 @@ class VariantAlignment(object):
         Default to 20.
     """
 
+    __slots__ = (
+        "variant", "chrom", "bam_chrom", "target_pos", "target_is_indel",
+        "window", "reference", "base_quality_thresh", "local_thresh",
+        "has_second", "contig_dict", "target_status", "are_reverse",
+        "are_first_bam", "tags", "ppos", "pref", "palt", "pltseq",
+        "prtseq", "ref", "alt", "skips", "trans_vars", "read_names", "is_with_target"
+    )
+
+    
     def __init__(
         self,
         variant,
@@ -336,13 +355,7 @@ class VariantAlignment(object):
 
         return pac
 
-    def phase(
-        self,
-        cis=False,
-        base_quality_threshold=20,
-        match_penalty_for_phasing=0.5,
-        max_common_substr_len=15,
-    ):
+    def phase(self, cis: bool = False, **kwargs) -> Variant:
         """returns :class:`~variantpost.Variant` representing a phased target variant.
 
         Parameters
