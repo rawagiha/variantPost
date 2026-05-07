@@ -2,7 +2,7 @@ from collections import namedtuple
 from typing import Optional, List, Tuple, Any
 
 from .variant import Variant, to_minimal_repeat_unit, repeat_counter
-from .phaser import _phase, loss
+from .phaser import _phase
 from variantpost.__search import search_target
 
 AlleleCount = namedtuple(

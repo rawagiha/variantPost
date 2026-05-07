@@ -1,10 +1,7 @@
 import math
 
-def loss(i, match_penal, local_thresh):
-    return -1 * match_penal * min(i / local_thresh, 1)
 
 class NonReferenceEvent:
-    # __slots__ を用いることで辞書割り当てを回避し、属性アクセスを劇的に高速化・省メモリ化
     __slots__ = ['pos', 'ref', 'alt', 'end_pos', 'qual']
 
     def __init__(self, pos, ref, alt, qual):
@@ -77,7 +74,6 @@ def _phase(
 def phasable_dist_to_mismatch(match_penal, local_thresh, contig_dict):
     score = 0.0
     for i in range(len(contig_dict)):
-        # loss() のインライン化による関数呼び出しオーバーヘッドの削減
         score -= match_penal * min(i / local_thresh, 1.0)
         if score < -1.0:
             return i
@@ -130,7 +126,6 @@ def rt_aln_pos(non_ref, contig_dict, contig_end):
 
 
 def lt_max_lim(target, indels, max_common_substr_len, contig_dict):
-    # indels は位置順と仮定し、リストの末尾から探索することで速度向上
     for indel in reversed(indels):
         if indel.pos < target.pos:
             if target.pos - indel.pos >= max_common_substr_len:
@@ -186,7 +181,6 @@ def profile_non_refs(contig_dict, target_pos, is_indel):
         else:
             snvs.append(non_ref)
 
-    # list.remove の線形探索を避け、リスト内包表記で再構築
     if is_indel:
         indels = [x for x in indels if x != actual_event]
     else:
@@ -196,7 +190,6 @@ def profile_non_refs(contig_dict, target_pos, is_indel):
 
 
 def to_numeric_qual(char_qual):
-    # 重い statistics.median を排除し、自前でソート・中央値算出を行う
     if not char_qual:
         return 0
     quals = sorted(ord(c) - 33 for c in char_qual)
@@ -213,7 +206,6 @@ def crop_contig(contig_dict, skips, snvs, indels, target_pos, base_qual_thresh, 
 
     lt_lim, rt_lim = contig_start, contig_end
 
-    # エクソンの検索を最適化
     exon_start = contig_start
     for skip in skips:
         exon_end = skip[0] - 1
@@ -251,7 +243,6 @@ def crop_contig(contig_dict, skips, snvs, indels, target_pos, base_qual_thresh, 
     if rt_disqualified_min != math.inf:
         rt_lim = min(rt_lim, rt_disqualified_min)
 
-    # 高速な辞書/リストの再構築
     new_contig_dict = {pos: v for pos, v in contig_dict.items() if lt_lim < pos < rt_lim}
     new_snvs = [snv for snv in snvs if lt_lim < snv.pos < rt_lim]
     new_indels = [indel for indel in indels if lt_lim < indel.pos < rt_lim]
@@ -274,14 +265,12 @@ def find_peak(contig_dict, target, snvs, match_penal, local_thresh, is_left):
     peak_score = -math.inf
     peak_locus = loci[0]
 
-    # リストを複数回舐めるのをやめ、1パスでピークを探索
     for i, locus in enumerate(loci):
         if locus in snv_loci:
             score += 1.0
         else:
             score -= match_penal * min(i / local_thresh, 1.0)
 
-        # >= にすることで、元のコードの `[-1]` (最後に出現した最大値) と同じ挙動を保証
         if score >= peak_score:
             peak_score = score
             peak_locus = locus
@@ -298,7 +287,6 @@ def find_peak(contig_dict, target, snvs, match_penal, local_thresh, is_left):
 
 
 def trim_contig(contig_dict, lt_end, rt_end):
-    # .copy() を避けて削除すべきキーだけをリスト化してから削除
     to_delete = [pos for pos in contig_dict if pos < lt_end or rt_end < pos]
     for pos in to_delete:
         del contig_dict[pos]
@@ -309,7 +297,6 @@ def greedy_phasing(contig_dict):
         return None, "", ""
     
     phased_pos = next(iter(contig_dict))
-    # += による重い文字列結合を .join() へ変更（最速）
     phased_ref = "".join(v[0] for v in contig_dict.values())
     phased_alt = "".join(v[1] for v in contig_dict.values())
 
@@ -410,7 +397,6 @@ def remove_common_substrs(contig_dict, pos, max_common_str_len):
 
 
 def get_far_indel(contig_dict, is_left):
-    # 走査方向に応じて dict.items() か reversed() を使い分け、最初に見つけた時点で早期リターン
     iterator = contig_dict.items() if is_left else reversed(contig_dict.items())
     for pos, (ref, alt, qual) in iterator:
         if len(ref) != len(alt):
