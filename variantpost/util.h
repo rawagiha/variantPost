@@ -242,8 +242,11 @@ int find_target(LocalReference& loc_ref,
 
 //------------------------------------------------------------------------------
 // make seq with Vars and index it
-void make_sequence(LocalReference& loc_ref, const Vars& variants, const int start, 
-                   const int end, std::string& seq, Coord* p_idx2pos=nullptr);
+//void make_sequence(LocalReference& loc_ref, const Vars& variants, const int start, 
+//                   const int end, std::string& seq, Coord* p_idx2pos=nullptr);
+
+void make_sequence(LocalReference& loc_ref, const Vars& variants, const int start,
+                   const int end, std::string& seq, Ints* p_idx2pos=nullptr);
 
 //------------------------------------------------------------------------------
 // introduce variant to existing seq/idx2pos 

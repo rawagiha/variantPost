@@ -68,7 +68,7 @@ class Variant(object):
     """
     
     __slots__ = (
-        'chrom', 'pos', 'ref', 'alt', 'reference', 'window',
+        'chrom', 'pos', 'ref', 'alt', 'cpos', 'cref', 'calt', 'is_phased', 'spos', 'sref', 'salt', 'reference', 'window',
         'reference_len', 'k', 'unspliced_local_reference_start', 'unspliced_local_reference_end'
     )
 
@@ -82,6 +82,16 @@ class Variant(object):
         self.pos = pos  # 1-based
         self.ref = ref
         self.alt = alt
+
+        self.cpos = -1
+        self.cref = "N"
+        self.calt = "N"
+        self.is_phased = False
+
+        self.spos = -1
+        self.sref = "N"
+        self.salt = "N"
+
         self.reference = reference
 
         ref_len = len(ref)

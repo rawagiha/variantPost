@@ -206,7 +206,7 @@ Pileup::Pileup(const Strs& names, const Bools& is_rv, const Strs& cigar_strs,
     end = set_end(ends, loc_ref, kmer_sz);
      
     // Set reference sequence to Pileup
-    make_sequence(loc_ref, {}, start, end, rseq, &i2p_r);
+    make_sequence(loc_ref, {}, start, end, rseq, &i2pr);
     
     // Set if reference haplotype detected in control BAM
     // (control BAM may not be supplied)
@@ -355,14 +355,14 @@ void Pileup::setHaploTypes(LocalReference& loc_ref, const Variant& target) {
     
     if (hiconf_read_idx > -1) {
         make_sequence(
-            loc_ref, reads[hiconf_read_idx].variants, start, end, seq0, &i2p_0);
+            loc_ref, reads[hiconf_read_idx].variants, start, end, seq0, &i2p0);
     } else if (!sig_s.empty()) {
         PatternCnt s_sig_cnt;
         count_patterns(sig_s, s_sig_cnt); hap0 = s_sig_cnt[0].first;
         make_sequence(
-            loc_ref, reads[sig_s[hap0][0]].variants, start, end, seq0, &i2p_0);
+            loc_ref, reads[sig_s[hap0][0]].variants, start, end, seq0, &i2p0);
     } else {
-        make_sequence(loc_ref, {target}, start, end, seq0, &i2p_0);
+        make_sequence(loc_ref, {target}, start, end, seq0, &i2p0);
     }
 
     /*if (!sig_s_hiconf.empty()) {
@@ -403,7 +403,7 @@ void Pileup::setHaploTypes(LocalReference& loc_ref, const Variant& target) {
         std::cout << hap1 << " " << u_sig_cnt[0].second << std::endl;
         if (hap_settable(s_cnt, hap1, anti_sigs) && set_hap1) {
             idx1 = sig_u[hap1][0];  
-            make_sequence(loc_ref, reads[idx1].variants, start, end, seq1, &i2p_1);
+            make_sequence(loc_ref, reads[idx1].variants, start, end, seq1, &i2p1);
             if (seq0 == seq1) seq1.clear();
         }
         
@@ -412,7 +412,7 @@ void Pileup::setHaploTypes(LocalReference& loc_ref, const Variant& target) {
             std::cout << hap2 << " " << u_sig_cnt[1].second << std::endl;
             if (hap_settable(s_cnt, hap2, anti_sigs) && set_hap2) {
                 idx2 = sig_u[hap2][0];
-                make_sequence(loc_ref, reads[idx2].variants, start, end, seq2, &i2p_2);
+                make_sequence(loc_ref, reads[idx2].variants, start, end, seq2, &i2p2);
                 if (seq0 == seq2 || seq1 == seq2 ) seq2.clear();
             }
         }
@@ -585,13 +585,20 @@ void Pileup::searchByRealignment(const UserParams& params,
     int fss = -1, fse = -1, fes = -1, fee = -1, ts = -1, te = -1;  
     
     std::cout << "y cnt " << y_cnt << std::endl;
-     
-    for (const auto& elem : i2p_0) {
+    
+    for (int i = 0; i < static_cast<int>(i2p0.size()); ++i) {
+        if (i2p0[i] == loc_ref.flanking_start) fss = i;
+        if (ts < 0 && i2p0[i] == target.pos) ts = i;
+        if (i2p0[i] == target.end_pos) te = i;
+        if (i2p0[i] == loc_ref.flanking_end) fee = i;
+    }
+    /* 
+    for (const auto& elem : i2p0) {
         if (elem.second == loc_ref.flanking_start) fss = elem.first;
         if (ts < 0 && elem.second == target.pos) ts = elem.first;
         if (elem.second == target.end_pos) te = elem.first;
         if (elem.second == loc_ref.flanking_end) fee = elem.first;
-    }
+    }*/
     
     if (fss == -1 || ts == -1 || te == -1 || fee == -1) return;
     fse = fss + params.dimer_window; fes = fee - params.dimer_window;

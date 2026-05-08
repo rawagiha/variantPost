@@ -1674,6 +1674,7 @@ int find_target(LocalReference& loc_ref,
 // -> special usage for swappable ins/del cases
 //
 // Vars should be pre-sorted. 
+/*
 void make_sequence(LocalReference& loc_ref, const Vars& variants, const int start, 
                    const int end, std::string& seq, Coord* p_idx2pos) {
     if (end <= start) return; 
@@ -1681,19 +1682,19 @@ void make_sequence(LocalReference& loc_ref, const Vars& variants, const int star
     int idx = 0, pos = start;
     if (variants.empty()) {
         seq.append(loc_ref._seq.substr(pos - loc_ref.start, end - pos));
-        if (p_idx2pos)
-            for (/**/; pos < end; pos++) p_idx2pos->emplace_back(idx++, pos);
-        return; 
-    }
-
+*///        if (p_idx2pos)
+//            for (/**/; pos < end; pos++) p_idx2pos->emplace_back(idx++, pos);
+//        return; 
+//    }
+/*
     if (variants.front().pos < start || end < variants.back().pos) return;
     
     seq.append(loc_ref._seq.substr(start - loc_ref.start, variants.front().pos - start));
     if (p_idx2pos)
-        for (/**/; pos < variants.front().pos; pos++) p_idx2pos->emplace_back(idx++, pos); 
-    
-    for (size_t i = 0; i < variants.size();/* */) {
-        
+*///        for (/**/; pos < variants.front().pos; pos++) p_idx2pos->emplace_back(idx++, pos); 
+/*    
+*/   // for (size_t i = 0; i < variants.size();/* */) {
+/*        
         if (i + 1 ==  variants.size() || variants[i]._end_pos < variants[i + 1].pos) {
             seq.append(variants[i].alt);
             if (p_idx2pos)
@@ -1729,15 +1730,117 @@ void make_sequence(LocalReference& loc_ref, const Vars& variants, const int star
         
         seq.append(loc_ref._seq.substr(pos - loc_ref.start, variants[i + 1].pos - pos));
         if (p_idx2pos)
-            for (/**/; pos < variants[i + 1].pos; pos++) p_idx2pos->emplace_back(idx++, pos);
-        ++i;
+*/     //       for (/**/; pos < variants[i + 1].pos; pos++) p_idx2pos->emplace_back(idx++, pos);
+/*        ++i;
     }
     if (end > pos)
         seq.append(loc_ref._seq.substr(pos - loc_ref.start, end - pos));
     
     if (p_idx2pos)
-        for (/* */; pos < end; ++pos) p_idx2pos->emplace_back(idx++, pos);
+*/    //    for (/* */; pos < end; ++pos) p_idx2pos->emplace_back(idx++, pos);
+//}
+
+
+void make_sequence(LocalReference& loc_ref, const Vars& variants, const int start, 
+                   const int end, std::string& seq, Ints* p_idx2pos) {
+    if (end <= start) return; 
+    
+    size_t estimated_len = static_cast<size_t>(end - start);
+    seq.reserve(seq.size() + estimated_len);
+    if (p_idx2pos) {
+        p_idx2pos->reserve(p_idx2pos->size() + estimated_len);
+    }
+    
+    int pos = start;
+    const std::string& ref_str = loc_ref._seq;
+    const int ref_offset = loc_ref.start;
+     
+    // no variations
+    if (variants.empty() || variants.back().pos < start || variants.front().pos >= end) {
+        int len = end - pos;
+        seq.append(ref_str, pos - ref_offset, len);
+        if (p_idx2pos) {
+            for (; pos < end; ++pos) p_idx2pos->push_back(pos);
+        }
+        return;
+    }
+    
+    // filling upto the first variant
+    if (variants.front().pos > pos) {
+        int len = variants.front().pos - pos;
+        seq.append(ref_str, pos - ref_offset, len);
+        if (p_idx2pos) {
+            for (int k = 0; k < len; ++k) p_idx2pos->push_back(pos++);
+        } else {
+            pos = variants.front().pos;
+        }
+    }
+    
+    for (size_t i = 0; i < variants.size(); ) {
+        // variants (i_th, i+1_th) are not overlapping
+        if (i + 1 == variants.size() || variants[i]._end_pos < variants[i + 1].pos) {
+            seq.append(variants[i].alt);
+            if (p_idx2pos) {
+                for (int k = 0; k < variants[i].alt_len; ++k) {
+                    p_idx2pos->push_back(pos);
+                }
+            }
+            pos = variants[i]._end_pos;
+        } 
+        // overlapping 
+        else {
+            size_t j = i;
+            while (j + 1 < variants.size() && variants[j]._end_pos >= variants[j + 1].pos) {
+                ++j;
+            }
+
+            int prev = pos;
+            while (i <= j) {
+                if (pos <= variants[i].pos) {
+                    seq.append(variants[i].alt);
+                    if (p_idx2pos) {
+                        for (int k = 0; k < variants[i].alt_len; ++k) p_idx2pos->push_back(pos);
+                    }
+                } else {
+                    if (variants[i].alt_len > 1) {
+                        seq.append(variants[i].alt, 1, variants[i].alt_len - 1);
+                        if (p_idx2pos) {
+                            for (int k = 0; k < variants[i].alt_len - 1; ++k) p_idx2pos->push_back(prev);
+                        }
+                    }
+                }
+                prev = pos;
+                pos = variants[i]._end_pos;
+                ++i;
+            }
+            --i; 
+        }
+
+        if (i + 1 == variants.size() || pos >= end) break;
+
+        // filling upto the next variant
+        int next_var_pos = std::min(end, variants[i + 1].pos);
+        if (next_var_pos > pos) {
+            int len = next_var_pos - pos;
+            seq.append(ref_str, pos - ref_offset, len);
+            if (p_idx2pos) {
+                for (int k = 0; k < len; ++k) p_idx2pos->push_back(pos++);
+            } else {
+                pos = next_var_pos;
+            }
+        }
+        ++i;
+    }
+
+    if (end > pos) {
+        int len = end - pos;
+        seq.append(ref_str, pos - ref_offset, len);
+        if (p_idx2pos) {
+            for (int k = 0; k < len; ++k) p_idx2pos->push_back(pos++);
+        }
+    }
 }
+
 
 //------------------------------------------------------------------------------
 void mutate_sequence(const Variant& variant, std::string& seq, Coord& idx2pos) {

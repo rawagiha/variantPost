@@ -66,8 +66,9 @@ struct Pileup {
     std::string rseq; // reference hap. this will be set if necessary
 
     //--------------------------------------------------------------------------
-    Coord i2p_0, i2p_1, i2p_2; // index/pos pair for hap0
-    Coord i2p_r; // index/pos pair for reference hap
+    //Coord i2p_0, i2p_1, i2p_2; // index/pos pair for hap0
+    //Coord i2p_r; // index/pos pair for reference hap
+    Ints i2p0, i2p1, i2p2, i2pr;
     int es = -1, ee = -1, fs = -1, fe = -1;
 
     //--------------------------------------------------------------------------

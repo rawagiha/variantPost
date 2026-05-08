@@ -279,7 +279,15 @@ void personalize(const Pileup& pileup, LocalReference& loc_ref, const UserParams
     CigarVec cigar_vec;
     fill_cigar_vector(cigar_str, cigar_vec); 
     const std::string& background = (which_hap == 1) ? pileup.seq1 : pileup.seq2;
-    const Coord& i2p = (which_hap == 1) ? pileup.i2p_1 : pileup.i2p_2;
+    //const Coord& i2p = (which_hap == 1) ? pileup.i2p_1 : pileup.i2p_2;
+    const Ints& i2p = (which_hap == 1) ? pileup.i2p1 : pileup.i2p2;
+    
+    // test vector version
+    //Ints ip;
+    //for (auto elem : i2p) {
+    //    ip.push_back(elem.second);
+    //}
+    
     char op = '\0'; int op_len = 0, i = 0, j = 0;
     Vars vars;
     for (const auto& c : cigar_vec) {
@@ -288,41 +296,47 @@ void personalize(const Pileup& pileup, LocalReference& loc_ref, const UserParams
             case '=':
                 i += op_len; j += op_len; break;
             case 'X':
-                vars.emplace_back(i2p[i].second, background.substr(i, op_len), hiconf_seq.substr(j, op_len));
+                //vars.emplace_back(i2p[i].second, background.substr(i, op_len), hiconf_seq.substr(j, op_len));
+                vars.emplace_back(i2p[i], background.substr(i, op_len), hiconf_seq.substr(j, op_len));
                 i += op_len; j+= op_len;   
                 break;
             case 'I': {
-                Variant v(i2p[i - 1].second, background.substr(i - 1, 1), hiconf_seq.substr(j - 1 , op_len +1));
+                //Variant v(i2p[i - 1].second, background.substr(i - 1, 1), hiconf_seq.substr(j - 1 , op_len +1));
+                Variant v(i2p[i - 1], background.substr(i - 1, 1), hiconf_seq.substr(j - 1 , op_len +1));
                 int lt_lim = std::max(i - 1 - 10, 0);
-                v.sample_lt_seq = background.substr(lt_lim - 10, 10);
+                v.sample_lt_seq = background.substr(lt_lim, i - lt_lim);
                 pltseq = v.sample_lt_seq;
-                v.sample_rt_seq = background.substr(i, loc_ref.flanking_end - i2p[i - 1].second);
+                v.sample_rt_seq = background.substr(i, loc_ref.flanking_end - i2p[i - 1]);
                 prtseq = v.sample_rt_seq;
                 vars.push_back(v);
                 //vars.emplace_back(i2p[i - 1].second, background.substr(i - 1, 1), hiconf_seq.substr(j - 1 , op_len +1));
                 j += op_len;
+                /*
                 std::cout << i << " " << i2p[i].first << " " << i2p[i].second << std::endl;
                 std::cout << i2p[i - 2].first << " " << i2p[i - 2].second << std::endl;
                 std::cout << i2p[i - 1].first << " " << i2p[i - 1].second << std::endl;
                 std::cout << i2p[i - 1 + op_len].first << " " << i2p[i - 1 + op_len ].second << std::endl;
                 std::cout << i2p[i + op_len].first << " " << i2p[i + op_len ].second << std::endl;
                 std::cout << i2p[i + op_len + 1].first << " " << i2p[i + op_len + 1].second << std::endl;
+                */
                 break;
             }
             case 'D': {
-                Variant _v(i2p[i - 1].second, background.substr(i - 1, op_len + 1), hiconf_seq.substr(j - 1 , 1));
+                Variant _v(i2p[i - 1], background.substr(i - 1, op_len + 1), hiconf_seq.substr(j - 1 , 1));
                 int _lt_lim = std::max(i - 1 - 10, 0);
-                _v.sample_lt_seq = background.substr(_lt_lim - 10, 10);
+                _v.sample_lt_seq = background.substr(_lt_lim, i - _lt_lim);
                 pltseq =  _v.sample_lt_seq;
-                _v.sample_rt_seq = background.substr(i + op_len, loc_ref.flanking_end - i2p[i - 1].second);
+                _v.sample_rt_seq = background.substr(i + op_len, loc_ref.flanking_end - i2p[i - 1]);
                 prtseq = _v.sample_rt_seq;
                 //vars.emplace_back(i2p[i - 1].second, background.substr(i - 1, op_len + 1), hiconf_seq.substr(j - 1 , 1));
                 vars.push_back(_v);
+                /*
                 std::cout << i << " " << i2p[i].first << " " << i2p[i].second << std::endl;
                 std::cout << i2p[i - 1].first << " " << i2p[i - 1].second << std::endl;
                 std::cout << i2p[i - 1 + op_len].first << " " << i2p[i - 1 + op_len ].second << std::endl;
                 std::cout << i2p[i + op_len].first << " " << i2p[i + op_len ].second << std::endl;
                 std::cout << i2p[i + op_len + 1].first << " " << i2p[i + op_len + 1].second << std::endl;
+                */
                 i += op_len;
                 break;
            }

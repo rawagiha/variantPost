@@ -170,6 +170,9 @@ class VariantAlignment(object):
             variant.unspliced_local_reference_end,
             variant.k,
         )
+        
+        self.is_with_target = (1 in self.target_status)
+
 
         ###########################
         #testing
@@ -354,8 +357,19 @@ class VariantAlignment(object):
         )
 
         return pac
+    
 
-    def phase(self, cis: bool = False, **kwargs) -> Variant:
+    def realn2sample_hap(self):
+        if len(self.pref) >  len(self.palt):
+            unit = to_minimal_repeat_unit(self.pref[1:])
+        else:
+            unit = to_minimal_repeat_unit(self.palt[1:])
+        rep_n = repeat_counter(unit, self.prtseq)
+        return self.ppos, self.pref, self.palt, self.pltseq, self.prtseq, unit, rep_n, self.variant.count_repeats()
+
+    
+    
+    def phase2complex(self, cis: bool = True, **kwargs):
         """returns :class:`~variantpost.Variant` representing a phased target variant.
 
         Parameters
@@ -373,7 +387,13 @@ class VariantAlignment(object):
         #    self.target_is_indel = True
         #    self.target_pos = self.retarget_pos
         
-        self.is_with_target = True
+        ###################
+        if not self.is_with_target:
+            return
+        
+        v = self.variant
+        v.cpos, v.cref, v.calt = v.pos, v.ref, v.alt
+        
         try:
             if cis:
                 trans_vars = self.trans_vars
@@ -391,30 +411,39 @@ class VariantAlignment(object):
                 match_penalty_for_phasing,
                 max_common_substr_len,
             )
+            
+            v = self.variant
 
             if phased and self.is_with_target:
-                return Variant(
-                    self.chrom, phased[0], phased[1], phased[2], self.reference
-                ).normalize()
-            elif self.is_with_target:
-                return self.variant
+                v.cpos = phased[0]
+                v.cref = phased[1]
+                v.calt = phased[2]
+                v.is_phased = True
+                v.normalize(inplace=True)
             else:
-                ref_base = self.reference.fetch(
-                    self.chrom, self.target_pos - 1, self.target_pos
-                )
-                return Variant(
-                    self.chrom, self.target_pos, ref_base, ref_base, self.reference
-                )
+                pass     
+            #elif self.is_with_target:
+            #    v.cpos = v.pos
+            #    v.cref = v.ref
+            #    v.calt = v.alt
+            #else:
+            #    ref_base = self.reference.fetch(
+            #        self.chrom, self.target_pos - 1, self.target_pos
+            #    )
+            #    return Variant(
+            #        self.chrom, self.target_pos, ref_base, ref_base, self.reference
+            #    )
         except:
-            if self.is_with_target:
-                return self.variant
-            else:
-                ref_base = self.reference.fetch(
-                    self.chrom, self.target_pos - 1, self.target_pos
-                )
-                return Variant(
-                    self.chrom, self.target_pos, ref_base, ref_base, self.reference
-                )
+            pass
+            #if self.is_with_target:
+            #    return self.variant
+            #else:
+            #    ref_base = self.reference.fetch(
+            #        self.chrom, self.target_pos - 1, self.target_pos
+            #    )
+            #    return Variant(
+            #        self.chrom, self.target_pos, ref_base, ref_base, self.reference
+            #    )
 
 def _find_value(lst, tag):
         for elem in lst:

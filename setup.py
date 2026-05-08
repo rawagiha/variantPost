@@ -34,7 +34,7 @@ extensions = [
         [
             "variantpost/__search.pyx",
             "variantpost/pileup.cpp",
-            "variantpost/sequence_model.cpp",
+            #"variantpost/sequence_model.cpp",
             #"variantpost/eval.cpp",
             "variantpost/search.cpp",
             "variantpost/reads.cpp",
