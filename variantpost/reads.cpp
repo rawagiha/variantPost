@@ -154,10 +154,15 @@ void Read::trimLowQualBases(const char qual_thresh) {
 void Read::qualityCheck(const int start, const int end, 
                         const char qual_thresh, const double freq_thresh) {   
     int i = 0, j = 0; //index
-    for (const auto& elem : idx2pos) {    
-        if (!i && start <= elem.second) i = elem.first;
-        if (elem.second < end) j = elem.first;  
+    //for (const auto& elem : idx2pos) {    
+    //    if (!i && start <= elem.second) i = elem.first;
+    //    if (elem.second < end) j = elem.first;  
+    //}
+    for (int k = 0; k < static_cast<int>(idx2pos.size()); ++k) {
+        if (!i && start <= idx2pos[k]) i = k;
+        if (idx2pos[k] < end) j = k;
     }
+    
     if (i == j) return;
      
     int non_ref_cnt = 0, dirty_non_ref_cnt = 0;
@@ -269,8 +274,12 @@ void Read::checkByRepeatCount(const Variant& target, bool& has_excess_ins_hap) {
     if (!target.repeats || has_target) return;
     
     int idx = -1;
-    for (const auto& elem : idx2pos)  
-        if (elem.second == target.pos + 1) { idx = elem.first; break; }
+    //for (const auto& elem : idx2pos)  
+    //    if (elem.second == target.pos + 1) { idx = elem.first; break; }
+    for (int j = 0; j < static_cast<int>(idx2pos.size()); ++j) {
+        if (idx2pos[j] == target.pos + 1) { idx = j; break; } 
+    }
+    
     if (idx < 0) return;
 
     std::string_view rt_side = seq.substr(idx), 
@@ -352,12 +361,18 @@ void Read::isCenterMapped(const Variant& target) {
      
     
     int d = INT_MAX, i = -1;
-    for (const auto& elem : idx2pos) {
-        if (std::abs(elem.second - target.pos) < d) {
-            i = elem.first; d = std::abs(elem.second - target.pos);
+    //for (const auto& elem : idx2pos) {
+    //    if (std::abs(elem.second - target.pos) < d) {
+    //        i = elem.first; d = std::abs(elem.second - target.pos);
+    //    }
+    //}
+    for (int j = 0; j < static_cast<int>(idx2pos.size()); ++j) {
+        if (std::abs(idx2pos[j] - target.pos) < d) {
+            i = j; d = std::abs(idx2pos[j] - target.pos); 
         }
     }
-    
+
+
     if (i < qs || qe < i) has_local_events = false; 
     
     int quintile = static_cast<int>(idx2pos.size() / 8);
@@ -396,9 +411,13 @@ void Read::hasTargetComplexIndel(LocalReference& loc_ref, const Variant& target)
     return;
 
     int i = -1;
-    for (const auto& elem : idx2pos) {
-        if (elem.second == loc_ref.flanking_start) { i = elem.first; break; }
+    //for (const auto& elem : idx2pos) {
+    //    if (elem.second == loc_ref.flanking_start) { i = elem.first; break; }
+    //}
+    for (int j = 0; j < static_cast<int>(idx2pos.size()); ++j) {
+        if (idx2pos[j] == loc_ref.flanking_start) i = j;
     }
+
     if (i < 0) return;
     
     int lt_len = static_cast<int>(target.lt_seq.size());
@@ -421,8 +440,11 @@ void Read::hasTargetComplexIndel(LocalReference& loc_ref, const Variant& target)
 // use if input is complex substitute 
 void Read::hasTargetComplexSubstitute(const Variant& target) {
     int i = -1;
-    for (const auto& elem : idx2pos) {
-        if (elem.second == target.pos) { i = elem.first; break; }
+    //for (const auto& elem : idx2pos) {
+    //    if (elem.second == target.pos) { i = elem.first; break; }
+    //}
+    for (int j = 0; j < static_cast<int>(idx2pos.size()); ++j) {
+        if (idx2pos[j] == target.pos) i = j;
     }
     if (i < 0) return;
     if (seq.substr(i, target.alt_len) == target.alt) has_target = true;

@@ -73,7 +73,8 @@ struct Read {
     int aln_start = 0; int aln_end = 0; // alignment start/end 
     int start_offset = 0; int end_offset = 0; // softclip len 
     int read_start = 0; int read_end = 0; // alignmet start/end extented by softclip len
-    Coord idx2pos; // maps read idx to aligned genomic position
+    //Coord idx2pos; // maps read idx to aligned genomic position
+    Ints idx2pos;
     Coord aligned_segments; // vector<pair<int, int>> start/end of aligned segments 
     Coord skipped_segments; // vector<pair<int, int>> start/end of skipped segments
     Ints var_idx; // index at variant pos (excl. clipping)

@@ -1247,7 +1247,7 @@ void read2variants(const int aln_start, std::string_view ref_seq,
                    const CigarVec& cigar_vector, 
                    //const Dict& ref_dict,
                    LocalReference& loc_ref,
-                   Vars& variants, Ints& var_idx, Coord& idx2pos) {
+                   Vars& variants, Ints& var_idx, Ints& idx2pos) {
     char op = '\0'; 
     std::string_view ref, alt, qual;
     bool is_padding_base_supported = false; // relavant to skips
@@ -1265,7 +1265,8 @@ void read2variants(const int aln_start, std::string_view ref_seq,
                                               std::string(ref), std::string(alt), qual);
                         var_idx.push_back(read_idx);
                     }
-                    idx2pos.emplace_back(read_idx, pos);
+                    //idx2pos.emplace_back(read_idx, pos);
+                    idx2pos.push_back(pos);
                     ++ref_idx; ++read_idx; ++pos;
                 }
 
@@ -1294,7 +1295,8 @@ void read2variants(const int aln_start, std::string_view ref_seq,
                 
                 for (int i = 0; i < op_len; ++i) {
                     if (i) var_idx.push_back(read_idx + 1); // index for inserted seq (excl. padding) 
-                    idx2pos.emplace_back(read_idx + i, pos - 1);
+                    //idx2pos.emplace_back(read_idx + i, pos - 1);
+                    idx2pos.push_back(pos - 1);
                 }
                 read_idx += op_len; break; 
             case 'D': {
@@ -1323,7 +1325,9 @@ void read2variants(const int aln_start, std::string_view ref_seq,
             }
             case 'N':
                 pos += op_len; is_padding_base_supported = false; break;
+            // soft-clipped -> -1 (not aligned)
             case 'S':
+                for(int i = 0; i < op_len; ++i) { idx2pos.push_back(-1); } 
                 read_idx += (op_len); break;
             case 'H': case 'P':
                 break;
@@ -1745,16 +1749,27 @@ void make_sequence(LocalReference& loc_ref, const Vars& variants, const int star
                    const int end, std::string& seq, Ints* p_idx2pos) {
     if (end <= start) return; 
     
-    size_t estimated_len = static_cast<size_t>(end - start);
+    for (auto& v : variants) {
+        std::cout << v.pos << " " << v.ref << " " << v.alt << std::endl;
+    }
+     
+    int pos = start;
+    if (start < loc_ref.start) {
+        pos = loc_ref.start;
+        if (end <= pos) return;
+    }
+    
+    std::cout << start << " " << loc_ref.start << " " << end << std::endl; 
+    size_t estimated_len = static_cast<size_t>(end - pos);
     seq.reserve(seq.size() + estimated_len);
     if (p_idx2pos) {
         p_idx2pos->reserve(p_idx2pos->size() + estimated_len);
     }
     
-    int pos = start;
+    std::cout << " step 1 " << std::endl; 
     const std::string& ref_str = loc_ref._seq;
     const int ref_offset = loc_ref.start;
-     
+         
     // no variations
     if (variants.empty() || variants.back().pos < start || variants.front().pos >= end) {
         int len = end - pos;
@@ -1765,6 +1780,7 @@ void make_sequence(LocalReference& loc_ref, const Vars& variants, const int star
         return;
     }
     
+    std::cout << " step 2 " << std::endl;
     // filling upto the first variant
     if (variants.front().pos > pos) {
         int len = variants.front().pos - pos;
@@ -1776,6 +1792,7 @@ void make_sequence(LocalReference& loc_ref, const Vars& variants, const int star
         }
     }
     
+    std::cout << " step 3 " << std::endl;
     for (size_t i = 0; i < variants.size(); ) {
         // variants (i_th, i+1_th) are not overlapping
         if (i + 1 == variants.size() || variants[i]._end_pos < variants[i + 1].pos) {
@@ -1815,13 +1832,15 @@ void make_sequence(LocalReference& loc_ref, const Vars& variants, const int star
             }
             --i; 
         }
-
+        
+        std::cout << pos << " " << variants[i].pos << " " << variants[i]._end_pos << std::endl;
         if (i + 1 == variants.size() || pos >= end) break;
-
+        
         // filling upto the next variant
         int next_var_pos = std::min(end, variants[i + 1].pos);
         if (next_var_pos > pos) {
             int len = next_var_pos - pos;
+            std::cout << "len " << len << " " << pos << " " << ref_offset << std::endl;
             seq.append(ref_str, pos - ref_offset, len);
             if (p_idx2pos) {
                 for (int k = 0; k < len; ++k) p_idx2pos->push_back(pos++);
@@ -1832,6 +1851,7 @@ void make_sequence(LocalReference& loc_ref, const Vars& variants, const int star
         ++i;
     }
 
+    std::cout << "stap4 " << std::endl;
     if (end > pos) {
         int len = end - pos;
         seq.append(ref_str, pos - ref_offset, len);
@@ -1839,9 +1859,11 @@ void make_sequence(LocalReference& loc_ref, const Vars& variants, const int star
             for (int k = 0; k < len; ++k) p_idx2pos->push_back(pos++);
         }
     }
+
+    std::cout << "all done " << std::endl;
 }
 
-
+/*
 //------------------------------------------------------------------------------
 void mutate_sequence(const Variant& variant, std::string& seq, Coord& idx2pos) {
     int idx = -1;
@@ -1873,7 +1895,7 @@ void mutate_sequence(const Variant& variant, std::string& seq, Coord& idx2pos) {
     }
     seq = _seq; idx2pos = _idx2pos;
 } 
-
+*/
 //------------------------------------------------------------------------------
 // grid
 

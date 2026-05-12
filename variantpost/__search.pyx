@@ -166,6 +166,7 @@ cdef inline void pack_to_lists(
         )
        
         if res:
+            print(len(res[0]), res[3], res[4])
             read_names.push_back(read.query_name.encode('ascii'))
             are_reverse.push_back(read.is_reverse)
             cigar_strings.push_back(res[2].encode('ascii'))

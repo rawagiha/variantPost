@@ -230,7 +230,7 @@ void read2variants(const int aln_start, std::string_view ref_seq,
                    const CigarVec& cigar_vector, 
                    //const Dict& ref_dict, 
                    LocalReference& loc_ref,
-                   Vars& variants, Ints& var_idx, Coord& idx2pos);
+                   Vars& variants, Ints& var_idx, Ints& idx2pos);
 
 
 //void sw2nonrefs(const std::string& ref, const std::string& query, 
@@ -250,7 +250,7 @@ void make_sequence(LocalReference& loc_ref, const Vars& variants, const int star
 
 //------------------------------------------------------------------------------
 // introduce variant to existing seq/idx2pos 
-void mutate_sequence(const Variant& variant, std::string& seq, Coord& idx2pos);
+//void mutate_sequence(const Variant& variant, std::string& seq, Coord& idx2pos);
 
 //------------------------------------------------------------------------------
 // make a set of kmers from string 

@@ -353,16 +353,23 @@ void Pileup::gridSearch(const UserParams& params,
 void Pileup::setHaploTypes(LocalReference& loc_ref, const Variant& target) {
     PatternCnt s_sig_cnt; 
     
+    std::cout << "get here " <<std::endl;
     if (hiconf_read_idx > -1) {
+        std::cout << "hey! " <<std::endl;
         make_sequence(
             loc_ref, reads[hiconf_read_idx].variants, start, end, seq0, &i2p0);
+        std::cout << "hey! hey!" <<std::endl;
     } else if (!sig_s.empty()) {
         PatternCnt s_sig_cnt;
         count_patterns(sig_s, s_sig_cnt); hap0 = s_sig_cnt[0].first;
+        std::cout << "hey---! " <<std::endl;
         make_sequence(
             loc_ref, reads[sig_s[hap0][0]].variants, start, end, seq0, &i2p0);
+        std::cout << "hey---hh! " <<std::endl;
     } else {
+        std::cout << "aaaaaaahey---! " <<std::endl;
         make_sequence(loc_ref, {target}, start, end, seq0, &i2p0);
+        std::cout << "ssshey---! " <<std::endl;
     }
 
     /*if (!sig_s_hiconf.empty()) {
@@ -426,24 +433,30 @@ void Pileup::setHaploTypes(LocalReference& loc_ref, const Variant& target) {
     if (seq1.empty() && seq2.empty()) no_non_target_haps = true;
 }
 
-[[nodiscard]] bool is_target_covering(const int start, const int end,
-                        const Read& read, const std::string_view& kmer, 
-                        const std::unordered_map<size_t, int>& dict) noexcept {
-    const size_t i = read.seq.find(kmer); 
-    if (i == std::string_view::npos) return false;
-    
-    const size_t j = i + kmer.size() - 1;   
-    
-    auto it_i = dict.find(i);
-    auto it_j = dict.find(j);
 
-    if (it_i == dict.end() || it_j == dict.end()) {
+[[nodiscard]] inline bool is_target_covering_fast(
+    const int rad_start, const int rad_end,
+    const Read& read, const std::string_view kmer, const int kmer_sz)  noexcept
+{
+    size_t pos_in_read = read.seq.find(kmer);
+    if (pos_in_read == std::string_view::npos) return false;
+
+    size_t end_idx = pos_in_read + kmer_sz - 1;
+
+    if (read.idx2pos.empty() || end_idx >= read.idx2pos.size()) {
+        return false;
+    }
+
+    int genome_start = read.idx2pos[pos_in_read];
+    int genome_end   = read.idx2pos[end_idx];
+
+    if (genome_start == -1 || genome_end == -1) {
         return (read.covered_in_clip || read.has_local_clip);
     }
-    
-    if (it_j->second < start || end < it_i->second) return false;
-    return true;
+
+    return !(genome_end < rad_start || genome_start > rad_end);
 }
+
 
 [[nodiscard]] inline bool has_the_sig(const std::string_view sig, const Strs& anti_sig) noexcept {
     return std::find(anti_sig.cbegin(), anti_sig.cend(), sig) != anti_sig.cend();
@@ -516,18 +529,26 @@ void Pileup::differentialKmerAnalysis(const UserParams& params,
         if (!read.qc_passed || read.rank != 'u') continue;
          
         std::unordered_map<size_t, int> dict;
-        for (auto& elem : read.idx2pos) 
-            dict[static_cast<size_t>(elem.first)] = elem.second;
+        //for (auto& elem : read.idx2pos) 
+        //    dict[static_cast<size_t>(elem.first)] = elem.second;
+        //for (size_t j = 0; j < read.idx2pos.size(); ++k) {
+        //    dict[j] = read.idx2pos[j];
+        //} 
         
         for (const auto& kmer : kmers_nt) {
-            if (is_target_covering(rad_start, rad_end, read, kmer, dict)) 
-                ++(read.nmer);
+           //if (is_target_covering(rad_start, rad_end, read, kmer, dict)) 
+           //     ++(read.nmer);
+           if (is_target_covering_fast(rad_start, rad_end, read, kmer, kmer_sz)) {
+                    ++read.nmer;
+           }  
         }
         
         for (const auto& kmer : kmers_t) {
-            if (!is_target_covering(rad_start, rad_end, read, kmer, dict)) 
+            //if (!is_target_covering(rad_start, rad_end, read, kmer, dict)) 
+            //    continue;
+            if (!is_target_covering_fast(rad_start, rad_end, read, kmer, kmer_sz))
                 continue;
-            
+
             // Positive count further must be in quality region
             int _i = static_cast<int>(read.seq.find(kmer));
             if (read.qs <= _i && _i + kmer_sz <= read.qe) ++(read.smer);
