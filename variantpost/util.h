@@ -113,10 +113,38 @@ struct LocalReference {
 
 //------------------------------------------------------------------------------
 struct Variant {
+    // 8-byte members
+    std::string ref;
+    std::string alt;
+    std::string indel_seq;
+    std::string_view qual;
+    std::string_view lt_seq;
+    std::string_view mid_seq;
+    std::string_view rt_seq;
+    std::string sample_lt_seq;
+    std::string sample_rt_seq;
+
+    // 4-byte members
+    int pos;
+    int ref_len = 0, alt_len = 0, event_len = 0;
+    int indel_len = 0, repeats = 0;
+    int lpos = -1, rpos = -1;
+    int _end_pos = -1;
+    int end_pos = -1;
+    int mean_qual = INT_MAX;
+    int denovo_rep = 0;
+    int event_radius = 0;
+    
+    // 1-byte (bool) members
+    bool has_n = false;
+    bool has_flankings = false;
+    bool is_snv = false, is_mnv = false, is_ins = false, is_del = false;
+    bool is_substitute = false, is_complex = false, is_shiftable = false;
+    bool in_target_flnk = false, in_homopolymer = false;
+    
     //--------------------------------------------------------------------------
     // base qualities may not be supplied (e.g.,deletions) 
-    Variant(const int pos, 
-            const std::string& ref, const std::string& alt, std::string_view qual = ""); 
+    Variant(int p, std::string r, std::string a, std::string_view q = ""); 
     
     //--------------------------------------------------------------------------
     // perform left or right alignmemt 
@@ -124,7 +152,6 @@ struct Variant {
     void setRightPos(const LocalReference& loc_ref);
     void setEndPos(const LocalReference& loc_ref);
     
-     
     //--------------------------------------------------------------------------
     // set left-flanking, inserted seq (middle), right flanking
     void setFlankingSequences(const LocalReference& loc_ref);
@@ -140,6 +167,7 @@ struct Variant {
     // test variant identity after normalization
     bool isEquivalent(const Variant& v, const LocalReference& loc_ref) const;
     
+    /*
     //--------------------------------------------------------------------------
     // inputs
     int pos; // 1-based genomic pos
@@ -179,6 +207,7 @@ struct Variant {
     bool is_shiftable = false; // true if left- and right-positions are different
     bool in_target_flnk = false; // true if located within target's flnk start/end
     bool in_homopolymer = false; // true in homopolymer or btw polymers
+    */
 };
 
 //------------------------------------------------------------------------------
@@ -193,17 +222,6 @@ template<> struct std::hash<Variant> {
         return h;
     }
 };
-
-// make Variant hashable
-/*
-template<> struct std::hash<Variant> {
-    size_t operator () (const Variant& v) const noexcept {
-        size_t h1 = std::hash<int>()(v.pos);
-        size_t h2 = std::hash<std::string>()(v.ref);
-        size_t h3 = std::hash<std::string>()(v.alt);
-        return h1 ^ h2 ^ h3;
-    }
-};*/
 
 //------------------------------------------------------------------------------
 // overloaded operators
