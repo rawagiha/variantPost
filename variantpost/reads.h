@@ -8,11 +8,75 @@
 //------------------------------------------------------------------------------
 // features at read level
 struct Read {   
+    
+    // 1. 8-byte members (Pointers, string_view, std::string, std::vector)
+    std::string_view name;
+    std::string_view base_quals;
+    std::string_view seq;
+    std::string_view ref_seq;
+    std::string_view cigar_str;
+
+    std::string spliced_ref_seq;
+    std::string target_ref = "N";
+    std::string target_alt = "N";
+    std::string splice_sig;
+    std::string non_ref_sig;
+
+    Ints idx2pos;
+    Coord aligned_segments;
+    Coord skipped_segments;
+    Ints var_idx;
+    CigarVec cigar_vector;
+    Vars variants;
+
+    // 2. 4-byte members (int)
+    int aln_start = 0;
+    int aln_end = 0;
+    int start_offset = 0;
+    int end_offset = 0;
+    int read_start = 0;
+    int read_end = 0;
+    int qs = -1, qe = -1;
+    int covering_start = 0;
+    int covering_end = 0;
+    int target_idx = -1;
+    int target_pos = -1;
+    int flnk_v_cnt = 0;
+    int dist_to_non_target = INT_MAX;
+    int smer = 0, nmer = 0;
+
+    // 3. 1-byte members (bool, char)
+    // boolをまとめて並べることで、コンパイラが1バイト単位で詰め込みます
+    bool is_reverse = false;
+    bool is_control = false;
+    bool is_na_ref = false;
+    bool covered_in_clip = false;
+    bool is_ref = false;
+    bool has_target = false;
+    bool has_local_events = false;
+    bool has_local_clip = false;
+    bool has_smaller_change = false;
+    bool has_anti_pattern = false;
+    bool has_positional_overlap = false;
+    bool qc_passed = false;
+    bool fail_to_cover_flankings = false;
+    bool is_stable_non_ref = false;
+    bool is_central_mapped = false;
+    bool is_quality_map = false;
+    bool ineffective_kmer = false;
+    bool high_ambiguity = false;
+
+    char covering_ptrn = 'C';
+    char rank = '\0';
+    
+
+
+
     //--------------------------------------------------------------------------
     // constructor from inputs passed by Cython wrapper
-    Read(std::string_view name, const bool is_reverse, const std::string& cigar_str,
-         const int aln_start, const int aln_end, std::string_view seq,
-         const std::string_view quals, const bool is_from_first_bam);
+    Read(std::string_view name, bool is_reverse, const std::string& cigar_str,
+         int aln_start, int aln_end, std::string_view seq,
+         std::string_view quals, bool is_from_first_bam);
      
     //--------------------------------------------------------------------------
     // setup reference sequence and coordinates 
@@ -59,6 +123,8 @@ struct Read {
     void hasTargetComplexSubstitute(const Variant& target);
     void hasTargetComplexIndel(LocalReference& loc_ref, const Variant& target);
     
+
+    /*
     //--------------------------------------------------------------------------
     // read identifier
     std::string_view name;
@@ -141,7 +207,7 @@ struct Read {
       
     //--------------------------------------------------------------------------
     // rank: 's' supporting target, 'y': likely, 'n': non_supprting 'u': undetermined
-    char rank = '\0'; 
+    char rank = '\0';*/ 
 };
 
 #endif
