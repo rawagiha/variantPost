@@ -96,6 +96,8 @@ void _search_target(SearchResult& rslt,
         //std::cout << "afer hapmatch " << pileup.s_cnt << " " << pileup.n_cnt << " " << pileup.u_cnt << std::endl; 
         //std::cout << pileup.s_cnt << " " << pileup.n_cnt << " " << pileup.u_cnt << std::endl;
         for (const auto& read : pileup.reads) {
+            if (read.covering_ptrn == 'C') continue;
+            std::cout << read.rank << " " << read.cigar_str << " " << read.covering_ptrn << std::endl;
             if (read.rank == 's' ) { rslt.target_statuses.push_back(1); /*std::cout << read.name << " " << read.cigar_str << " " << " why " << std::endl;*/ }
             else if (read.rank == 'n' && !read.covered_in_clip) { 
                 //std::cout << "get here " << std::endl;
@@ -107,6 +109,8 @@ void _search_target(SearchResult& rslt,
         }
     } else {
         for (const auto& read : pileup.reads) {
+            if (read.covering_ptrn == 'C') continue;
+            std::cout << read.rank << " " << read.cigar_str << " " << read.covering_ptrn << std::endl;
             if (read.rank == 's') rslt.target_statuses.push_back(1);
             else if (read.rank == 'n' && !read.covered_in_clip) rslt.target_statuses.push_back(0);
             else if (read.rank == 'u' || read.rank == 'y') rslt.target_statuses.push_back(-1);

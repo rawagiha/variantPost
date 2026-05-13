@@ -251,7 +251,7 @@ void Read::parseLocalPattern(LocalReference& loc_ref,
             ++anti_ptrn; total_base_changes += v.event_len;
             
             // TODO Add logic here
-            if (!target.is_complex && target.in_homopolymer && v.is_shiftable) has_anti_pattern = true;
+            //if (!target.is_complex && v.is_shiftable) has_anti_pattern = true;
         }
         
         // ineffective kmer
