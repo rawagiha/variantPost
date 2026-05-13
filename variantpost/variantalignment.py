@@ -185,10 +185,10 @@ class VariantAlignment(object):
         self.trans_vars = []
 
 
-        for tglst in self.tags:
-            for _ in tglst:
-                if _[0] == "CB":
-                    print(_[1])
+        #for tglst in self.tags:
+        #    for _ in tglst:
+        #        if _[0] == "CB":
+        #            print(_[1])
         
         #print(self.tags)
         # print(a)

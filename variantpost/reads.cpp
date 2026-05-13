@@ -4,18 +4,20 @@
 inline int find_first_read_idx(const Ints& idx2pos, int target_pos, int start_offset, int end_offset) {
     if (idx2pos.empty()) return -1;
     
-    // 有効なアライメント範囲（-1を除外）を探索
     auto begin_it = idx2pos.begin() + start_offset;
     auto end_it = idx2pos.end() - end_offset;
     
     auto it = std::lower_bound(begin_it, end_it, target_pos);
     
     if (it != end_it && *it == target_pos) {
-        return static_cast<int>(std::distance(idx2pos.begin(), it));
+        return static_cast<int>(it - idx2pos.begin());
     }
     return -1;
 }
 
+inline bool is_variant(const int idx, const Ints& var_idx) {
+    return std::binary_search(var_idx.begin(), var_idx.end(), idx);
+}
 
 //------------------------------------------------------------------------------
 // NOTE: initilizer list reordered to suppress warning
@@ -49,8 +51,12 @@ void Read::setReference(LocalReference& loc_ref) {
         int pos_1 = aln_start - 1; // for refseq setup
         int pos_2 = read_start; 
         
-        spliced_ref_seq.clear();
-        spliced_ref_seq.reserve(seq.size());
+        size_t required_capacity = 0;
+        for (const auto& [op, op_len] : cigar_vector) {
+            if (op == 'M' || op == '=' || op == 'X' || op == 'D') required_capacity += op_len;
+        }
+        
+        spliced_ref_seq.reserve(required_capacity);
         //char op = '\0'; int op_len = 0;
         for (const auto& [op, op_len] : cigar_vector) {
             //op = c.first; op_len = c.second;
@@ -97,9 +103,10 @@ void Read::setVariants(LocalReference& loc_ref) {
 
     for (auto& v : variants) { v.isInFlanking(loc_ref); ++flnk_v_cnt; }
     
-    // TODO is this okay if sort -> var_idx will be changed.
-    //if (variants.size() > 1)
-    //    std::sort(variants.begin(), variants.end()); 
+    // sorted -> var_idx will be changed.
+    // This is okay. var_idx is only used for quality check
+    if (variants.size() > 1)
+        std::sort(variants.begin(), variants.end()); 
 }
 
 //------------------------------------------------------------------------------
@@ -141,12 +148,6 @@ void Read::parseCoveringPattern(LocalReference& loc_ref, const Variant& target) 
     }
     if (is_partial) covering_ptrn = 'B';
 }
-// var_idx is sorted
-inline bool is_variant(const int idx, const Ints& var_idx) {
-    //auto it = std::find(var_idx.begin(), var_idx.end(), idx);
-    //return (it != var_idx.end()); 
-    return std::binary_search(var_idx.begin(), var_idx.end(), idx);
-}
 
 //------------------------------------------------------------------------------
 //Find consecutive low-qaul bases from ends
@@ -159,24 +160,36 @@ void Read::trimLowQualBases(const char qual_thresh) {
     qs = i; 
     while (j >= i && base_quals[j] < qual_thresh) --j;
     qe = j;
-    /*
-    const int n = static_cast<int>(base_quals.size());
-    int i = 0, j = n - 1;
-    bool is_low_qual = true;
-    while (is_low_qual && i < n) {
-        is_low_qual = (base_quals[i] < qual_thresh); ++i;
-    } qs = (--i); 
-    
-    is_low_qual = true;
-    while (is_low_qual && j >= 0) {
-        is_low_qual = (base_quals[j] < qual_thresh); --j;
-    } qe = (++j);*/
 }
 
 //------------------------------------------------------------------------------
 //Calc. freq of low quality non-ref bases between start/end
 void Read::qualityCheck(const int start, const int end, 
                         const char qual_thresh, const double freq_thresh) {   
+    if (idx2pos.empty()) return;
+
+    // 線形探索を廃止。std::distance と std::find_if を使用して高速化
+    auto it_i = std::find_if(idx2pos.begin(), idx2pos.end(), [start](int pos){ return pos >= start; });
+    auto it_j = std::find_if(idx2pos.rbegin(), idx2pos.rend(), [end](int pos){ return pos < end; });
+
+    if (it_i == idx2pos.end() || it_j == idx2pos.rend()) return;
+    
+    int i = static_cast<int>(std::distance(idx2pos.begin(), it_i));
+    int j = static_cast<int>(std::distance(idx2pos.begin(), it_j.base()) - 1);
+
+    if (i >= j) return;
+     
+    int non_ref_cnt = 0, dirty_non_ref_cnt = 0;
+    for (int k = i; k <= j; ++k) {
+        if (is_variant(k, var_idx)) {
+            ++non_ref_cnt;
+            if (base_quals[k] < qual_thresh) ++dirty_non_ref_cnt; 
+        }
+    }
+    
+    qc_passed = non_ref_cnt ? (static_cast<double>(dirty_non_ref_cnt) / non_ref_cnt <= freq_thresh) : true;
+    
+    /*
     int i = 0, j = 0; //index
     //for (const auto& elem : idx2pos) {    
     //    if (!i && start <= elem.second) i = elem.first;
@@ -199,7 +212,7 @@ void Read::qualityCheck(const int start, const int end,
     
     if (dirty_non_ref_cnt) 
         qc_passed = (static_cast<double>(dirty_non_ref_cnt) / non_ref_cnt <= freq_thresh);
-    else qc_passed = true;
+    else qc_passed = true;*/
 }
 
 //------------------------------------------------------------------------------
@@ -297,6 +310,36 @@ void Read::parseLocalPattern(LocalReference& loc_ref,
 void Read::checkByRepeatCount(const Variant& target, bool& has_excess_ins_hap) {
     if (!target.repeats || has_target) return;
     
+    auto it = std::find(idx2pos.rbegin(), idx2pos.rend(), target.pos + 1);
+    if (it == idx2pos.rend()) return;
+
+    int idx = static_cast<int>(std::distance(idx2pos.begin(), it.base()) - 1);
+
+    std::string_view rt_side = seq.substr(idx);
+    std::string_view lt_side = seq.substr(0, idx);
+    std::string_view indel_seq_sv = target.indel_seq;
+
+    const int rt_len = static_cast<int>(rt_side.size());
+    const int indel_len = target.indel_len;
+
+    int rep = 0;
+    for (int i = 0; rt_len - i >= indel_len; i += indel_len) {
+        if (rt_side.substr(i, indel_len) == indel_seq_sv) ++rep; else break;
+    }
+
+    for (int i = idx - indel_len; i >= 0; i -= indel_len) {
+        if (lt_side.substr(i, indel_len) == indel_seq_sv) ++rep; else break;
+    }
+
+    if (rep != target.repeats) {
+        has_anti_pattern = true;
+        covered_in_clip = false;
+        if (target.is_ins && rep > target.repeats) {
+            is_central_mapped = true;
+            has_excess_ins_hap = true;
+        }
+    }
+    /*
     int idx = -1;
     //for (const auto& elem : idx2pos)  
     //    if (elem.second == target.pos + 1) { idx = elem.first; break; }
@@ -330,21 +373,96 @@ void Read::checkByRepeatCount(const Variant& target, bool& has_excess_ins_hap) {
         if (target.is_ins && rep > target.repeats) {
             is_central_mapped = true; has_excess_ins_hap = true; 
         }
-    }
+    }*/
 }
 
-inline bool is_dirty(const Variant& v, const char thresh) {
-    for (const auto& q : v.qual) { if (q < thresh) return true; }
-    return false; 
-}
+//inline bool is_dirty(const Variant& v, const char thresh) {
+//    for (const auto& q : v.qual) { if (q < thresh) return true; }
+//    return false; 
+//}
+
+
+inline auto append_num = [](std::string& target, auto val) {
+    std::array<char, 20> buffer; // 64bit整数でも20文字あれば十分
+    auto [ptr, ec] = std::to_chars(buffer.data(), buffer.data() + buffer.size(), val);
+    if (ec == std::errc{}) {
+        target.append(buffer.data(), ptr - buffer.data());
+    }
+};
+
 
 //------------------------------------------------------------------------------
 // NOTE: qualityCheck before use
 void Read::setSignatureStrings(const UserParams& params) {
     if (!qc_passed) return;
-
+    
     non_ref_sig.clear();
-    non_ref_sig.reserve(128); // 頻繁な再割当てを回避
+    non_ref_sig.reserve(256); // 余裕を持たせる
+
+    for (const auto& v : variants) {
+        bool dirty = false;
+        for (const auto q : v.qual) {
+            if (q < params.base_q_thresh) { dirty = true; break; }
+        }
+        if (dirty) continue;
+
+        // std::to_string の連続呼び出しは遅延の元。可能なら std::to_chars を推奨
+        append_num(non_ref_sig, v.pos);
+        non_ref_sig.append(":").append(v.ref).append(">").append(v.alt).append(";");        
+        //non_ref_sig.append(std::to_string(v.pos)).append(":")
+        //           .append(v.ref).append(">").append(v.alt).append(";");
+    }
+
+    splice_sig.clear();
+    splice_sig.reserve(128);
+    
+    for (const auto& [s_start, s_end] : skipped_segments) {
+        non_ref_sig.append("spl=");
+        splice_sig.append("spl=");
+    
+        // 開始位置
+        append_num(non_ref_sig, s_start);
+        append_num(splice_sig, s_start);
+
+        non_ref_sig.append("-");
+        splice_sig.append("-");
+
+        // 終了位置
+        append_num(non_ref_sig, s_end);
+        append_num(splice_sig, s_end);
+
+        non_ref_sig.append("|");
+        splice_sig.append("|");
+    }
+
+    if (start_offset) {
+        non_ref_sig.append("lt=");
+        append_num(non_ref_sig, aln_start - 1);
+        non_ref_sig.append("$");
+    }
+    if (end_offset) {
+        non_ref_sig.append("rt=");
+        append_num(non_ref_sig, aln_end + 1);
+    }    
+
+
+    /*
+    for (const auto& [s_start, s_end] : skipped_segments) {
+        std::string s = "spl=" + std::to_string(s_start) + "-" + std::to_string(s_end) + "|";
+        non_ref_sig.append(s);
+        splice_sig.append(s);
+    }
+
+    if (start_offset) {
+        non_ref_sig.append("lt=").append(std::to_string(aln_start - 1)).append("$");
+    }
+    if (end_offset) {
+        non_ref_sig.append("rt=").append(std::to_string(aln_end + 1));
+    }*/
+
+    /*
+    non_ref_sig.clear();
+    non_ref_sig.reserve(256); 
 
     for (const auto& v : variants) {
         bool dirty = false;
@@ -367,7 +485,7 @@ void Read::setSignatureStrings(const UserParams& params) {
     if (end_offset) {
         non_ref_sig.append("rt=").append(std::to_string(aln_end + 1));
     }
-    
+    */
     
     /*
     if(!qc_passed) return;

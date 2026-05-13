@@ -1,7 +1,9 @@
 import os
+import pysam
 from setuptools import setup, find_packages
 from setuptools.extension import Extension
-
+from Cython.Build import cythonize
+from Cython.Distutils import build_ext
 
 def pip_install(pkg_name):
     import subprocess
@@ -27,6 +29,12 @@ class BuildExt(build_ext):
             self.compiler.compiler_so.remove("-Wstrict-prototypes")
         super().build_extensions()
 
+pysam_includes = pysam.get_include()
+if isinstance(pysam_includes, str):
+    pysam_includes = [pysam_includes]
+
+# htslib のパスもリスト内の各要素に対して作成
+htslib_includes = [os.path.join(p, "htslib") for p in pysam_includes]
 
 extensions = [
     Extension(
@@ -50,10 +58,11 @@ extensions = [
             "variantpost/fasta/split.cpp",
         ],
         language="c++",
-        extra_compile_args=["-std=c++17"],
-        #extra_compile_args=["-O3", "-std=c++17"],
+        # pysam のヘッダーパスを追加（これが重要）
+        include_dirs=pysam_includes + htslib_includes,
+        # 最適化フラグを有効化
+        extra_compile_args=["-std=c++17", "-O3", "-fPIC"],
         extra_link_args=["-std=c++17"],
-        #extra_link_args=["-O3", "-std=c++17"],
     ),
 ]
 
