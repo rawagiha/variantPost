@@ -42,7 +42,7 @@ struct Pileup {
       
     //--------------------------------------------------------------------------
     // metrics
-    int sz = -1; // pileup size
+    int sz = -1;
     int s_cnt = 0, n_cnt = 0, u_cnt = 0, y_cnt = 0, z_cnt = 0; //cnt for supporting, non, undetermined
     
     //--------------------------------------------------------------------------

@@ -42,20 +42,20 @@ Pileup::Pileup(const Strs& names, const Bools& is_rv, const Strs& cigar_strs,
                const Ints& aln_starts, const Ints& aln_ends, const Strs& seqs,
                const Strs& quals, const Bools& is_first_bam, const bool has_scnd,
                const UserParams& params, LocalReference& loc_ref, Variant& target) {
-    
-    kmer_sz = std::max(loc_ref.low_cplx_len, params.kmer_size);
     sz = static_cast<int>(names.size());
+    kmer_sz = std::max(loc_ref.low_cplx_len, params.kmer_size);
 
-    const int qc_start = (loc_ref.start <= target.pos - target.event_radius && target.pos - target.event_radius < loc_ref.flanking_start)
-                         ? target.pos - target.event_radius : loc_ref.flanking_start;
-
-    const int qc_end = (target.pos + target.event_radius <= loc_ref.end && loc_ref.flanking_end < target.pos + target.event_radius)
-                       ? target.pos + target.event_radius : loc_ref.flanking_end;
+    const int target_left_lim = target.pos - target.event_radius;
+    const int qc_start = (loc_ref.start <= target_left_lim && target_left_lim < loc_ref.flanking_start)
+                         ? target_left_lim : loc_ref.flanking_start;
+    const int target_right_lim = target.pos + target.event_radius;
+    const int qc_end = (target_right_lim <= loc_ref.end && loc_ref.flanking_end < target_right_lim)
+                       ? target_right_lim: loc_ref.flanking_end;
     
-    // NOTE -- Test if read has the target complex variant if
-    //        1. completely cover the locus ('A') 
-    //        2. has multiple variants within flanking region (flnk_v_cnt > 1)
-    auto search_for_complex = [&](Read& read) {
+    //--- Search the target complex variant if the read satisfies
+    //  1. is completely covered the locus ('A') 
+    //  2. has multiple variants within flanking region (flnk_v_cnt > 1)
+    auto search_complex_target = [&](Read& read) {
         if (target.is_complex && read.covering_ptrn == 'A' && read.qc_passed && read.flnk_v_cnt > 1) {
             target.is_substitute ? read.hasTargetComplexSubstitute(target)
                                  : read.hasTargetComplexIndel(loc_ref, target);
@@ -64,12 +64,11 @@ Pileup::Pileup(const Strs& names, const Bools& is_rv, const Strs& cigar_strs,
     
     int ref_hap_n = 0, ineff_kmer = 0, overlapping = 0;
     
-    // NOTE -- Annotate non-reference varitions needing further analysis to determine if
-    //         supporting the target as Undetermined Signature. The read must satisfy 
-    //         1. has non-ambigously-mapped, non-reference pattern (is_stable_non_ref)
-    //         2. clean bases (qc_passed)
-    //         3. read is not clipped near the locus of interest
-    //          
+    //--- Annotate non-reference varitions needing further analysis to determine if
+    //     supporting the target as Undetermined Signature. The read must satisfy 
+    //     1. has non-ambigously-mapped, non-reference pattern (is_stable_non_ref)
+    //     2. clean bases (qc_passed)
+    //     3. read is not clipped near the locus of interest
     auto annotate_undetermined_signatures = [&](Read& read, int read_idx) {
         if (read.is_stable_non_ref && read.qc_passed && !read.has_local_clip) {
             const auto& sig = read.non_ref_sig;
@@ -85,8 +84,19 @@ Pileup::Pileup(const Strs& names, const Bools& is_rv, const Strs& cigar_strs,
         }
     };
     
-    //int ref_hap_n = 0, ineff_kmer = 0, overlapping = 0; 
-    
+    //--- Demote reads with anti-patterns to non-supporting ('n') 
+    //    
+    auto process_anti_patterns = [&](Read& read) {
+        if (read.is_stable_non_ref && (read.has_anti_pattern || read.has_smaller_change)) { 
+            read.rank = 'n'; ++n_cnt; --u_cnt;
+            
+            if (read.has_anti_pattern) anti_sigs.push_back(read.non_ref_sig);
+            for (auto& v : read.variants) { 
+                if (v.in_target_flnk) { v.testForDeNovoRepeats(loc_ref); ns_vars[v]++; } 
+            }
+        }
+    };
+   
     Ints starts, ends; 
     reads.reserve(sz); starts.reserve(sz); ends.reserve(sz);
     for (int i = 0; i < sz; ++i) {
@@ -112,111 +122,61 @@ Pileup::Pileup(const Strs& names, const Bools& is_rv, const Strs& cigar_strs,
 
         read.is_quality_map = (read.is_stable_non_ref && read.is_central_mapped);
         
-        search_for_complex(read);
+        search_complex_target(read);
                 
-        // --- Ranking read ---
+        //--- Read classification
         if (read.has_target) {
             read.rank = 's'; ++s_cnt;
             read.setSignatureStrings(params); sig_s[read.non_ref_sig].push_back(i);
-            if (read.is_quality_map) sig_s_hiconf[read.non_ref_sig].push_back(i); 
+            if (read.is_quality_map) { sig_s_hiconf[read.non_ref_sig].push_back(i); has_hiconf_support = true; }
         } else if (read.has_local_events) {
             read.rank = 'u'; ++u_cnt;
             read.setSignatureStrings(params);             
             read.checkByRepeatCount(target, has_excess_ins_hap);
             
-            // Rank "anti-pattern" & "smaller change" as 'n'
-            // Anti-pattern:
-            // Single, non-target mutation closed with high-cplx sequence (anti-pattern)
-            // example:
-            //      target    del(C)
-            //                    *
-            //        ref GCTAAAAACAAAATGC
-            //      read  GCTAAAAAAAAAATGC  de-novo homopolymer
-            // Smaller change (non-complex):
-            // Fewer base changes than target (e.g. a SNV for indel target)
-            // 
-            // Store such variants in ns_vars 
-            if (read.is_stable_non_ref && (read.has_anti_pattern || read.has_smaller_change)) { 
-                if (read.has_anti_pattern) anti_sigs.push_back(read.non_ref_sig);
-                read.rank = 'n'; ++n_cnt; --u_cnt;
-                for (auto& v : read.variants) { 
-                    if (v.in_target_flnk) { v.testForDeNovoRepeats(loc_ref); ns_vars[v]++; } 
-                }
-            }
+            process_anti_patterns(read);
+            annotate_undetermined_signatures(read, i);
 
             if (read.rank != 'n') {
                 starts.push_back(read.covering_start); ends.push_back(read.covering_end);
             }   
-            
-            annotate_undetermined_signatures(read, i); 
-           
-            /*
-            // Reads are qualified for undetermined signature profiling if
-            // 1. capped with enough 2-mer diversity (is_stable_non_ref)
-            // 2. mapped in 2nd/3rd readlen quartile (is_central_mapped)
-            // 3. local freq of dirty base < thresh (qc_passed)
-            if (read.is_stable_non_ref && read.qc_passed && !read.has_local_clip) {
-                sig_u[read.non_ref_sig].push_back(i);
-                
-                // annot for signature usage: (kmer, overlap, grid-search)
-                // kmer: ineffctive kmer if 1
-                // overlap: positionally overlap non-target if 1
-                // grid-search: do not use this sig for grid-search
-                if (u_sig_annot.find(read.non_ref_sig) == u_sig_annot.end()) {
-                    u_sig_annot[read.non_ref_sig] = {0, 0, 0};
-                }
-
-                if (read.ineffective_kmer) { ++ineff_kmer; u_sig_annot[read.non_ref_sig][0] = 1; }
-                if (read.has_positional_overlap) { ++overlapping; u_sig_annot[read.non_ref_sig][1] = 1; }  
-                if (read.rank == 'n') { u_sig_annot[read.non_ref_sig][2] = 1; }
-            }*/
         } else { 
             if (read.has_local_clip || read.covered_in_clip) { read.rank = 'u'; ++u_cnt; }
             else { read.rank = 'n'; ++n_cnt; } 
             
             // Catch reference haplotype in control BAM here
-            if (read.is_control && read.is_quality_map) ++ref_hap_n;              
+            if (read.is_control && read.is_quality_map) { ++ref_hap_n; has_ref_hap = true; }              
         }       
     }
-    // No supporting and no undetermined reads (e.g., all non-supporting or no coverage)
+    
     if (!s_cnt && !u_cnt) { has_no_support = true; return; }
     
-    // Local reference start <= Pileup start
+    //--- Define pileup start/end within local reference start/end 
     start = set_start(starts, loc_ref, kmer_sz); 
-    
-    // Pileup end <= Local reference end
     end = set_end(ends, loc_ref, kmer_sz);
-     
-    // Set reference sequence to Pileup
     make_sequence(loc_ref, {}, start, end, rseq, &i2pr);
     
-    // Set if reference haplotype detected in control BAM
-    // (control BAM may not be supplied)
-    has_ref_hap = (ref_hap_n);
-    
-    // Set if high confidence target has been found
-    has_hiconf_support = (!sig_s_hiconf.empty());
+    //--- Focus on high confidence case (Supporing reads with no mapping ambiguity)
+    //    --> pick up most frequent pattern 
     if (!has_hiconf_support) return;
-    
-    // Sort high conf. target pattern by occurrence
-    PatternCnt s_sig_cnt; count_patterns(sig_s_hiconf, s_sig_cnt); 
-    // Set the most freq. pattern as target haplotype (hap0)
-    hap0 = s_sig_cnt[0].first; hiconf_read_idx = sig_s_hiconf[hap0][0];
-
-    // Heuristic: Target alignment would be unique 
-    // -> may not be true if mapping algorithms are difference (e.g., DNA vs. RNA)
+    else {
+        PatternCnt s_sig_cnt; count_patterns(sig_s_hiconf, s_sig_cnt); 
+        hap0 = s_sig_cnt[0].first; hiconf_read_idx = sig_s_hiconf[hap0][0];
+    }
+     
+    //--- Focus on a single BAM file && high-confidence already found case (exit earlier)
+    //    Undetermined singatures are also well-mapped and are unlikely to be supporting.
+    //    (target is unique.). With second BAM, this may not be the case (DNA vs. RNA)
     if (!has_scnd) return; 
-
-    // If the target is found in a unambiguously-mapped read,
-    // patters in other unambigously mapped reads (sig_u) would be non-supporting. 
-    for (const auto& elem : sig_u) {
-        const auto& read_indexes =  elem.second; 
-        for (const auto i : read_indexes) {
-            if (reads[i].rank == 'n') continue;
-            reads[i].rank = 'n'; ++n_cnt; --u_cnt;
-            u_sig_annot[reads[i].non_ref_sig][2] = 1; // Don't use for grid-search
+    else { 
+        for (const auto& [_, read_indexes] : sig_u) {
+            for (const auto i : read_indexes) {
+                if (reads[i].rank == 'n') continue;
+                reads[i].rank = 'n'; ++n_cnt; --u_cnt;
+                u_sig_annot[reads[i].non_ref_sig][2] = 1; // Don't use for grid-search
+            }
         }
-    } 
+    }
 }
 
 
