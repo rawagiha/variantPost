@@ -18,6 +18,11 @@ struct Pileup {
     
     void gridSearch(const UserParams& params, LocalReference& loc_ref, const Variant& target); 
     
+    void searchByDeBruijnGraph(const UserParams& params, 
+                                   LocalReference& loc_ref, 
+                                   const Variant& target);
+    
+    
     void setHaploTypes(LocalReference& loc_ref, const Variant& target);  
     
     void differentialKmerAnalysis(const UserParams& params,
@@ -44,7 +49,8 @@ struct Pileup {
     // metrics
     int sz = -1;
     int s_cnt = 0, n_cnt = 0, u_cnt = 0, y_cnt = 0, z_cnt = 0; //cnt for supporting, non, undetermined
-    
+    int control_bam_cov = -1;
+     
     //--------------------------------------------------------------------------
     //Ints starts, ends; // storing coverings starts/ends
     int start = -1, end = -1; //typically, start = min(starts), end = max(ends)
@@ -78,7 +84,7 @@ struct Pileup {
     
     //--------------------------------------------------------------------------
     // flags
-    bool has_second = false; // second BAM input
+    bool has_second_bam = false; // second BAM input
     bool has_hiconf_support = false; // center-aligned + surrounded by complex seq
     bool has_no_support = false; // no support no undetermined
     bool has_likely_support = false; // reads likely supporting the target

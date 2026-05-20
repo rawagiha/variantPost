@@ -1,5 +1,8 @@
 #include "pileup.h"
 #include "match.h"
+#include <unordered_set>
+#include <queue>
+#include <cstring>
 
 typedef std::vector<std::pair<std::string_view, size_t>> PatternCnt;
 
@@ -40,8 +43,11 @@ inline void count_patterns(const Idx& ptrn_read_idx, PatternCnt& ptrn_cnts) noex
 //------------------------------------------------------------------------------
 Pileup::Pileup(const Strs& names, const Bools& is_rv, const Strs& cigar_strs,
                const Ints& aln_starts, const Ints& aln_ends, const Strs& seqs,
-               const Strs& quals, const Bools& is_first_bam, const bool has_scnd,
-               const UserParams& params, LocalReference& loc_ref, Variant& target) {
+               const Strs& quals, const Bools& is_first_bam, bool has_scnd,
+               const UserParams& params, LocalReference& loc_ref, Variant& target) 
+    : has_second_bam(has_scnd) {
+    if (has_second_bam) control_bam_cov = 0;
+    
     sz = static_cast<int>(names.size());
     kmer_sz = std::max(loc_ref.low_cplx_len, params.kmer_size);
 
@@ -97,7 +103,7 @@ Pileup::Pileup(const Strs& names, const Bools& is_rv, const Strs& cigar_strs,
         }
     };
    
-    Ints starts, ends; 
+    Ints starts, ends;  
     reads.reserve(sz); starts.reserve(sz); ends.reserve(sz);
     for (int i = 0; i < sz; ++i) {
         reads.emplace_back(names[i], is_rv[i], cigar_strs[i], aln_starts[i], 
@@ -118,9 +124,9 @@ Pileup::Pileup(const Strs& names, const Bools& is_rv, const Strs& cigar_strs,
 
         if (read.covering_ptrn == 'A' && !read.idx2pos.empty()) {
             read.isCenterMapped(target);
+            if (has_second_bam && read.is_control 
+                &&!read.fail_to_cover_flankings) ++control_bam_cov; 
         }
-
-        read.is_quality_map = (read.is_stable_non_ref && read.is_central_mapped);
         
         search_complex_target(read);
                 
@@ -156,7 +162,7 @@ Pileup::Pileup(const Strs& names, const Bools& is_rv, const Strs& cigar_strs,
     end = set_end(ends, loc_ref, kmer_sz);
     make_sequence(loc_ref, {}, start, end, rseq, &i2pr);
     
-    //--- Focus on high confidence case (Supporing reads with no mapping ambiguity)
+    //--- Focus on high confidence case (supporting reads with no mapping ambiguity)
     //    --> pick up most frequent pattern 
     if (!has_hiconf_support) return;
     else {
@@ -167,7 +173,7 @@ Pileup::Pileup(const Strs& names, const Bools& is_rv, const Strs& cigar_strs,
     //--- Focus on a single BAM file && high-confidence already found case (exit earlier)
     //    Undetermined singatures are also well-mapped and are unlikely to be supporting.
     //    (target is unique.). With second BAM, this may not be the case (DNA vs. RNA)
-    if (!has_scnd) return; 
+    if (!has_second_bam) return; 
     else { 
         for (const auto& [_, read_indexes] : sig_u) {
             for (const auto i : read_indexes) {
@@ -286,18 +292,35 @@ void Pileup::setHaploTypes(LocalReference& loc_ref, const Variant& target) {
     PatternCnt s_sig_cnt; 
     
     if (hiconf_read_idx > -1) {
-        make_sequence(
-            loc_ref, reads[hiconf_read_idx].variants, start, end, seq0, &i2p0);
+        //if (seq0.empty()) {
+            make_sequence(
+                loc_ref, reads[hiconf_read_idx].variants, start, end, seq0, &i2p0);
+        //}
     } else if (!sig_s.empty()) {
         PatternCnt s_sig_cnt;
-        count_patterns(sig_s, s_sig_cnt); hap0 = s_sig_cnt[0].first;
-        make_sequence(
-            loc_ref, reads[sig_s[hap0][0]].variants, start, end, seq0, &i2p0);
+        count_patterns(sig_s, s_sig_cnt); 
+        hap0 = s_sig_cnt[0].first;
+        if (seq0.empty()) {
+            hap0 = s_sig_cnt[0].first;
+            make_sequence(
+                loc_ref, reads[sig_s[hap0][0]].variants, start, end, seq0, &i2p0);
+        } else {
+            auto& read = reads[sig_s[hap0][0]];
+            if (read.is_stable_non_ref) {
+                make_sequence(loc_ref, read.variants, start, end, seq0, &i2p0); 
+            } 
+        }
+
     } else {
         make_sequence(loc_ref, {target}, start, end, seq0, &i2p0);
     }
 
     PatternCnt u_sig_cnt; int idx1 = -1, idx2 = -1;
+    
+    //--- Paired BAM file case
+    if (has_second_bam && control_bam_cov) {
+        // pass for now
+    }
     
     int cntl_cov = 0;
     for (const auto& read : reads) {
@@ -565,3 +588,335 @@ void Pileup::searchByRealignment(const UserParams& params,
 
     //aligner.SetReferenceSequence(seq0.c_str(), seq0.size());
 }
+
+struct DBGNode {
+    std::string kmer;
+    int coverage = 0;
+    std::vector<std::string> out_edges;
+};
+
+inline void dfs_find_longest_path(
+    const std::string& current,
+    const std::unordered_map<std::string, DBGNode>& graph,
+    std::unordered_set<std::string>& visited,
+    std::string& current_path,
+    std::string& best_path,
+    const size_t max_depth = 2000
+) noexcept {
+    if (current_path.size() > max_depth) return;
+
+    auto it = graph.find(current);
+    if (it == graph.end() || it->second.out_edges.empty()) {
+        if (current_path.size() > best_path.size()) {
+            best_path = current_path;
+        }
+        return;
+    }
+
+    // 高速化のため、カバレッジ（リード支持数）が高いエッジを優先して走査
+    auto edges = it->second.out_edges;
+    std::sort(edges.begin(), edges.end(), [&](const std::string& a, const std::string& b) noexcept {
+        auto it_a = graph.find(a);
+        auto it_b = graph.find(b);
+        int cov_a = (it_a != graph.end()) ? it_a->second.coverage : 0;
+        int cov_b = (it_b != graph.end()) ? it_b->second.coverage : 0;
+        return cov_a > cov_b;
+    });
+
+    for (const auto& next_kmer : edges) {
+        if (visited.find(next_kmer) == visited.end()) {
+            visited.insert(next_kmer);
+            size_t orig_sz = current_path.size();
+            current_path.push_back(next_kmer.back()); // K-merの最後の塩基を追加
+
+            dfs_find_longest_path(next_kmer, graph, visited, current_path, best_path, max_depth);
+
+            current_path.resize(orig_sz); // バックトラック
+            visited.erase(next_kmer);
+        }
+    }
+
+    // どの分岐も行けなかった場合はそこまでのパスを評価
+    if (current_path.size() > best_path.size()) {
+        best_path = current_path;
+    }
+}
+
+//==============================================================================
+// Pileupクラスのメソッド: searchByDeBruijnGraph（完全実装）
+//==============================================================================
+void Pileup::searchByDeBruijnGraph(const UserParams& params,
+                                   LocalReference& loc_ref,
+                                   const Variant& target)
+{
+    // 早期リターン条件: 既に十分な高信頼度支持（s_cnt）が得られているか、
+    // あるいは検証対象の 'u' リードがそもそも存在しない場合はスキップ
+    //if (s_cnt || u_cnt == 0) return;
+    if (s_cnt || y_cnt == 0) return;
+
+    // 1. K-merサイズの決定（paramsの指定またはデフォルト値）
+    // DBGの分岐耐性を上げるため、通常はリード長やリピート長に応じて動的に決定
+    const size_t k = (kmer_sz > 0) ? static_cast<size_t>(kmer_sz) : 31;
+    if (k < 1) return;
+
+    // 2. De Bruijn Graphの構築
+    // 要件3: "read.rank == 'u' のみからつくる"
+    std::unordered_map<std::string, DBGNode> dbg;
+    std::unordered_map<std::string, int> in_degrees;
+
+    
+    std::unordered_map<std::string, int> kmer_counts;
+    for (const auto& read : reads) {
+        if (!read.qc_passed || read.rank != 'y') continue;
+        //if (read.has_smaller_change || read.has_anti_pattern) continue;
+        //if (!read.has_local_clip && !read.is_stable_non_ref) continue;
+        if (read.seq.size() < k) continue;
+        
+        for (size_t i = 0; i <= read.seq.size() - k; ++i) {
+            kmer_counts[std::string(read.seq.substr(i, k))]++;
+        }
+    }
+    
+    const int min_coverage = 2; 
+    
+    for (const auto& read : reads) {
+        if (!read.qc_passed || read.rank != 'y') continue;
+        //if (read.has_smaller_change || read.has_anti_pattern) continue;
+        //if (!read.has_local_clip && !read.is_stable_non_ref) continue;
+        if (read.seq.size() < k) continue;
+
+        // クリップ部分やインデル部分を網羅するため、リード全体のウィンドウをスライド
+        for (size_t i = 0; i <= read.seq.size() - k; ++i) {
+            std::string kmer{read.seq.substr(i, k)};
+            
+            if (kmer_counts[kmer] < min_coverage) continue;
+
+            auto& node = dbg[kmer];
+            if (node.kmer.empty()) {
+                node.kmer = kmer;
+            }
+            node.coverage = kmer_counts[kmer];
+
+            // 次のK-merへのエッジを張る
+            if (i < read.seq.size() - k) {
+                std::string next_kmer{read.seq.substr(i + 1, k)};
+                // 重複エッジの登録を防ぐ
+                if (kmer_counts[next_kmer] >= min_coverage){
+                    if (std::find(node.out_edges.begin(), node.out_edges.end(), next_kmer) == node.out_edges.end()) {
+                        node.out_edges.push_back(next_kmer);
+                        in_degrees[next_kmer]++;
+                    }
+                }
+            }
+        }
+    }
+
+    if (dbg.empty()) return;
+
+    // 3. グラフのソースノード（入次数0、またはカバレッジ最大のノード）を起点に決定
+    std::string start_kmer;
+    int max_src_cov = -1;
+    for (const auto& [kmer, node] : dbg) {
+        if (in_degrees[kmer] == 0 && node.coverage > max_src_cov) {
+            max_src_cov = node.coverage;
+            start_kmer = kmer;
+        }
+    }
+    // 入次数0が見つからない（ループ構造など）場合は、最大カバレッジのノードを起点にする
+    if (start_kmer.empty()) {
+        for (const auto& [kmer, node] : dbg) {
+            if (node.coverage > max_src_cov) {
+                max_src_cov = node.coverage;
+                start_kmer = kmer;
+            }
+        }
+    }
+
+    // 4. アセンブリパスの探索（最有力コンティグの生成）
+    std::unordered_set<std::string> visited_kmers;
+    std::string current_path = start_kmer;
+    std::string assembled_seq = start_kmer;
+
+    visited_kmers.insert(start_kmer);
+    dfs_find_longest_path(start_kmer, dbg, visited_kmers, current_path, assembled_seq);
+
+    // 長すぎる、または短すぎるアセンブリ配列は異常値として除外
+    if (assembled_seq.size() < k + 10) return;
+
+    // 要件4: "assembly したtarget を含む配列をseq0に代入"
+    seq0 = assembled_seq;
+    i2p0.clear();
+    i2p0.resize(seq0.size(), -1); // 初期値としてゲノム座標未定義（-1）を設定
+
+    // 5. アセンブリ配列（seq0）をリファレンス配列（rseq）に対してアラインメントし、座標変換を計算
+    // 要件4: "genomic positionはi2pをしてかえす"
+    // ここでは、Smith-Waterman/Needleman-Wunsch に基づく内部アライナー（Aligner）を利用
+    Aligner dgb_aligner(params.match_score, params.mismatch_penal,
+                        params.gap_open_penal, params.gap_ext_penal);
+
+    // リファレンス配列（rseq: クラス内で定義・抽出済み）をセット
+    dgb_aligner.SetReferenceSequence(rseq.c_str(), rseq.size());
+
+    Alignment aln_res;
+    Filter filter_dummy;
+    int32_t mask_len = (seq0.size() < 30) ? 15 : static_cast<int32_t>(seq0.size() / 2);
+
+    dgb_aligner.Align(seq0.c_str(), filter_dummy, &aln_res, mask_len);
+
+    // CIGAR文字列およびアラインメント開始位置をパースして i2p0 マップを構築
+    // start は Pileup::start (ゲノム上のリファレンス座標)
+    int ref_offset = aln_res.ref_begin; // rseq内でのローカルオフセット
+    int query_idx = aln_res.query_begin;
+
+    // CIGAR解析用の簡易ステートマシン
+    // 例: "10M2I5D20M" などのオペレーションを処理
+    const std::string& cigar = aln_res.cigar_string;
+    size_t cigar_len = cigar.size();
+    size_t c_idx = 0;
+
+    while (c_idx < cigar_len) {
+        int length = 0;
+        while (c_idx < cigar_len && std::isdigit(cigar[c_idx])) {
+            length = length * 10 + (cigar[c_idx] - '0');
+            c_idx++;
+        }
+        if (c_idx >= cigar_len) break;
+        char op = cigar[c_idx++];
+
+        switch (op) {
+            case 'M': // Match or Mismatch
+            case 'X':
+            case 'A':
+                for (int l = 0; l < length; ++l) {
+                    if (query_idx < static_cast<int>(i2p0.size())) {
+                        // ゲノム上の絶対座標 = クラス全体のベースゲノム座標(start) + リファレンス内相対オフセット
+                        i2p0[query_idx] = start + ref_offset;
+                    }
+                    query_idx++;
+                    ref_offset++;
+                }
+                break;
+            case 'I': // Insertion to Reference (Queryには塩基があり、Refにはない)
+                for (int l = 0; l < length; ++l) {
+                    if (query_idx < static_cast<int>(i2p0.size())) {
+                        // 挿入セグメントの内部座標。周辺のゲノム境界を割り振るか、
+                        // インデル検出用に特定のアンカー座標（直前のリファレンス座標等）をマッピング
+                        i2p0[query_idx] = start + ref_offset;
+                    }
+                    query_idx++;
+                }
+                break;
+            case 'D': // Deletion from Reference (Queryには塩基がなく、Refにある)
+                ref_offset += length;
+                break;
+            case 'S': // Soft-clip
+                query_idx += length;
+                break;
+            default:
+                break;
+        }
+    }
+
+    // 6. アセンブリされたターゲット候補配列（seq0）に対して、'u' リードがサポートしているか再評価
+    // 要件1, 2の解決: Complex Indel や長いソフトクリップを持つリードを、DBGによる共通コンティグを介して救い出す
+    int target_left_lim = target.pos - target.event_radius;
+    int target_right_lim = target.pos + target.event_radius;
+    
+    /*
+    bool contig_contains_target = false;
+    
+    // コンティグの各塩基のゲノム座標（i2p0）から、target.pos に対応するインデックスを探す
+    auto it_pos = std::find(i2p0.begin(), i2p0.end(), target.pos);
+    
+    if (it_pos != i2p0.end()) {
+        size_t local_idx = std::distance(i2p0.begin(), it_pos);
+        
+        // 変異（Indel含む）の長さを考慮してコンティグから実際の配列を切り出す
+        // SNVであれば1文字、Indelであればその長さ分
+        size_t check_len = target.alt.size();
+        if (local_idx + check_len <= seq0.size()) {
+            std::string assembled_allele = seq0.substr(local_idx, check_len);
+            
+            // コンティグの該当座標の配列が、target.alt または target.ref と一致するかを厳密に判定
+            if (assembled_allele == target.alt || assembled_allele == target.ref) {
+                contig_contains_target = true;
+            }
+        }
+    }*/
+
+    //if (!contig_contains_target) { seq0.clear(); i2p0.clear(); return; }
+
+    // コンティグ内にターゲットバリアントが存在しているかを検出する（簡易シグネチャ探索、またはアラインメント境界確認）
+    // ここでは、アセンブリ配列自身がtarget indelをカバーしているかを検証
+   // bool contig_contains_target = false;
+
+    // targetのref/alt配列パターンがseq0に見出せるか、座標系がtarget.posに交差しているかを判定
+    //if (seq0.find(target.alt) != std::string::npos || seq0.find(target.ref) != std::string::npos) {
+    //    contig_contains_target = true;
+    //}
+
+    //if (!contig_contains_target) {
+        // もし文字列一致で不十分な場合、座標空間（i2p0）にtarget.pos周辺が含まれているかでフォールバック
+     //   auto it_pos = std::find(i2p0.begin(), i2p0.end(), target.pos);
+      //  if (it_pos != i2p0.end()) {
+       //     contig_contains_target = true;
+        //}
+    //}
+
+    // コンティグがターゲットを正しく回収できていれば、このコンティグ（パス）を構成した 'u' リードを 's' へ昇格
+    //if (contig_contains_target) {
+    Aligner read_aligner(params.match_score, params.mismatch_penal,
+                         params.gap_open_penal, params.gap_ext_penal);
+        // 今回アセンブリされた高信頼性配列（seq0）を新たなリファレンスとしてセット
+    read_aligner.SetReferenceSequence(seq0.c_str(), seq0.size());
+
+    std::bitset<3> check_points;
+    int fss = -1, fee = -1, ts = -1, te = -1;
+
+        // i2p0 マップから各アプローチウィンドウ（Flanking / Target）のローカル座標を決定
+    for (int i = 0; i < static_cast<int>(i2p0.size()); ++i) {
+        if (i2p0[i] == loc_ref.flanking_start) fss = i;
+        if (ts < 0 && i2p0[i] == target.pos) ts = i;
+        if (i2p0[i] == target.end_pos) te = i;
+        if (i2p0[i] == loc_ref.flanking_end) fee = i;
+    }
+
+        // 座標定義が有効な場合のみ、各リードのリアラインメント・チェックをおこなう
+    if (fss != -1 && ts != -1 && te != -1 && fee != -1) {
+        int fse = fss + params.dimer_window;
+        int fes = fee - params.dimer_window;
+
+        for (auto& read : reads) {
+            if (!read.qc_passed || read.rank != 'y') continue;
+            //if (read.has_smaller_change || read.has_anti_pattern) continue;
+            //if (!read.has_local_clip && !read.is_stable_non_ref) continue;
+            if (read.seq.size() < k) continue;
+            
+            Alignment read_aln;
+            int32_t r_mask_len = (read.seq.size() < 30) ? 15 : static_cast<int32_t>(read.seq.size() / 2);
+
+            // リードを seq0 コンティグに対してアラインメント（ソフトクリップの解消）
+            read_aligner.Align(read.seq.data(), filter_dummy, &read_aln, r_mask_len);
+
+            // match.h の外部ヘルパー関数でターゲットに合致するかチェック
+            check_match_pattern(read_aln, check_points, fss, fse, ts, te, fes, fee);
+
+            // 完全一致、または複雑なIndelの一部として高スコアでマッチした場合
+            //if (check_points.count() == 3 || (check_points.test(1) && read.has_positional_overlap)) {
+            if (check_points.count() == 3 ) {
+                read.rank = 's'; // 確定支持リードへ昇格
+                ++s_cnt; --y_cnt;
+
+                // シグネチャマップの更新
+                sig_s[read.non_ref_sig].push_back(&read - &reads[0]);
+                sig_s_hiconf[read.non_ref_sig].push_back(&read - &reads[0]);
+                has_hiconf_support = true;
+            }
+            check_points.reset();
+        }
+   }
+   
+   //if (!s_cnt) { seq0.clear(); i2p0.clear(); } 
+}
+
+

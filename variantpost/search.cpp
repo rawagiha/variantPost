@@ -82,11 +82,13 @@ void _search_target(SearchResult& rslt,
     // -> if no, such reads are likely non-supporting
     // -> use for background haplotype construction 
     pileup.gridSearch(params, loc_ref, target);
+    //pileup.searchByDeBruijnGraph(params, loc_ref, target);
     //std::cout << "after grid " << pileup.s_cnt << " " << pileup.n_cnt << " " << pileup.u_cnt << std::endl; 
     // supporting reads where target is clipped (clipped-target) would be still "undetermied"
     if (pileup.u_cnt) {
         pileup.setHaploTypes(loc_ref, target);
         pileup.differentialKmerAnalysis(params, loc_ref, target);
+        pileup.searchByDeBruijnGraph(params, loc_ref, target);
         //std::cout << "after kmer " << pileup.s_cnt << " " << pileup.n_cnt << " " << pileup.u_cnt << std::endl;   
         // capture clipped-target here based on the differential kmer analysis  
         pileup.searchByRealignment(params, loc_ref, target);
