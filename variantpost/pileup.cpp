@@ -189,14 +189,12 @@ Pileup::Pileup(const Strs& names, const Bools& is_rv, const Strs& cigar_strs,
 void Pileup::phaseGermlineVariants() {
     if (this->sz == 0) return;
 
-    // 1. 各変異のカウントと、その座標の正確なデプス（カバレッジ）を保持する構造体
     struct CountTrack {
         int total_reads = 0;
         int total_depth = 0;
     };
     std::unordered_map<VariantKey, CountTrack, VariantKeyHash> global_counts;
 
-    // まずは今まで通り、有効なリードからALT（変異）のカウントを集計
     for (int i = 0; i < this->sz; ++i) {
         const auto& read = this->reads[i];
         if (!read.is_control || read.covering_ptrn != 'A' || !read.qc_passed) continue;
@@ -207,8 +205,7 @@ void Pileup::phaseGermlineVariants() {
 
     if (global_counts.empty()) return;
 
-    // 2. 精緻化：各変異の正確な total_depth を aligned_segments から算出する
-    // 高速化のため、ユニークな変異の座標（pos）だけをソートして抽出しておく
+    //--- Sort variant postions to calculate VAF
     std::vector<long long> unique_positions;
     for (const auto& [key, _] : global_counts) {
         unique_positions.push_back(key.pos);
@@ -216,19 +213,17 @@ void Pileup::phaseGermlineVariants() {
     std::sort(unique_positions.begin(), unique_positions.end());
     unique_positions.erase(std::unique(unique_positions.begin(), unique_positions.end()), unique_positions.end());
 
-    // 各座標(pos)ごとの実際のリード数を数えるマップ
+    //--- Calculate depths at sorted variant positions
     std::unordered_map<long long, int> pos_depth;
 
     for (int i = 0; i < this->sz; ++i) {
         const auto& read = this->reads[i];
         if (!read.is_control || read.covering_ptrn != 'A' || !read.qc_passed) continue;
-
-        // 各リードの整列セグメント（区間）を走査
+        
+        //--- Count only aligned segments (exclude spliced skips)
         for (const auto& seg : read.aligned_segments) { // seg は std::pair<int, int> (start, end)
             int seg_start = seg.first;
             int seg_end = seg.second;
-            std::cout << read.cigar_str << " start " << seg_start << " end  " << seg_end << std::endl;  
-            // 二分探索で、このセグメントの範囲内 [seg_start, seg_end] に乗っている変異posを高速にインクリメント
             auto it = std::lower_bound(unique_positions.begin(), unique_positions.end(), seg_start);
             while (it != unique_positions.end() && *it <= seg_end) {
                 pos_depth[*it]++;
@@ -237,19 +232,19 @@ void Pileup::phaseGermlineVariants() {
         }
     }
 
-    // 計算した正確なデプスを global_counts 側にマッピング
+    //--- Map the depth to global count
     for (auto& [key, track] : global_counts) {
         track.total_depth = pos_depth[key.pos];
     }
 
-    // 3. 正確なローカル VAF を用いて骨格（backbone）となるヘテロ変異を抽出
+    //--- Extract heterozygous variants (VAF: 0.3 - 0.7)
     std::vector<VariantKey> backbone_keys;
     backbone_keys.reserve(global_counts.size());
 
     for (const auto& [key, track] : global_counts) {
-        if (track.total_depth == 0) continue; // 0除算回避
+        if (track.total_depth == 0) continue; 
         double vaf = static_cast<double>(track.total_reads) / track.total_depth;
-        if (vaf >= 0.2 && vaf <= 0.8) {
+        if (vaf >= 0.3 && vaf <= 0.7) {
             backbone_keys.push_back(key);
         }
     }
@@ -268,77 +263,78 @@ void Pileup::phaseGermlineVariants() {
     std::vector<std::pair<int, bool>> read_calls;
     read_calls.reserve(64);
     
-    for (int i = 0; i < this->sz; ++i) { // <-- リードを回す大元のループ
-            const auto& read = this->reads[i]; // <-- これが消えると read() 関数と勘違いされる
-            if (!read.is_control || read.covering_ptrn != 'A' || !read.qc_passed) continue;
+    for (int i = 0; i < this->sz; ++i) { 
+        const auto& read = this->reads[i]; 
+        if (!read.is_control || read.covering_ptrn != 'A' || !read.qc_passed) continue;
 
-            read_calls.clear();
+        read_calls.clear();
+        
+        for (int j = 0; j < N; ++j) {
+            const auto& b_key = backbone_keys[j];
 
-            for (int j = 0; j < N; ++j) {
-                const auto& b_key = backbone_keys[j];
-
-                if (read.aln_end < b_key.pos) {
+            if (read.aln_end < b_key.pos) break;
+                
+            if (b_key.pos < read.aln_start) continue;
+                
+             
+            bool is_mechanically_covered = false;
+            for (const auto& seg : read.mapped_segments) {
+                if (seg.first <= b_key.pos && b_key.pos <= seg.second) {
+                    is_mechanically_covered = true;
                     break;
                 }
-                if (b_key.pos < read.aln_start) {
-                    continue;
-                }
-
-                // 物理カバーの厳密チェック
-                bool is_mechanically_covered = false;
-                for (const auto& seg : read.aligned_segments) {
-                    if (seg.first <= b_key.pos && b_key.pos <= seg.second) {
-                        is_mechanically_covered = true;
-                        break;
-                    }
-                }
-
-                // DEL領域等で欠失している場合は登録せずにスキップ
-                if (!is_mechanically_covered) {
-                    continue;
-                }
-
-                bool has_alt = false;
-                for (const auto& v : read.variants) {
-                    if (v.pos == b_key.pos && v.ref == b_key.ref && v.alt == b_key.alt) {
-                        has_alt = true; // ALT
-                        break;
-                    }
-                }
-
-                read_calls.push_back({j, has_alt});
             }
 
-            // --- Within the same read, testing the linkage
-            if (read_calls.size() < 2) continue; // <-- ここがループ内として正しく認識されるはず
+            if (!is_mechanically_covered) continue;
             
-            for (size_t a = 0; a < read_calls.size(); ++a) {
-                for (size_t b = a + 1; b < read_calls.size(); ++b) {
-                    int idxA = read_calls[a].first;
-                    int idxB = read_calls[b].first;
-
-                    if (read_calls[a].second == read_calls[b].second) {
-                        adj[idxA][idxB].same++;
-                        adj[idxB][idxA].same++;
-                    } else {
-                        adj[idxA][idxB].diff++;
-                        adj[idxB][idxA].diff++;
-                    }
+            bool has_alt = false;
+            for (const auto& v : read.variants) {
+                if (v.pos == b_key.pos && v.ref == b_key.ref && v.alt == b_key.alt) {
+                    has_alt = true; // ALT
+                    break;
                 }
             }
-        }    
+            
+            read_calls.push_back({j, has_alt});
+        }
 
-    // Pick up most covered SNP as starting point
+        // --- Within the same read, testing the linkage
+        if (read_calls.size() < 2) continue; 
+            
+        for (size_t a = 0; a < read_calls.size(); ++a) {
+            for (size_t b = a + 1; b < read_calls.size(); ++b) {
+                int idxA = read_calls[a].first;
+                int idxB = read_calls[b].first;
+                
+                
+                if (read_calls[a].second == read_calls[b].second) {
+                    adj[idxA][idxB].same++;
+                    adj[idxB][idxA].same++;
+                } else {
+                    adj[idxA][idxB].diff++;
+                    adj[idxB][idxA].diff++;
+                }
+            }
+       }
+    }    
+    
+    // Pick up the most reliable HET variant as the starting point
+    // (Maximize coverage while penalizing deviation from VAF 0.5)
     int best_seed_idx = 0;
-    int max_reads = 0;
+    double best_seed_score = -1.0;
     for (int i = 0; i < N; ++i) {
-        int coverage_reads = global_counts[backbone_keys[i]].total_reads;
-        if (coverage_reads > max_reads) {
-            max_reads = coverage_reads;
+        int coverage = global_counts[backbone_keys[i]].total_reads;
+        int depth = global_counts[backbone_keys[i]].total_depth;
+        if (depth == 0) continue;
+        
+        double vaf = static_cast<double>(coverage) / depth;
+        double score = coverage * (0.5 - std::abs(vaf - 0.5));
+        
+        if (score > best_seed_score) {
+            best_seed_score = score;
             best_seed_idx = i;
         }
-    }
-    
+    } 
     
     std::vector<Phase> phased_array(N, Phase::Unphased);
     phased_array[best_seed_idx] = Phase::Hap1; // designate the start as Hap1
@@ -356,14 +352,20 @@ void Pileup::phaseGermlineVariants() {
             if (phased_array[neighbor] != Phase::Unphased) continue;
 
             const Edge& edge = adj[curr][neighbor];
-            // require 2 or more read supports
-            if (edge.same + edge.diff >= 2) {
-                if (edge.same > edge.diff) {
-                    phased_array[neighbor] = curr_phase;
-                    queue.push_back(neighbor);
-                } else if (edge.diff > edge.same) {
-                    phased_array[neighbor] = (curr_phase == Phase::Hap1) ? Phase::Hap2 : Phase::Hap1;
-                    queue.push_back(neighbor);
+            int total_links = edge.same + edge.diff;
+            
+            if (total_links >= 2) {
+                double purity = static_cast<double>(std::max(edge.same, edge.diff)) / total_links;
+                
+                // same /(same + diff) > 0.75 or < 0.25
+                if (purity >= 0.75) {
+                    if (edge.same > edge.diff) {
+                        phased_array[neighbor] = curr_phase;
+                        queue.push_back(neighbor);
+                    } else {
+                        phased_array[neighbor] = (curr_phase == Phase::Hap1) ? Phase::Hap2 : Phase::Hap1;
+                        queue.push_back(neighbor);
+                    }
                 }
             }
         }
@@ -386,48 +388,49 @@ void Pileup::phaseGermlineVariants() {
 
         for (int j = 0; j < N; ++j) {
             const auto& b_key = backbone_keys[j];
-            if (read.aln_start <= b_key.pos && b_key.pos <= read.aln_end) {
-                auto it = backbone_phase.find(b_key);
-                if (it == backbone_phase.end()) continue;
 
-                bool has_alt = false;
-                for (const auto& v : read.variants) {
-                    if (v.pos == b_key.pos && v.ref == b_key.ref && v.alt == b_key.alt) {
-                        has_alt = true; break;
-                    }
+            bool is_mechanically_covered = false;
+            for (const auto& seg : read.mapped_segments) {
+                if (seg.first <= b_key.pos && b_key.pos <= seg.second) {
+                    is_mechanically_covered = true; break;
                 }
+            }
+            if (!is_mechanically_covered) continue;
 
-                if (has_alt) {
-                    if (it->second == Phase::Hap1) h1_votes++;
-                    else if (it->second == Phase::Hap2) h2_votes++;
-                } else {
-                    if (it->second == Phase::Hap1) h2_votes++;
-                    else if (it->second == Phase::Hap2) h1_votes++;
+            auto it = backbone_phase.find(b_key);
+            if (it == backbone_phase.end()) continue; 
+
+            bool has_alt = false;
+            for (const auto& v : read.variants) {
+                if (v.pos == b_key.pos && v.ref == b_key.ref && v.alt == b_key.alt) {
+                    has_alt = true; break;
                 }
+            }
+
+            if (has_alt) {
+                if (it->second == Phase::Hap1) h1_votes++;
+                else if (it->second == Phase::Hap2) h2_votes++;
+            } else {
+                if (it->second == Phase::Hap1) h2_votes++;
+                else if (it->second == Phase::Hap2) h1_votes++;
             }
         }
 
         if (h1_votes > h2_votes) read.phase = Phase::Hap1;
         else if (h2_votes > h1_votes) read.phase = Phase::Hap2;
         else read.phase = Phase::Unphased;
-    }
-   
+    } 
     
-    // -------------------------------------------------------------------------
-    // 4. 最終処理：リードのフェーズ（トポロジー）に基づく決定論的分類
-    // -------------------------------------------------------------------------
     this->hap1_vars.clear();
     this->hap2_vars.clear();
     this->homo_vars.clear();
 
-    // 各変異が、Hap1のリード / Hap2のリード からそれぞれ何回支持されたかをカウントする
     struct PhaseVote {
         int hap1_support = 0;
         int hap2_support = 0;
     };
     std::unordered_map<VariantKey, PhaseVote, VariantKeyHash> var_votes;
 
-    // フェーズ確定済みのリードをなめる
     for (int i = 0; i < this->sz; ++i) {
         const auto& read = this->reads[i];
         if (read.phase == Phase::Unphased || !read.qc_passed || read.covering_ptrn != 'A') continue;
@@ -442,256 +445,32 @@ void Pileup::phaseGermlineVariants() {
         }
     }
 
-    // 座標の昇順ソート用のコンパレータ
     auto sortByPos = [](const Variant& a, const Variant& b) { return a.pos < b.pos; };
 
-    // 支持数に基づく分類（VAFは一切見ない！）
     for (const auto& [key, vote] : var_votes) {
         Variant v(static_cast<int>(key.pos), key.ref, key.alt, "");
 
-        // ノイズ（シーケンスエラー等）を弾くための最低支持リード数（例えば2。環境に合わせて調整）
         const int MIN_SUPPORT = 2;
 
         bool in_hap1 = (vote.hap1_support >= MIN_SUPPORT);
         bool in_hap2 = (vote.hap2_support >= MIN_SUPPORT);
 
-        // 両方のハプロタイプに十分な支持がある -> 確定でHomozygous！
         if (in_hap1 && in_hap2) {
             this->homo_vars.push_back(v);
         }
-        // Hap1のリードだけに乗っている -> Hap1のHetero
         else if (in_hap1) {
             this->hap1_vars.push_back(v);
         }
-        // Hap2のリードだけに乗っている -> Hap2のHetero
         else if (in_hap2) {
             this->hap2_vars.push_back(v);
         }
     }
 
-    // 最後に座標順にソート
     std::sort(this->hap1_vars.begin(), this->hap1_vars.end(), sortByPos);
     std::sort(this->hap2_vars.begin(), this->hap2_vars.end(), sortByPos);
     std::sort(this->homo_vars.begin(), this->homo_vars.end(), sortByPos);
-
-
-
-    /*
-    // -------------------------------------------------------------------------
-    // 4. 最終処理：メソッドの各各種変異リストを正確に埋める
-    // -------------------------------------------------------------------------
-    this->hap1_vars.clear();
-    this->hap2_vars.clear();
-    this->homo_vars.clear();
-
-    // 座標の昇順ソート用のコンパレータ
-    auto sortByPos = [](const Variant& a, const Variant& b) { return a.pos < b.pos; };
-
-    for (const auto& [key, track] : global_counts) {
-        if (track.total_depth == 0) continue;
-
-        double vaf = static_cast<double>(track.total_reads) / track.total_depth;
-
-        // 以前のエラー回避のため、必要な4引数で Variant オブジェクトを作成
-        Variant v(static_cast<int>(key.pos), key.ref, key.alt, "");
-        std::cout << v.pos <<  " " << v.ref << " " << v.alt << "  this is checking " << vaf << " " << std::endl;
-        // ① Homozygous判定 (カバレッジに対して極めて高い割合でALTを検出)
-        if (vaf >= 0.8) {
-            this->homo_vars.push_back(v);
-        }
-        // ② Heterozygous判定 (すでにバックボーン探索で信頼できるフェーズが割り振られたもの)
-        else if (vaf >= 0.2 && vaf < 0.8) {
-            auto it = backbone_phase.find(key);
-            if (it != backbone_phase.end()) {
-                if (it->second == Phase::Hap1) {
-                    this->hap1_vars.push_back(v);
-                } else if (it->second == Phase::Hap2) {
-                    this->hap2_vars.push_back(v);
-                }
-            }
-        }
-    }
-
-    // 後続処理や出力でのバイナリサーチ（std::lower_bound）のために、座標順でソートしておく
-    std::sort(this->hap1_vars.begin(), this->hap1_vars.end(), sortByPos);
-    std::sort(this->hap2_vars.begin(), this->hap2_vars.end(), sortByPos);
-    std::sort(this->homo_vars.begin(), this->homo_vars.end(), sortByPos);i*/
 }
 
-/*
-void Pileup::phaseGermlineVariants() {
-    if (this->sz == 0) return;
-
-    struct CountTrack { int total_reads = 0; };
-    std::unordered_map<VariantKey, CountTrack, VariantKeyHash> global_counts;
-    
-    int coverage = 0;
-    for (int i = 0; i < this->sz; ++i) {
-        const auto& read = this->reads[i];
-        if (!read.is_control || read.covering_ptrn != 'A' || !read.qc_passed) continue;
-        for (const auto& v : read.variants) {
-            global_counts[VariantKey{v.pos, v.ref, v.alt}].total_reads++;
-        }
-        ++coverage;
-    }
-    
-    if (!coverage) return; 
-
-    std::vector<VariantKey> backbone_keys;
-    backbone_keys.reserve(global_counts.size());
-
-    for (const auto& [key, track] : global_counts) {
-        double vaf = static_cast<double>(track.total_reads) / coverage;
-        if (vaf >= 0.2 && vaf <= 0.8) {
-            backbone_keys.push_back(key);
-        }
-    }
-
-    std::sort(backbone_keys.begin(), backbone_keys.end(), [](const VariantKey& a, const VariantKey& b) {
-        return a.pos < b.pos;
-    });
-
-    int N = backbone_keys.size();
-    if (N == 0) return; // no het case
-
-    //--- Making adj matrix
-    struct Edge { int same = 0; int diff = 0; };
-    std::vector<std::vector<Edge>> adj(N, std::vector<Edge>(N));
-
-    std::vector<std::pair<int, bool>> read_calls; 
-    read_calls.reserve(64); 
-
-    for (int i = 0; i < this->sz; ++i) {
-        const auto& read = this->reads[i];
-        if (!read.is_control || read.covering_ptrn != 'A' || !read.qc_passed) continue;
-
-        read_calls.clear();
-
-        for (int j = 0; j < N; ++j) {
-            const auto& b_key = backbone_keys[j];
-
-            if (read.aln_end < b_key.pos) {
-                break; 
-            }
-            if (b_key.pos < read.aln_start) {
-                continue; 
-            }
-
-            bool has_alt = false;
-            for (const auto& v : read.variants) {
-                if (v.pos == b_key.pos && v.ref == b_key.ref && v.alt == b_key.alt) {
-                    has_alt = true; // this variant exists as ALT in this read
-                    break;
-                }
-            }
-            read_calls.push_back({j, has_alt});
-        }
-
-        //--- Within the same read, testing the linkage
-        if (read_calls.size() < 2) continue;
-        for (size_t a = 0; a < read_calls.size(); ++a) {
-            for (size_t b = a + 1; b < read_calls.size(); ++b) {
-                int idxA = read_calls[a].first;
-                int idxB = read_calls[b].first;
-                
-                // For a pair of variants in the sam read....
-                if (read_calls[a].second == read_calls[b].second) {
-                    // both ALT or both REF -> same hap
-                    adj[idxA][idxB].same++;
-                    adj[idxB][idxA].same++;
-                } else {
-                    // one ALT(REF) and the other REF(ALT) -> diff hap
-                    adj[idxA][idxB].diff++;
-                    adj[idxB][idxA].diff++;
-                }
-            }
-        }
-    }
-
-    // Pick up most covered SNP as starting point
-    int best_seed_idx = 0;
-    int max_reads = 0;
-    for (int i = 0; i < N; ++i) {
-        int coverage = global_counts[backbone_keys[i]].total_reads;
-        if (coverage > max_reads) {
-            max_reads = coverage;
-            best_seed_idx = i;
-        }
-    }
-
-    std::vector<Phase> phased_array(N, Phase::Unphased);
-    phased_array[best_seed_idx] = Phase::Hap1; // designate the start as Hap1
-
-    std::vector<int> queue;
-    queue.reserve(N);
-    queue.push_back(best_seed_idx);
-    size_t q_head = 0;
-
-    while (q_head < queue.size()) {
-        int curr = queue[q_head++];
-        Phase curr_phase = phased_array[curr];
-
-        for (int neighbor = 0; neighbor < N; ++neighbor) {
-            if (phased_array[neighbor] != Phase::Unphased) continue;
-
-            const Edge& edge = adj[curr][neighbor];
-            // require 2 or more read supports
-            if (edge.same + edge.diff >= 2) {
-                if (edge.same > edge.diff) {
-                    phased_array[neighbor] = curr_phase;
-                    queue.push_back(neighbor);
-                } else if (edge.diff > edge.same) {
-                    phased_array[neighbor] = (curr_phase == Phase::Hap1) ? Phase::Hap2 : Phase::Hap1;
-                    queue.push_back(neighbor);
-                }
-            }
-        }
-    }
-
-    std::unordered_map<VariantKey, Phase, VariantKeyHash> backbone_phase;
-    for (int i = 0; i < N; ++i) {
-        if (phased_array[i] != Phase::Unphased) {
-            backbone_phase[backbone_keys[i]] = phased_array[i];
-        }
-    }
-    
-    // assign haplotype to all reads (tumor & normal)
-    for (int i = 0; i < this->sz; ++i) {
-        auto& read = this->reads[i];
-        if (read.covering_ptrn != 'A' || !read.qc_passed) continue;
-
-        int h1_votes = 0;
-        int h2_votes = 0;
-
-        for (int j = 0; j < N; ++j) {
-            const auto& b_key = backbone_keys[j];
-            if (read.aln_start <= b_key.pos && b_key.pos <= read.aln_end) {
-                auto it = backbone_phase.find(b_key);
-                if (it == backbone_phase.end()) continue;
-
-                bool has_alt = false;
-                for (const auto& v : read.variants) {
-                    if (v.pos == b_key.pos && v.ref == b_key.ref && v.alt == b_key.alt) {
-                        has_alt = true; break;
-                    }
-                }
-
-                if (has_alt) {
-                    if (it->second == Phase::Hap1) h1_votes++;
-                    else if (it->second == Phase::Hap2) h2_votes++;
-                } else {
-                    if (it->second == Phase::Hap1) h2_votes++; 
-                    else if (it->second == Phase::Hap2) h1_votes++; 
-                }
-            }
-        }
-
-        if (h1_votes > h2_votes) read.phase = Phase::Hap1;
-        else if (h2_votes > h1_votes) read.phase = Phase::Hap2;
-        else read.phase = Phase::Unphased;
-    }
-}
-*/
 //-----------------------------------------------------------------------------
 // This method tends to overanalyze 
 // -> tighter conditions to apply
