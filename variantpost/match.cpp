@@ -253,13 +253,13 @@ void personalize(const Pileup& pileup, LocalReference& loc_ref, const UserParams
     std::string hiconf_seq;
     make_sequence(loc_ref, hiconfvars, pileup.start, pileup.end, hiconf_seq);
     
-    auto query = hiconf_seq.c_str();
+    const char* query = hiconf_seq.c_str();
     int32_t mask_len = strlen(query) < 30 ? 15 : strlen(query) / 2;
     Alignment aln; Filter filter;    
     Aligner aligner(params.match_score, params.mismatch_penal,
                     params.gap_open_penal, params.gap_ext_penal);
     
-    int aln_score = INT_MAX, which_hap = 1;
+    int aln_score = -1, which_hap = 1;
     std::string cigar_str = ""; 
     if (!pileup.seq1.empty()) {
         aligner.SetReferenceSequence(pileup.seq1.c_str(), pileup.seq1.size());
@@ -268,7 +268,7 @@ void personalize(const Pileup& pileup, LocalReference& loc_ref, const UserParams
     }    
     
     if (!pileup.seq2.empty()) {
-        aligner.SetReferenceSequence(pileup.seq2.c_str(), pileup.seq1.size());
+        aligner.SetReferenceSequence(pileup.seq2.c_str(), pileup.seq2.size());
         aligner.Align(query, filter, &aln, mask_len);
         std::cout << "second " << aln.sw_score << std::endl;
         if (aln.sw_score > aln_score) {

@@ -3,12 +3,13 @@
 
 #include "util.h"
 #include "reads.h"
+#include "variant_types.h"
 
 typedef std::vector<Read> Reads;
 typedef std::unordered_map<std::string_view, std::vector<int>> Idx;
 
+
 //------------------------------------------------------------------------------
-// features in a collection of reads (pileup)
 struct Pileup {   
     //--------------------------------------------------------------------------    
     Pileup(const Strs& read_names, const Bools& are_reverse, const Strs& cigar_strs,
@@ -16,12 +17,10 @@ struct Pileup {
            const Strs& quals, const Bools& are_from_first_bam, const bool has_second,
            const UserParams& params, LocalReference& loc_ref, Variant& target);
     
+    void phaseGermlineVariants(); 
+    
+    
     void gridSearch(const UserParams& params, LocalReference& loc_ref, const Variant& target); 
-    
-    void searchByDeBruijnGraph(const UserParams& params, 
-                                   LocalReference& loc_ref, 
-                                   const Variant& target);
-    
     
     void setHaploTypes(LocalReference& loc_ref, const Variant& target);  
     
@@ -34,6 +33,11 @@ struct Pileup {
     //--------------------------------------------------------------------------    
     Reads reads; 
     
+    //--------------------------------------------------------------------------
+    Vars hap1_vars;
+    Vars hap2_vars;
+    Vars homo_vars;
+
     //--------------------------------------------------------------------------
     // variants between flank start/end in non-supporting reads
     std::unordered_map<Variant, int>  ns_vars; 

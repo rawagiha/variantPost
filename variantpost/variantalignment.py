@@ -209,17 +209,17 @@ class VariantAlignment(object):
         s1, n1, u1, s2, n2, u2 = 0, 0, 0, 0, 0, 0
         for i, j in zip(self.target_status, self.are_first_bam):
             if i == 1:
-                if not j:
+                if j:
                     s1 += 1
                 else:
                     s2 += 1
             elif i == 0:
-                if not j:
+                if j:
                     n1 += 1
                 else:
                     n2 += 1
             elif i == -1:
-                if not j:
+                if j:
                     u1 += 1
                 else:
                     u2 += 1    

@@ -41,8 +41,10 @@ Read::Read(std::string_view name_, bool is_rv,
 void Read::setReference(LocalReference& loc_ref) {
     const int loc_ref_len = static_cast<int>(loc_ref.seq.size());
     //int pos_2 = read_start; // for coordinate setup    
- 
-    if (cigar_str.find('N') == std::string_view::npos) {
+    
+    Coord unmapped_segments;
+    if (cigar_str.find('N') == std::string_view::npos 
+       && cigar_str.find('D') == std::string_view::npos) {
         const int _idx = aln_start - loc_ref.start; // idx on local reference 
         const int _ref_len = aln_end - aln_start + 1; // expected refseq len
         if (_idx >= 0 && _idx + _ref_len <= loc_ref_len)
@@ -57,19 +59,21 @@ void Read::setReference(LocalReference& loc_ref) {
         }
         
         spliced_ref_seq.reserve(required_capacity);
-        //char op = '\0'; int op_len = 0;
         for (const auto& [op, op_len] : cigar_vector) {
-            //op = c.first; op_len = c.second;
-
             switch (op) {
-                case 'M': case '=': case 'X': case 'D':
+                case 'M': case '=': case 'X': case 'D': {
+                    if (op == 'D') {
+                        unmapped_segments.emplace_back(pos_1, (pos_1 + op_len));
+                    }
                     spliced_ref_seq += loc_ref.fasta.getSubSequence(loc_ref.chrom, pos_1, op_len);
                     pos_1 += op_len; pos_2 += op_len;
                     break;
+                }
                 case 'S':
                     pos_2 += op_len;
                     break;
                 case 'N':
+                    unmapped_segments.emplace_back(pos_2, (pos_2 + op_len -1));
                     skipped_segments.emplace_back(pos_2, (pos_2 + op_len -1));
                     pos_1 += op_len; pos_2 += op_len;
                     break;
@@ -90,6 +94,13 @@ void Read::setReference(LocalReference& loc_ref) {
         current_pos = skip_end + 1;
     }
     aligned_segments.emplace_back(current_pos, read_end);
+
+    current_pos = read_start;
+    for (const auto& [un_start, un_end] : unmapped_segments) {
+        mapped_segments.emplace_back(current_pos, un_start - 1);
+        current_pos = un_end + 1;
+    }
+    mapped_segments.emplace_back(current_pos, read_end);
 }
 
 //------------------------------------------------------------------------------
@@ -168,7 +179,6 @@ void Read::qualityCheck(const int start, const int end,
                         const char qual_thresh, const double freq_thresh) {   
     if (idx2pos.empty()) return;
 
-    // 線形探索を廃止。std::distance と std::find_if を使用して高速化
     auto it_i = std::find_if(idx2pos.begin(), idx2pos.end(), [start](int pos){ return pos >= start; });
     auto it_j = std::find_if(idx2pos.rbegin(), idx2pos.rend(), [end](int pos){ return pos < end; });
 

@@ -4,6 +4,7 @@
 #include <climits>
 #include <bitset>
 #include "util.h"
+#include "variant_types.h"
 
 //------------------------------------------------------------------------------
 // features at read level
@@ -24,6 +25,7 @@ struct Read {
 
     Ints idx2pos;
     Coord aligned_segments;
+    Coord mapped_segments;
     Coord skipped_segments;
     Ints var_idx;
     CigarVec cigar_vector;
@@ -44,6 +46,7 @@ struct Read {
     int flnk_v_cnt = 0;
     int dist_to_non_target = INT_MAX;
     int smer = 0, nmer = 0;
+    Phase phase = Phase::Unphased;
 
     // 3. 1-byte members (bool, char)
     // boolをまとめて並べることで、コンパイラが1バイト単位で詰め込みます

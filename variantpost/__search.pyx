@@ -11,7 +11,6 @@ from libcpp.vector cimport vector
 from libcpp cimport bool as bool_t
 from collections import OrderedDict
 
-# 既存の long_reads はそのまま利用（ここがボトルネックになる可能性はあるが、ロジック維持のため）
 from .long_reads import shorten_read
 
 cdef extern from "search.h":
@@ -23,6 +22,7 @@ cdef extern from "search.h":
         int ppos
         string ref, alt, pref, palt, pltseq, prtseq
         vector[int] target_statuses
+        vector[bool_t] are_from_first_bam
 
     void _search_target(
         SearchResult&, string&, string&, int, string&, string&,
@@ -190,7 +190,7 @@ cpdef object search_target(
         )
     
     return (
-        contig_dict, rslt.target_statuses, are_reverse, are_first_bam, tags,
+        contig_dict, rslt.target_statuses, are_reverse, rslt.are_from_first_bam, tags,
         rslt.ppos, rslt.pref.decode("ascii"), rslt.palt.decode("ascii"),
         rslt.pltseq.decode("ascii"), rslt.prtseq.decode("ascii"),
         rslt.ref.decode("ascii"), rslt.alt.decode("ascii")

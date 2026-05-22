@@ -21,7 +21,7 @@ struct SearchResult
     //std::vector<std::string> read_names;
     //std::vector<bool> are_reverse;
     std::vector<int> target_statuses;
-    //std::vector<bool> are_from_first_bam;
+    std::vector<bool> are_from_first_bam;
     //std::vector<std::string> trans_vars;
     //bool is_retargeted;
 

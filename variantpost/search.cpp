@@ -4,8 +4,8 @@
 #include "search.h"
 #include "pileup.h"
 #include "consensus.h"
-#include "sequence_model.h"
-
+//#include "sequence_model.h"
+#include "variant_types.h"
 SearchResult::SearchResult() {}
 
 void _search_target(SearchResult& rslt,
@@ -66,6 +66,22 @@ void _search_target(SearchResult& rslt,
                   aln_starts, aln_ends, read_seqs, quals, 
                   are_from_first_bam, has_second, 
                   params, loc_ref, target);
+    
+    if (pileup.has_second_bam)  { 
+        pileup.phaseGermlineVariants();
+        for (const auto& v : pileup.hap1_vars) std::cout << v.pos << " " << v.ref << " " << v.alt << " this is hap1 " << std::endl;
+        for (const auto& v : pileup.hap2_vars) std::cout << v.pos << " " << v.ref << " " << v.alt << " this is hap2 " << std::endl;
+        for (const auto& v : pileup.homo_vars) std::cout << v.pos << " " << v.ref << " " << v.alt << " this is homo " << std::endl;
+    }
+    
+    for (const auto& read : pileup.reads) {
+        if (read.is_control) {
+            if (read.phase == Phase::Unphased) std::cout << read.name << " " << read.cigar_str << "  un "  << std::endl;
+            else if (read.phase == Phase::Hap1) std::cout << read.name << " " << read.cigar_str << " hap 1" << std::endl;
+            else if (read.phase == Phase::Hap2) std::cout << read.name << " " << read.cigar_str << " hap 2 " << std::endl;
+        }
+    }
+    
     /*
     int uu = 0;
     for (const auto& read : pileup.reads) {
@@ -88,10 +104,11 @@ void _search_target(SearchResult& rslt,
     if (pileup.u_cnt) {
         pileup.setHaploTypes(loc_ref, target);
         pileup.differentialKmerAnalysis(params, loc_ref, target);
-        pileup.searchByDeBruijnGraph(params, loc_ref, target);
+        //pileup.searchByDeBruijnGraph(params, loc_ref, target);
         //std::cout << "after kmer " << pileup.s_cnt << " " << pileup.n_cnt << " " << pileup.u_cnt << std::endl;   
         // capture clipped-target here based on the differential kmer analysis  
         pileup.searchByRealignment(params, loc_ref, target);
+        
         //std::cout << "after realn " << pileup.s_cnt << " " << pileup.n_cnt << " " << pileup.u_cnt << std::endl;
         if (pileup.has_hiconf_support)
              match2haplotypes(pileup, read_seqs, params); 
@@ -99,6 +116,9 @@ void _search_target(SearchResult& rslt,
         //std::cout << pileup.s_cnt << " " << pileup.n_cnt << " " << pileup.u_cnt << std::endl;
         for (const auto& read : pileup.reads) {
             if (read.covering_ptrn == 'C') continue;
+            bool is_first = (read.is_control) ? false : true;
+
+            rslt.are_from_first_bam.push_back(is_first);
             std::cout << read.rank << " " << read.cigar_str << " " << read.covering_ptrn << std::endl;
             if (read.rank == 's' ) { rslt.target_statuses.push_back(1); /*std::cout << read.name << " " << read.cigar_str << " " << " why " << std::endl;*/ }
             else if (read.rank == 'n' && !read.covered_in_clip) { 
@@ -112,6 +132,8 @@ void _search_target(SearchResult& rslt,
     } else {
         for (const auto& read : pileup.reads) {
             if (read.covering_ptrn == 'C') continue;
+            bool is_first = (read.is_control) ? false : true;
+            rslt.are_from_first_bam.push_back(is_first);
             std::cout << read.rank << " " << read.cigar_str << " " << read.covering_ptrn << std::endl;
             if (read.rank == 's') rslt.target_statuses.push_back(1);
             else if (read.rank == 'n' && !read.covered_in_clip) rslt.target_statuses.push_back(0);

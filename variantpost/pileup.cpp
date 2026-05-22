@@ -3,6 +3,7 @@
 #include <unordered_set>
 #include <queue>
 #include <cstring>
+#include <optional>
 
 typedef std::vector<std::pair<std::string_view, size_t>> PatternCnt;
 
@@ -128,6 +129,7 @@ Pileup::Pileup(const Strs& names, const Bools& is_rv, const Strs& cigar_strs,
                 &&!read.fail_to_cover_flankings) ++control_bam_cov; 
         }
         
+        read.is_quality_map = (read.is_stable_non_ref && read.is_central_mapped);
         search_complex_target(read);
                 
         //--- Read classification
@@ -154,7 +156,6 @@ Pileup::Pileup(const Strs& names, const Bools& is_rv, const Strs& cigar_strs,
             if (read.is_control && read.is_quality_map) { ++ref_hap_n; has_ref_hap = true; }              
         }       
     }
-    
     if (!s_cnt && !u_cnt) { has_no_support = true; return; }
     
     //--- Define pileup start/end within local reference start/end 
@@ -185,7 +186,512 @@ Pileup::Pileup(const Strs& names, const Bools& is_rv, const Strs& cigar_strs,
     }
 }
 
+void Pileup::phaseGermlineVariants() {
+    if (this->sz == 0) return;
 
+    // 1. 各変異のカウントと、その座標の正確なデプス（カバレッジ）を保持する構造体
+    struct CountTrack {
+        int total_reads = 0;
+        int total_depth = 0;
+    };
+    std::unordered_map<VariantKey, CountTrack, VariantKeyHash> global_counts;
+
+    // まずは今まで通り、有効なリードからALT（変異）のカウントを集計
+    for (int i = 0; i < this->sz; ++i) {
+        const auto& read = this->reads[i];
+        if (!read.is_control || read.covering_ptrn != 'A' || !read.qc_passed) continue;
+        for (const auto& v : read.variants) {
+            global_counts[VariantKey{v.pos, v.ref, v.alt}].total_reads++;
+        }
+    }
+
+    if (global_counts.empty()) return;
+
+    // 2. 精緻化：各変異の正確な total_depth を aligned_segments から算出する
+    // 高速化のため、ユニークな変異の座標（pos）だけをソートして抽出しておく
+    std::vector<long long> unique_positions;
+    for (const auto& [key, _] : global_counts) {
+        unique_positions.push_back(key.pos);
+    }
+    std::sort(unique_positions.begin(), unique_positions.end());
+    unique_positions.erase(std::unique(unique_positions.begin(), unique_positions.end()), unique_positions.end());
+
+    // 各座標(pos)ごとの実際のリード数を数えるマップ
+    std::unordered_map<long long, int> pos_depth;
+
+    for (int i = 0; i < this->sz; ++i) {
+        const auto& read = this->reads[i];
+        if (!read.is_control || read.covering_ptrn != 'A' || !read.qc_passed) continue;
+
+        // 各リードの整列セグメント（区間）を走査
+        for (const auto& seg : read.aligned_segments) { // seg は std::pair<int, int> (start, end)
+            int seg_start = seg.first;
+            int seg_end = seg.second;
+            std::cout << read.cigar_str << " start " << seg_start << " end  " << seg_end << std::endl;  
+            // 二分探索で、このセグメントの範囲内 [seg_start, seg_end] に乗っている変異posを高速にインクリメント
+            auto it = std::lower_bound(unique_positions.begin(), unique_positions.end(), seg_start);
+            while (it != unique_positions.end() && *it <= seg_end) {
+                pos_depth[*it]++;
+                ++it;
+            }
+        }
+    }
+
+    // 計算した正確なデプスを global_counts 側にマッピング
+    for (auto& [key, track] : global_counts) {
+        track.total_depth = pos_depth[key.pos];
+    }
+
+    // 3. 正確なローカル VAF を用いて骨格（backbone）となるヘテロ変異を抽出
+    std::vector<VariantKey> backbone_keys;
+    backbone_keys.reserve(global_counts.size());
+
+    for (const auto& [key, track] : global_counts) {
+        if (track.total_depth == 0) continue; // 0除算回避
+        double vaf = static_cast<double>(track.total_reads) / track.total_depth;
+        if (vaf >= 0.2 && vaf <= 0.8) {
+            backbone_keys.push_back(key);
+        }
+    }
+
+    std::sort(backbone_keys.begin(), backbone_keys.end(), [](const VariantKey& a, const VariantKey& b) {
+        return a.pos < b.pos;
+    });
+
+    int N = backbone_keys.size();
+    if (N == 0) return; // no het case
+
+    // --- Making adj matrix
+    struct Edge { int same = 0; int diff = 0; };
+    std::vector<std::vector<Edge>> adj(N, std::vector<Edge>(N));
+
+    std::vector<std::pair<int, bool>> read_calls;
+    read_calls.reserve(64);
+    
+    for (int i = 0; i < this->sz; ++i) { // <-- リードを回す大元のループ
+            const auto& read = this->reads[i]; // <-- これが消えると read() 関数と勘違いされる
+            if (!read.is_control || read.covering_ptrn != 'A' || !read.qc_passed) continue;
+
+            read_calls.clear();
+
+            for (int j = 0; j < N; ++j) {
+                const auto& b_key = backbone_keys[j];
+
+                if (read.aln_end < b_key.pos) {
+                    break;
+                }
+                if (b_key.pos < read.aln_start) {
+                    continue;
+                }
+
+                // 物理カバーの厳密チェック
+                bool is_mechanically_covered = false;
+                for (const auto& seg : read.aligned_segments) {
+                    if (seg.first <= b_key.pos && b_key.pos <= seg.second) {
+                        is_mechanically_covered = true;
+                        break;
+                    }
+                }
+
+                // DEL領域等で欠失している場合は登録せずにスキップ
+                if (!is_mechanically_covered) {
+                    continue;
+                }
+
+                bool has_alt = false;
+                for (const auto& v : read.variants) {
+                    if (v.pos == b_key.pos && v.ref == b_key.ref && v.alt == b_key.alt) {
+                        has_alt = true; // ALT
+                        break;
+                    }
+                }
+
+                read_calls.push_back({j, has_alt});
+            }
+
+            // --- Within the same read, testing the linkage
+            if (read_calls.size() < 2) continue; // <-- ここがループ内として正しく認識されるはず
+            
+            for (size_t a = 0; a < read_calls.size(); ++a) {
+                for (size_t b = a + 1; b < read_calls.size(); ++b) {
+                    int idxA = read_calls[a].first;
+                    int idxB = read_calls[b].first;
+
+                    if (read_calls[a].second == read_calls[b].second) {
+                        adj[idxA][idxB].same++;
+                        adj[idxB][idxA].same++;
+                    } else {
+                        adj[idxA][idxB].diff++;
+                        adj[idxB][idxA].diff++;
+                    }
+                }
+            }
+        }    
+
+    // Pick up most covered SNP as starting point
+    int best_seed_idx = 0;
+    int max_reads = 0;
+    for (int i = 0; i < N; ++i) {
+        int coverage_reads = global_counts[backbone_keys[i]].total_reads;
+        if (coverage_reads > max_reads) {
+            max_reads = coverage_reads;
+            best_seed_idx = i;
+        }
+    }
+    
+    
+    std::vector<Phase> phased_array(N, Phase::Unphased);
+    phased_array[best_seed_idx] = Phase::Hap1; // designate the start as Hap1
+
+    std::vector<int> queue;
+    queue.reserve(N);
+    queue.push_back(best_seed_idx);
+    size_t q_head = 0;
+
+    while (q_head < queue.size()) {
+        int curr = queue[q_head++];
+        Phase curr_phase = phased_array[curr];
+
+        for (int neighbor = 0; neighbor < N; ++neighbor) {
+            if (phased_array[neighbor] != Phase::Unphased) continue;
+
+            const Edge& edge = adj[curr][neighbor];
+            // require 2 or more read supports
+            if (edge.same + edge.diff >= 2) {
+                if (edge.same > edge.diff) {
+                    phased_array[neighbor] = curr_phase;
+                    queue.push_back(neighbor);
+                } else if (edge.diff > edge.same) {
+                    phased_array[neighbor] = (curr_phase == Phase::Hap1) ? Phase::Hap2 : Phase::Hap1;
+                    queue.push_back(neighbor);
+                }
+            }
+        }
+    }
+
+    std::unordered_map<VariantKey, Phase, VariantKeyHash> backbone_phase;
+    for (int i = 0; i < N; ++i) {
+        if (phased_array[i] != Phase::Unphased) {
+            backbone_phase[backbone_keys[i]] = phased_array[i];
+        }
+    }
+
+    // assign haplotype to all reads (tumor & normal)
+    for (int i = 0; i < this->sz; ++i) {
+        auto& read = this->reads[i];
+        if (read.covering_ptrn != 'A' || !read.qc_passed) continue;
+
+        int h1_votes = 0;
+        int h2_votes = 0;
+
+        for (int j = 0; j < N; ++j) {
+            const auto& b_key = backbone_keys[j];
+            if (read.aln_start <= b_key.pos && b_key.pos <= read.aln_end) {
+                auto it = backbone_phase.find(b_key);
+                if (it == backbone_phase.end()) continue;
+
+                bool has_alt = false;
+                for (const auto& v : read.variants) {
+                    if (v.pos == b_key.pos && v.ref == b_key.ref && v.alt == b_key.alt) {
+                        has_alt = true; break;
+                    }
+                }
+
+                if (has_alt) {
+                    if (it->second == Phase::Hap1) h1_votes++;
+                    else if (it->second == Phase::Hap2) h2_votes++;
+                } else {
+                    if (it->second == Phase::Hap1) h2_votes++;
+                    else if (it->second == Phase::Hap2) h1_votes++;
+                }
+            }
+        }
+
+        if (h1_votes > h2_votes) read.phase = Phase::Hap1;
+        else if (h2_votes > h1_votes) read.phase = Phase::Hap2;
+        else read.phase = Phase::Unphased;
+    }
+   
+    
+    // -------------------------------------------------------------------------
+    // 4. 最終処理：リードのフェーズ（トポロジー）に基づく決定論的分類
+    // -------------------------------------------------------------------------
+    this->hap1_vars.clear();
+    this->hap2_vars.clear();
+    this->homo_vars.clear();
+
+    // 各変異が、Hap1のリード / Hap2のリード からそれぞれ何回支持されたかをカウントする
+    struct PhaseVote {
+        int hap1_support = 0;
+        int hap2_support = 0;
+    };
+    std::unordered_map<VariantKey, PhaseVote, VariantKeyHash> var_votes;
+
+    // フェーズ確定済みのリードをなめる
+    for (int i = 0; i < this->sz; ++i) {
+        const auto& read = this->reads[i];
+        if (read.phase == Phase::Unphased || !read.qc_passed || read.covering_ptrn != 'A') continue;
+
+        for (const auto& v : read.variants) {
+            VariantKey key{v.pos, v.ref, v.alt};
+            if (read.phase == Phase::Hap1) {
+                var_votes[key].hap1_support++;
+            } else if (read.phase == Phase::Hap2) {
+                var_votes[key].hap2_support++;
+            }
+        }
+    }
+
+    // 座標の昇順ソート用のコンパレータ
+    auto sortByPos = [](const Variant& a, const Variant& b) { return a.pos < b.pos; };
+
+    // 支持数に基づく分類（VAFは一切見ない！）
+    for (const auto& [key, vote] : var_votes) {
+        Variant v(static_cast<int>(key.pos), key.ref, key.alt, "");
+
+        // ノイズ（シーケンスエラー等）を弾くための最低支持リード数（例えば2。環境に合わせて調整）
+        const int MIN_SUPPORT = 2;
+
+        bool in_hap1 = (vote.hap1_support >= MIN_SUPPORT);
+        bool in_hap2 = (vote.hap2_support >= MIN_SUPPORT);
+
+        // 両方のハプロタイプに十分な支持がある -> 確定でHomozygous！
+        if (in_hap1 && in_hap2) {
+            this->homo_vars.push_back(v);
+        }
+        // Hap1のリードだけに乗っている -> Hap1のHetero
+        else if (in_hap1) {
+            this->hap1_vars.push_back(v);
+        }
+        // Hap2のリードだけに乗っている -> Hap2のHetero
+        else if (in_hap2) {
+            this->hap2_vars.push_back(v);
+        }
+    }
+
+    // 最後に座標順にソート
+    std::sort(this->hap1_vars.begin(), this->hap1_vars.end(), sortByPos);
+    std::sort(this->hap2_vars.begin(), this->hap2_vars.end(), sortByPos);
+    std::sort(this->homo_vars.begin(), this->homo_vars.end(), sortByPos);
+
+
+
+    /*
+    // -------------------------------------------------------------------------
+    // 4. 最終処理：メソッドの各各種変異リストを正確に埋める
+    // -------------------------------------------------------------------------
+    this->hap1_vars.clear();
+    this->hap2_vars.clear();
+    this->homo_vars.clear();
+
+    // 座標の昇順ソート用のコンパレータ
+    auto sortByPos = [](const Variant& a, const Variant& b) { return a.pos < b.pos; };
+
+    for (const auto& [key, track] : global_counts) {
+        if (track.total_depth == 0) continue;
+
+        double vaf = static_cast<double>(track.total_reads) / track.total_depth;
+
+        // 以前のエラー回避のため、必要な4引数で Variant オブジェクトを作成
+        Variant v(static_cast<int>(key.pos), key.ref, key.alt, "");
+        std::cout << v.pos <<  " " << v.ref << " " << v.alt << "  this is checking " << vaf << " " << std::endl;
+        // ① Homozygous判定 (カバレッジに対して極めて高い割合でALTを検出)
+        if (vaf >= 0.8) {
+            this->homo_vars.push_back(v);
+        }
+        // ② Heterozygous判定 (すでにバックボーン探索で信頼できるフェーズが割り振られたもの)
+        else if (vaf >= 0.2 && vaf < 0.8) {
+            auto it = backbone_phase.find(key);
+            if (it != backbone_phase.end()) {
+                if (it->second == Phase::Hap1) {
+                    this->hap1_vars.push_back(v);
+                } else if (it->second == Phase::Hap2) {
+                    this->hap2_vars.push_back(v);
+                }
+            }
+        }
+    }
+
+    // 後続処理や出力でのバイナリサーチ（std::lower_bound）のために、座標順でソートしておく
+    std::sort(this->hap1_vars.begin(), this->hap1_vars.end(), sortByPos);
+    std::sort(this->hap2_vars.begin(), this->hap2_vars.end(), sortByPos);
+    std::sort(this->homo_vars.begin(), this->homo_vars.end(), sortByPos);i*/
+}
+
+/*
+void Pileup::phaseGermlineVariants() {
+    if (this->sz == 0) return;
+
+    struct CountTrack { int total_reads = 0; };
+    std::unordered_map<VariantKey, CountTrack, VariantKeyHash> global_counts;
+    
+    int coverage = 0;
+    for (int i = 0; i < this->sz; ++i) {
+        const auto& read = this->reads[i];
+        if (!read.is_control || read.covering_ptrn != 'A' || !read.qc_passed) continue;
+        for (const auto& v : read.variants) {
+            global_counts[VariantKey{v.pos, v.ref, v.alt}].total_reads++;
+        }
+        ++coverage;
+    }
+    
+    if (!coverage) return; 
+
+    std::vector<VariantKey> backbone_keys;
+    backbone_keys.reserve(global_counts.size());
+
+    for (const auto& [key, track] : global_counts) {
+        double vaf = static_cast<double>(track.total_reads) / coverage;
+        if (vaf >= 0.2 && vaf <= 0.8) {
+            backbone_keys.push_back(key);
+        }
+    }
+
+    std::sort(backbone_keys.begin(), backbone_keys.end(), [](const VariantKey& a, const VariantKey& b) {
+        return a.pos < b.pos;
+    });
+
+    int N = backbone_keys.size();
+    if (N == 0) return; // no het case
+
+    //--- Making adj matrix
+    struct Edge { int same = 0; int diff = 0; };
+    std::vector<std::vector<Edge>> adj(N, std::vector<Edge>(N));
+
+    std::vector<std::pair<int, bool>> read_calls; 
+    read_calls.reserve(64); 
+
+    for (int i = 0; i < this->sz; ++i) {
+        const auto& read = this->reads[i];
+        if (!read.is_control || read.covering_ptrn != 'A' || !read.qc_passed) continue;
+
+        read_calls.clear();
+
+        for (int j = 0; j < N; ++j) {
+            const auto& b_key = backbone_keys[j];
+
+            if (read.aln_end < b_key.pos) {
+                break; 
+            }
+            if (b_key.pos < read.aln_start) {
+                continue; 
+            }
+
+            bool has_alt = false;
+            for (const auto& v : read.variants) {
+                if (v.pos == b_key.pos && v.ref == b_key.ref && v.alt == b_key.alt) {
+                    has_alt = true; // this variant exists as ALT in this read
+                    break;
+                }
+            }
+            read_calls.push_back({j, has_alt});
+        }
+
+        //--- Within the same read, testing the linkage
+        if (read_calls.size() < 2) continue;
+        for (size_t a = 0; a < read_calls.size(); ++a) {
+            for (size_t b = a + 1; b < read_calls.size(); ++b) {
+                int idxA = read_calls[a].first;
+                int idxB = read_calls[b].first;
+                
+                // For a pair of variants in the sam read....
+                if (read_calls[a].second == read_calls[b].second) {
+                    // both ALT or both REF -> same hap
+                    adj[idxA][idxB].same++;
+                    adj[idxB][idxA].same++;
+                } else {
+                    // one ALT(REF) and the other REF(ALT) -> diff hap
+                    adj[idxA][idxB].diff++;
+                    adj[idxB][idxA].diff++;
+                }
+            }
+        }
+    }
+
+    // Pick up most covered SNP as starting point
+    int best_seed_idx = 0;
+    int max_reads = 0;
+    for (int i = 0; i < N; ++i) {
+        int coverage = global_counts[backbone_keys[i]].total_reads;
+        if (coverage > max_reads) {
+            max_reads = coverage;
+            best_seed_idx = i;
+        }
+    }
+
+    std::vector<Phase> phased_array(N, Phase::Unphased);
+    phased_array[best_seed_idx] = Phase::Hap1; // designate the start as Hap1
+
+    std::vector<int> queue;
+    queue.reserve(N);
+    queue.push_back(best_seed_idx);
+    size_t q_head = 0;
+
+    while (q_head < queue.size()) {
+        int curr = queue[q_head++];
+        Phase curr_phase = phased_array[curr];
+
+        for (int neighbor = 0; neighbor < N; ++neighbor) {
+            if (phased_array[neighbor] != Phase::Unphased) continue;
+
+            const Edge& edge = adj[curr][neighbor];
+            // require 2 or more read supports
+            if (edge.same + edge.diff >= 2) {
+                if (edge.same > edge.diff) {
+                    phased_array[neighbor] = curr_phase;
+                    queue.push_back(neighbor);
+                } else if (edge.diff > edge.same) {
+                    phased_array[neighbor] = (curr_phase == Phase::Hap1) ? Phase::Hap2 : Phase::Hap1;
+                    queue.push_back(neighbor);
+                }
+            }
+        }
+    }
+
+    std::unordered_map<VariantKey, Phase, VariantKeyHash> backbone_phase;
+    for (int i = 0; i < N; ++i) {
+        if (phased_array[i] != Phase::Unphased) {
+            backbone_phase[backbone_keys[i]] = phased_array[i];
+        }
+    }
+    
+    // assign haplotype to all reads (tumor & normal)
+    for (int i = 0; i < this->sz; ++i) {
+        auto& read = this->reads[i];
+        if (read.covering_ptrn != 'A' || !read.qc_passed) continue;
+
+        int h1_votes = 0;
+        int h2_votes = 0;
+
+        for (int j = 0; j < N; ++j) {
+            const auto& b_key = backbone_keys[j];
+            if (read.aln_start <= b_key.pos && b_key.pos <= read.aln_end) {
+                auto it = backbone_phase.find(b_key);
+                if (it == backbone_phase.end()) continue;
+
+                bool has_alt = false;
+                for (const auto& v : read.variants) {
+                    if (v.pos == b_key.pos && v.ref == b_key.ref && v.alt == b_key.alt) {
+                        has_alt = true; break;
+                    }
+                }
+
+                if (has_alt) {
+                    if (it->second == Phase::Hap1) h1_votes++;
+                    else if (it->second == Phase::Hap2) h2_votes++;
+                } else {
+                    if (it->second == Phase::Hap1) h2_votes++; 
+                    else if (it->second == Phase::Hap2) h1_votes++; 
+                }
+            }
+        }
+
+        if (h1_votes > h2_votes) read.phase = Phase::Hap1;
+        else if (h2_votes > h1_votes) read.phase = Phase::Hap2;
+        else read.phase = Phase::Unphased;
+    }
+}
+*/
 //-----------------------------------------------------------------------------
 // This method tends to overanalyze 
 // -> tighter conditions to apply
@@ -292,25 +798,14 @@ void Pileup::setHaploTypes(LocalReference& loc_ref, const Variant& target) {
     PatternCnt s_sig_cnt; 
     
     if (hiconf_read_idx > -1) {
-        //if (seq0.empty()) {
-            make_sequence(
-                loc_ref, reads[hiconf_read_idx].variants, start, end, seq0, &i2p0);
-        //}
+        make_sequence(
+            loc_ref, reads[hiconf_read_idx].variants, start, end, seq0, &i2p0);
     } else if (!sig_s.empty()) {
         PatternCnt s_sig_cnt;
         count_patterns(sig_s, s_sig_cnt); 
         hap0 = s_sig_cnt[0].first;
-        if (seq0.empty()) {
-            hap0 = s_sig_cnt[0].first;
-            make_sequence(
-                loc_ref, reads[sig_s[hap0][0]].variants, start, end, seq0, &i2p0);
-        } else {
-            auto& read = reads[sig_s[hap0][0]];
-            if (read.is_stable_non_ref) {
-                make_sequence(loc_ref, read.variants, start, end, seq0, &i2p0); 
-            } 
-        }
-
+        make_sequence(
+            loc_ref, reads[sig_s[hap0][0]].variants, start, end, seq0, &i2p0);
     } else {
         make_sequence(loc_ref, {target}, start, end, seq0, &i2p0);
     }
@@ -588,335 +1083,4 @@ void Pileup::searchByRealignment(const UserParams& params,
 
     //aligner.SetReferenceSequence(seq0.c_str(), seq0.size());
 }
-
-struct DBGNode {
-    std::string kmer;
-    int coverage = 0;
-    std::vector<std::string> out_edges;
-};
-
-inline void dfs_find_longest_path(
-    const std::string& current,
-    const std::unordered_map<std::string, DBGNode>& graph,
-    std::unordered_set<std::string>& visited,
-    std::string& current_path,
-    std::string& best_path,
-    const size_t max_depth = 2000
-) noexcept {
-    if (current_path.size() > max_depth) return;
-
-    auto it = graph.find(current);
-    if (it == graph.end() || it->second.out_edges.empty()) {
-        if (current_path.size() > best_path.size()) {
-            best_path = current_path;
-        }
-        return;
-    }
-
-    // 高速化のため、カバレッジ（リード支持数）が高いエッジを優先して走査
-    auto edges = it->second.out_edges;
-    std::sort(edges.begin(), edges.end(), [&](const std::string& a, const std::string& b) noexcept {
-        auto it_a = graph.find(a);
-        auto it_b = graph.find(b);
-        int cov_a = (it_a != graph.end()) ? it_a->second.coverage : 0;
-        int cov_b = (it_b != graph.end()) ? it_b->second.coverage : 0;
-        return cov_a > cov_b;
-    });
-
-    for (const auto& next_kmer : edges) {
-        if (visited.find(next_kmer) == visited.end()) {
-            visited.insert(next_kmer);
-            size_t orig_sz = current_path.size();
-            current_path.push_back(next_kmer.back()); // K-merの最後の塩基を追加
-
-            dfs_find_longest_path(next_kmer, graph, visited, current_path, best_path, max_depth);
-
-            current_path.resize(orig_sz); // バックトラック
-            visited.erase(next_kmer);
-        }
-    }
-
-    // どの分岐も行けなかった場合はそこまでのパスを評価
-    if (current_path.size() > best_path.size()) {
-        best_path = current_path;
-    }
-}
-
-//==============================================================================
-// Pileupクラスのメソッド: searchByDeBruijnGraph（完全実装）
-//==============================================================================
-void Pileup::searchByDeBruijnGraph(const UserParams& params,
-                                   LocalReference& loc_ref,
-                                   const Variant& target)
-{
-    // 早期リターン条件: 既に十分な高信頼度支持（s_cnt）が得られているか、
-    // あるいは検証対象の 'u' リードがそもそも存在しない場合はスキップ
-    //if (s_cnt || u_cnt == 0) return;
-    if (s_cnt || y_cnt == 0) return;
-
-    // 1. K-merサイズの決定（paramsの指定またはデフォルト値）
-    // DBGの分岐耐性を上げるため、通常はリード長やリピート長に応じて動的に決定
-    const size_t k = (kmer_sz > 0) ? static_cast<size_t>(kmer_sz) : 31;
-    if (k < 1) return;
-
-    // 2. De Bruijn Graphの構築
-    // 要件3: "read.rank == 'u' のみからつくる"
-    std::unordered_map<std::string, DBGNode> dbg;
-    std::unordered_map<std::string, int> in_degrees;
-
-    
-    std::unordered_map<std::string, int> kmer_counts;
-    for (const auto& read : reads) {
-        if (!read.qc_passed || read.rank != 'y') continue;
-        //if (read.has_smaller_change || read.has_anti_pattern) continue;
-        //if (!read.has_local_clip && !read.is_stable_non_ref) continue;
-        if (read.seq.size() < k) continue;
-        
-        for (size_t i = 0; i <= read.seq.size() - k; ++i) {
-            kmer_counts[std::string(read.seq.substr(i, k))]++;
-        }
-    }
-    
-    const int min_coverage = 2; 
-    
-    for (const auto& read : reads) {
-        if (!read.qc_passed || read.rank != 'y') continue;
-        //if (read.has_smaller_change || read.has_anti_pattern) continue;
-        //if (!read.has_local_clip && !read.is_stable_non_ref) continue;
-        if (read.seq.size() < k) continue;
-
-        // クリップ部分やインデル部分を網羅するため、リード全体のウィンドウをスライド
-        for (size_t i = 0; i <= read.seq.size() - k; ++i) {
-            std::string kmer{read.seq.substr(i, k)};
-            
-            if (kmer_counts[kmer] < min_coverage) continue;
-
-            auto& node = dbg[kmer];
-            if (node.kmer.empty()) {
-                node.kmer = kmer;
-            }
-            node.coverage = kmer_counts[kmer];
-
-            // 次のK-merへのエッジを張る
-            if (i < read.seq.size() - k) {
-                std::string next_kmer{read.seq.substr(i + 1, k)};
-                // 重複エッジの登録を防ぐ
-                if (kmer_counts[next_kmer] >= min_coverage){
-                    if (std::find(node.out_edges.begin(), node.out_edges.end(), next_kmer) == node.out_edges.end()) {
-                        node.out_edges.push_back(next_kmer);
-                        in_degrees[next_kmer]++;
-                    }
-                }
-            }
-        }
-    }
-
-    if (dbg.empty()) return;
-
-    // 3. グラフのソースノード（入次数0、またはカバレッジ最大のノード）を起点に決定
-    std::string start_kmer;
-    int max_src_cov = -1;
-    for (const auto& [kmer, node] : dbg) {
-        if (in_degrees[kmer] == 0 && node.coverage > max_src_cov) {
-            max_src_cov = node.coverage;
-            start_kmer = kmer;
-        }
-    }
-    // 入次数0が見つからない（ループ構造など）場合は、最大カバレッジのノードを起点にする
-    if (start_kmer.empty()) {
-        for (const auto& [kmer, node] : dbg) {
-            if (node.coverage > max_src_cov) {
-                max_src_cov = node.coverage;
-                start_kmer = kmer;
-            }
-        }
-    }
-
-    // 4. アセンブリパスの探索（最有力コンティグの生成）
-    std::unordered_set<std::string> visited_kmers;
-    std::string current_path = start_kmer;
-    std::string assembled_seq = start_kmer;
-
-    visited_kmers.insert(start_kmer);
-    dfs_find_longest_path(start_kmer, dbg, visited_kmers, current_path, assembled_seq);
-
-    // 長すぎる、または短すぎるアセンブリ配列は異常値として除外
-    if (assembled_seq.size() < k + 10) return;
-
-    // 要件4: "assembly したtarget を含む配列をseq0に代入"
-    seq0 = assembled_seq;
-    i2p0.clear();
-    i2p0.resize(seq0.size(), -1); // 初期値としてゲノム座標未定義（-1）を設定
-
-    // 5. アセンブリ配列（seq0）をリファレンス配列（rseq）に対してアラインメントし、座標変換を計算
-    // 要件4: "genomic positionはi2pをしてかえす"
-    // ここでは、Smith-Waterman/Needleman-Wunsch に基づく内部アライナー（Aligner）を利用
-    Aligner dgb_aligner(params.match_score, params.mismatch_penal,
-                        params.gap_open_penal, params.gap_ext_penal);
-
-    // リファレンス配列（rseq: クラス内で定義・抽出済み）をセット
-    dgb_aligner.SetReferenceSequence(rseq.c_str(), rseq.size());
-
-    Alignment aln_res;
-    Filter filter_dummy;
-    int32_t mask_len = (seq0.size() < 30) ? 15 : static_cast<int32_t>(seq0.size() / 2);
-
-    dgb_aligner.Align(seq0.c_str(), filter_dummy, &aln_res, mask_len);
-
-    // CIGAR文字列およびアラインメント開始位置をパースして i2p0 マップを構築
-    // start は Pileup::start (ゲノム上のリファレンス座標)
-    int ref_offset = aln_res.ref_begin; // rseq内でのローカルオフセット
-    int query_idx = aln_res.query_begin;
-
-    // CIGAR解析用の簡易ステートマシン
-    // 例: "10M2I5D20M" などのオペレーションを処理
-    const std::string& cigar = aln_res.cigar_string;
-    size_t cigar_len = cigar.size();
-    size_t c_idx = 0;
-
-    while (c_idx < cigar_len) {
-        int length = 0;
-        while (c_idx < cigar_len && std::isdigit(cigar[c_idx])) {
-            length = length * 10 + (cigar[c_idx] - '0');
-            c_idx++;
-        }
-        if (c_idx >= cigar_len) break;
-        char op = cigar[c_idx++];
-
-        switch (op) {
-            case 'M': // Match or Mismatch
-            case 'X':
-            case 'A':
-                for (int l = 0; l < length; ++l) {
-                    if (query_idx < static_cast<int>(i2p0.size())) {
-                        // ゲノム上の絶対座標 = クラス全体のベースゲノム座標(start) + リファレンス内相対オフセット
-                        i2p0[query_idx] = start + ref_offset;
-                    }
-                    query_idx++;
-                    ref_offset++;
-                }
-                break;
-            case 'I': // Insertion to Reference (Queryには塩基があり、Refにはない)
-                for (int l = 0; l < length; ++l) {
-                    if (query_idx < static_cast<int>(i2p0.size())) {
-                        // 挿入セグメントの内部座標。周辺のゲノム境界を割り振るか、
-                        // インデル検出用に特定のアンカー座標（直前のリファレンス座標等）をマッピング
-                        i2p0[query_idx] = start + ref_offset;
-                    }
-                    query_idx++;
-                }
-                break;
-            case 'D': // Deletion from Reference (Queryには塩基がなく、Refにある)
-                ref_offset += length;
-                break;
-            case 'S': // Soft-clip
-                query_idx += length;
-                break;
-            default:
-                break;
-        }
-    }
-
-    // 6. アセンブリされたターゲット候補配列（seq0）に対して、'u' リードがサポートしているか再評価
-    // 要件1, 2の解決: Complex Indel や長いソフトクリップを持つリードを、DBGによる共通コンティグを介して救い出す
-    int target_left_lim = target.pos - target.event_radius;
-    int target_right_lim = target.pos + target.event_radius;
-    
-    /*
-    bool contig_contains_target = false;
-    
-    // コンティグの各塩基のゲノム座標（i2p0）から、target.pos に対応するインデックスを探す
-    auto it_pos = std::find(i2p0.begin(), i2p0.end(), target.pos);
-    
-    if (it_pos != i2p0.end()) {
-        size_t local_idx = std::distance(i2p0.begin(), it_pos);
-        
-        // 変異（Indel含む）の長さを考慮してコンティグから実際の配列を切り出す
-        // SNVであれば1文字、Indelであればその長さ分
-        size_t check_len = target.alt.size();
-        if (local_idx + check_len <= seq0.size()) {
-            std::string assembled_allele = seq0.substr(local_idx, check_len);
-            
-            // コンティグの該当座標の配列が、target.alt または target.ref と一致するかを厳密に判定
-            if (assembled_allele == target.alt || assembled_allele == target.ref) {
-                contig_contains_target = true;
-            }
-        }
-    }*/
-
-    //if (!contig_contains_target) { seq0.clear(); i2p0.clear(); return; }
-
-    // コンティグ内にターゲットバリアントが存在しているかを検出する（簡易シグネチャ探索、またはアラインメント境界確認）
-    // ここでは、アセンブリ配列自身がtarget indelをカバーしているかを検証
-   // bool contig_contains_target = false;
-
-    // targetのref/alt配列パターンがseq0に見出せるか、座標系がtarget.posに交差しているかを判定
-    //if (seq0.find(target.alt) != std::string::npos || seq0.find(target.ref) != std::string::npos) {
-    //    contig_contains_target = true;
-    //}
-
-    //if (!contig_contains_target) {
-        // もし文字列一致で不十分な場合、座標空間（i2p0）にtarget.pos周辺が含まれているかでフォールバック
-     //   auto it_pos = std::find(i2p0.begin(), i2p0.end(), target.pos);
-      //  if (it_pos != i2p0.end()) {
-       //     contig_contains_target = true;
-        //}
-    //}
-
-    // コンティグがターゲットを正しく回収できていれば、このコンティグ（パス）を構成した 'u' リードを 's' へ昇格
-    //if (contig_contains_target) {
-    Aligner read_aligner(params.match_score, params.mismatch_penal,
-                         params.gap_open_penal, params.gap_ext_penal);
-        // 今回アセンブリされた高信頼性配列（seq0）を新たなリファレンスとしてセット
-    read_aligner.SetReferenceSequence(seq0.c_str(), seq0.size());
-
-    std::bitset<3> check_points;
-    int fss = -1, fee = -1, ts = -1, te = -1;
-
-        // i2p0 マップから各アプローチウィンドウ（Flanking / Target）のローカル座標を決定
-    for (int i = 0; i < static_cast<int>(i2p0.size()); ++i) {
-        if (i2p0[i] == loc_ref.flanking_start) fss = i;
-        if (ts < 0 && i2p0[i] == target.pos) ts = i;
-        if (i2p0[i] == target.end_pos) te = i;
-        if (i2p0[i] == loc_ref.flanking_end) fee = i;
-    }
-
-        // 座標定義が有効な場合のみ、各リードのリアラインメント・チェックをおこなう
-    if (fss != -1 && ts != -1 && te != -1 && fee != -1) {
-        int fse = fss + params.dimer_window;
-        int fes = fee - params.dimer_window;
-
-        for (auto& read : reads) {
-            if (!read.qc_passed || read.rank != 'y') continue;
-            //if (read.has_smaller_change || read.has_anti_pattern) continue;
-            //if (!read.has_local_clip && !read.is_stable_non_ref) continue;
-            if (read.seq.size() < k) continue;
-            
-            Alignment read_aln;
-            int32_t r_mask_len = (read.seq.size() < 30) ? 15 : static_cast<int32_t>(read.seq.size() / 2);
-
-            // リードを seq0 コンティグに対してアラインメント（ソフトクリップの解消）
-            read_aligner.Align(read.seq.data(), filter_dummy, &read_aln, r_mask_len);
-
-            // match.h の外部ヘルパー関数でターゲットに合致するかチェック
-            check_match_pattern(read_aln, check_points, fss, fse, ts, te, fes, fee);
-
-            // 完全一致、または複雑なIndelの一部として高スコアでマッチした場合
-            //if (check_points.count() == 3 || (check_points.test(1) && read.has_positional_overlap)) {
-            if (check_points.count() == 3 ) {
-                read.rank = 's'; // 確定支持リードへ昇格
-                ++s_cnt; --y_cnt;
-
-                // シグネチャマップの更新
-                sig_s[read.non_ref_sig].push_back(&read - &reads[0]);
-                sig_s_hiconf[read.non_ref_sig].push_back(&read - &reads[0]);
-                has_hiconf_support = true;
-            }
-            check_points.reset();
-        }
-   }
-   
-   //if (!s_cnt) { seq0.clear(); i2p0.clear(); } 
-}
-
 
