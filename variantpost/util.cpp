@@ -242,7 +242,7 @@ inline bool is_rotatable(std::string_view allele) {
 void average_base_qual(std::string_view qual, int& mean_qual) {
     int n = 0, q_sum = 0;
     for (const auto q : qual) {
-        q_sum += static_cast<int>(q); ++n;
+        q_sum += (static_cast<int>(q) - 33); ++n;
     }
     if (n) mean_qual = q_sum / n;   
 } 

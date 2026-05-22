@@ -247,11 +247,12 @@ void personalize(const Pileup& pileup, LocalReference& loc_ref, const UserParams
     if (pileup.hap1.empty() && pileup.hap2.empty()) return;
     
     Vars hiconfvars;
+    // FOr del no qual value???
     for (const auto& v : pileup.reads[pileup.hiconf_read_idx].variants) 
-        if (v.mean_qual >= params.base_q_thresh) hiconfvars.push_back(v);
+        if (v.mean_qual >= params.base_q_thresh) {  hiconfvars.push_back(v); std::cout << v.pos << " " << v.ref << " " << v.alt << std::endl; } 
     
-    std::string hiconf_seq;
-    make_sequence(loc_ref, hiconfvars, pileup.start, pileup.end, hiconf_seq);
+    std::string hiconf_seq = pileup.seq0;
+   // make_sequence(loc_ref, hiconfvars, pileup.start, pileup.end, hiconf_seq);
     
     const char* query = hiconf_seq.c_str();
     int32_t mask_len = strlen(query) < 30 ? 15 : strlen(query) / 2;
@@ -265,12 +266,14 @@ void personalize(const Pileup& pileup, LocalReference& loc_ref, const UserParams
         aligner.SetReferenceSequence(pileup.seq1.c_str(), pileup.seq1.size());
         aligner.Align(query, filter, &aln, mask_len);
         aln_score = aln.sw_score; cigar_str = aln.cigar_string;
+        std::cout << aln.cigar_string << std::endl;
     }    
     
     if (!pileup.seq2.empty()) {
         aligner.SetReferenceSequence(pileup.seq2.c_str(), pileup.seq2.size());
         aligner.Align(query, filter, &aln, mask_len);
         std::cout << "second " << aln.sw_score << std::endl;
+        std::cout << aln.cigar_string << std::endl;
         if (aln.sw_score > aln_score) {
             which_hap = 2; cigar_str = aln.cigar_string;
         }

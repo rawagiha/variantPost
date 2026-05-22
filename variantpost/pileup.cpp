@@ -197,8 +197,9 @@ void Pileup::phaseGermlineVariants() {
 
     for (int i = 0; i < this->sz; ++i) {
         const auto& read = this->reads[i];
-        if (!read.is_control || read.covering_ptrn != 'A' || !read.qc_passed) continue;
+        if (!read.is_control || read.covering_ptrn != 'A' || !read.qc_passed || !read.is_central_mapped) continue;
         for (const auto& v : read.variants) {
+            if (v.mean_qual < 20) continue;
             global_counts[VariantKey{v.pos, v.ref, v.alt}].total_reads++;
         }
     }
@@ -218,7 +219,7 @@ void Pileup::phaseGermlineVariants() {
 
     for (int i = 0; i < this->sz; ++i) {
         const auto& read = this->reads[i];
-        if (!read.is_control || read.covering_ptrn != 'A' || !read.qc_passed) continue;
+        if (!read.is_control || read.covering_ptrn != 'A' || !read.qc_passed ) continue;
         
         //--- Count only aligned segments (exclude spliced skips)
         for (const auto& seg : read.aligned_segments) { // seg は std::pair<int, int> (start, end)
@@ -244,18 +245,21 @@ void Pileup::phaseGermlineVariants() {
     for (const auto& [key, track] : global_counts) {
         if (track.total_depth == 0) continue; 
         double vaf = static_cast<double>(track.total_reads) / track.total_depth;
+        std::cout << key.pos << " " << key.ref << " " << key.alt << " " << vaf << " " << track.total_reads << " " << track.total_depth <<  std::endl;
         if (vaf >= 0.3 && vaf <= 0.7) {
             backbone_keys.push_back(key);
         }
     }
-
+    
+    
     std::sort(backbone_keys.begin(), backbone_keys.end(), [](const VariantKey& a, const VariantKey& b) {
         return a.pos < b.pos;
     });
 
     int N = backbone_keys.size();
-    if (N == 0) return; // no het case
+    if (N == 0) return; // no het case 
 
+    std::cout << " size N " << N <<  std::endl;
     // --- Making adj matrix
     struct Edge { int same = 0; int diff = 0; };
     std::vector<std::vector<Edge>> adj(N, std::vector<Edge>(N));
