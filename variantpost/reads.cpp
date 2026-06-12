@@ -198,31 +198,6 @@ void Read::qualityCheck(const int start, const int end,
     }
     
     qc_passed = non_ref_cnt ? (static_cast<double>(dirty_non_ref_cnt) / non_ref_cnt <= freq_thresh) : true;
-    
-    /*
-    int i = 0, j = 0; //index
-    //for (const auto& elem : idx2pos) {    
-    //    if (!i && start <= elem.second) i = elem.first;
-    //    if (elem.second < end) j = elem.first;  
-    //}
-    for (int k = 0; k < static_cast<int>(idx2pos.size()); ++k) {
-        if (!i && start <= idx2pos[k]) i = k;
-        if (idx2pos[k] < end) j = k;
-    }
-    
-    if (i == j) return;
-     
-    int non_ref_cnt = 0, dirty_non_ref_cnt = 0;
-    for (int k = i; k <= j; ++k) {
-        if (is_variant(k, var_idx)) {
-            ++non_ref_cnt;
-            if (base_quals[k] < qual_thresh) ++dirty_non_ref_cnt; 
-        }
-    }
-    
-    if (dirty_non_ref_cnt) 
-        qc_passed = (static_cast<double>(dirty_non_ref_cnt) / non_ref_cnt <= freq_thresh);
-    else qc_passed = true;*/
 }
 
 //------------------------------------------------------------------------------
@@ -349,51 +324,10 @@ void Read::checkByRepeatCount(const Variant& target, bool& has_excess_ins_hap) {
             has_excess_ins_hap = true;
         }
     }
-    /*
-    int idx = -1;
-    //for (const auto& elem : idx2pos)  
-    //    if (elem.second == target.pos + 1) { idx = elem.first; break; }
-    for (int j = 0; j < static_cast<int>(idx2pos.size()); ++j) {
-        if (idx2pos[j] == target.pos + 1) { idx = j; break; } 
-    }
-    
-    if (idx < 0) return;
-
-    std::string_view rt_side = seq.substr(idx), 
-                     lt_side = seq.substr(0, idx),
-                     indel_seq_sv = target.indel_seq;
-    
-    const int rt_len = static_cast<int>(rt_side.size());
-    const int indel_len = target.indel_len;
-    
-    int rep = 0;
-    for (int i = 0; rt_len - i >= indel_len; i += indel_len) {
-        if (rt_side.substr(i, indel_len) == indel_seq_sv) ++rep; else break;
-    } 
-   
-    for (int i = idx - indel_len; i >= 0; i -= indel_len) {
-        if (lt_side.substr(i, indel_len) == indel_seq_sv) ++rep; else break;
-    }
-    
-    if (rep != target.repeats) { 
-        has_anti_pattern = true; 
-        //repeats are counted regardless of clipping -> deactivated
-        covered_in_clip = false; 
-        //more ins repeats -> relative read loc. does not matter  
-        if (target.is_ins && rep > target.repeats) {
-            is_central_mapped = true; has_excess_ins_hap = true; 
-        }
-    }*/
 }
 
-//inline bool is_dirty(const Variant& v, const char thresh) {
-//    for (const auto& q : v.qual) { if (q < thresh) return true; }
-//    return false; 
-//}
-
-
 inline auto append_num = [](std::string& target, auto val) {
-    std::array<char, 20> buffer; // 64bit整数でも20文字あれば十分
+    std::array<char, 20> buffer; 
     auto [ptr, ec] = std::to_chars(buffer.data(), buffer.data() + buffer.size(), val);
     if (ec == std::errc{}) {
         target.append(buffer.data(), ptr - buffer.data());
@@ -407,7 +341,7 @@ void Read::setSignatureStrings(const UserParams& params) {
     if (!qc_passed) return;
     
     non_ref_sig.clear();
-    non_ref_sig.reserve(256); // 余裕を持たせる
+    non_ref_sig.reserve(256); 
 
     for (const auto& v : variants) {
         bool dirty = false;
@@ -416,11 +350,8 @@ void Read::setSignatureStrings(const UserParams& params) {
         }
         if (dirty) continue;
 
-        // std::to_string の連続呼び出しは遅延の元。可能なら std::to_chars を推奨
         append_num(non_ref_sig, v.pos);
         non_ref_sig.append(":").append(v.ref).append(">").append(v.alt).append(";");        
-        //non_ref_sig.append(std::to_string(v.pos)).append(":")
-        //           .append(v.ref).append(">").append(v.alt).append(";");
     }
 
     splice_sig.clear();
@@ -430,14 +361,12 @@ void Read::setSignatureStrings(const UserParams& params) {
         non_ref_sig.append("spl=");
         splice_sig.append("spl=");
     
-        // 開始位置
         append_num(non_ref_sig, s_start);
         append_num(splice_sig, s_start);
 
         non_ref_sig.append("-");
         splice_sig.append("-");
 
-        // 終了位置
         append_num(non_ref_sig, s_end);
         append_num(splice_sig, s_end);
 
@@ -454,73 +383,6 @@ void Read::setSignatureStrings(const UserParams& params) {
         non_ref_sig.append("rt=");
         append_num(non_ref_sig, aln_end + 1);
     }    
-
-
-    /*
-    for (const auto& [s_start, s_end] : skipped_segments) {
-        std::string s = "spl=" + std::to_string(s_start) + "-" + std::to_string(s_end) + "|";
-        non_ref_sig.append(s);
-        splice_sig.append(s);
-    }
-
-    if (start_offset) {
-        non_ref_sig.append("lt=").append(std::to_string(aln_start - 1)).append("$");
-    }
-    if (end_offset) {
-        non_ref_sig.append("rt=").append(std::to_string(aln_end + 1));
-    }*/
-
-    /*
-    non_ref_sig.clear();
-    non_ref_sig.reserve(256); 
-
-    for (const auto& v : variants) {
-        bool dirty = false;
-        for (const auto q : v.qual) { if (q < params.base_q_thresh) { dirty = true; break; } }
-        if (dirty) continue;
-
-        non_ref_sig.append(std::to_string(v.pos)).append(":").append(v.ref).append(">").append(v.alt).append(";");
-    }
-
-    splice_sig.clear();
-    for (const auto& [s_start, s_end] : skipped_segments) {
-        std::string s = "spl=" + std::to_string(s_start) + "-" + std::to_string(s_end) + "|";
-        non_ref_sig.append(s);
-        splice_sig.append(s);
-    }
-    
-    if (start_offset) {
-        non_ref_sig.append("lt=").append(std::to_string(aln_start - 1)).append("$");
-    }
-    if (end_offset) {
-        non_ref_sig.append("rt=").append(std::to_string(aln_end + 1));
-    }
-    */
-    
-    /*
-    if(!qc_passed) return;
-    
-    non_ref_sig.reserve(128);
-
-    for (const auto& v : variants) {
-        // use only clean variants for signature
-        if (is_dirty(v, params.base_q_thresh)) continue;
-        non_ref_sig += (std::to_string(v.pos) + ":" + v.ref + ">" + v.alt + ";");
-    }
-
-    std::string s1, s2;
-    for (const auto& s : skipped_segments) {
-        s1 = std::to_string(s.first); s2 = std::to_string(s.second);
-        non_ref_sig += ("spl=" + s1 + "-" + s2 + "|");
-        splice_sig += ("spl=" + s1 + "-" + s2 + "|");
-    }
-    
-    if (start_offset) 
-        non_ref_sig += ("lt=" + std::to_string(aln_start - 1) + "$");
-    
-    if (end_offset) 
-        non_ref_sig += ("rt=" + std::to_string(aln_end + 1));
-    */
 }
 
 //------------------------------------------------------------------------------
@@ -574,21 +436,12 @@ void Read::hasTargetComplexIndel(LocalReference& loc_ref, const Variant& target)
     if (left_it != std::string_view::npos) {
         left_it += target.lt_seq.size();
         left_match = (seq.substr(left_it, mid_len) == target.mid_seq);
-        if (left_match) {
-            std::cout << seq.substr(left_it, mid_len) << " lt  " << target.mid_seq << std::endl;
-        }
     }
 
     bool right_match = false;
     auto right_it = seq.find(target.rt_seq);
     if (right_it != std::string_view::npos && right_it >= mid_len) {
         right_match = (seq.substr(right_it - mid_len,  mid_len) == target.mid_seq);
-        if (left_match) {
-            std::cout << seq.substr(right_it - mid_len,  mid_len) << " " << target.mid_seq << std::endl;
-        }
-        if (right_match) {
-            std::cout << seq.substr(right_it - mid_len,  mid_len) << " r t " << target.mid_seq << std::endl;
-        }
     }
    
     if (left_match && right_match) { has_target = true; return; }
@@ -611,9 +464,6 @@ void Read::hasTargetComplexIndel(LocalReference& loc_ref, const Variant& target)
     
     if (seq_len < i + lt_len + target.alt_len) return;
     
-    std::cout << seq.substr(i, lt_len) << " " << target.lt_seq << std::endl;
-    std::cout << seq.substr(i + lt_len, target.alt_len) << " " << target.mid_seq << std::endl;
-    std::cout << seq.substr(i + lt_len + target.alt_len, rt_len) << " " << target.rt_seq << std::endl;
     if (seq.substr(i, lt_len) != target.lt_seq) return;
     if (seq.substr(i + lt_len, target.alt_len) != target.mid_seq) return;
     if (seq.substr(i + lt_len + target.alt_len, rt_len) != target.rt_seq) return;

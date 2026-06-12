@@ -236,29 +236,35 @@ void match2haplotypes(Pileup& pileup, const Strs& read_seqs, const UserParams& p
 }
 
 
+size_t count_overlap(const Vars& v1, const Vars& v2) {
+    Vars intersection;
+    intersection.reserve(std::min(v1.size(), v2.size()));
+    std::set_intersection(v1.begin(), v1.end(),
+                          v2.begin(), v2.end(),
+                          std::back_inserter(intersection));
 
-// crop_function 
+    return intersection.size();
+}
 
 void personalize(const Pileup& pileup, LocalReference& loc_ref, const UserParams& params, const Variant& target, Variant& per, std::string& pltseq, std::string& prtseq) {
-    std::cout << " get here hiconf idx " <<  pileup.hiconf_read_idx << std::endl;
     
     
     if (pileup.hiconf_read_idx < 0) return;
-    if (pileup.hap1.empty() && pileup.hap2.empty()) return;
+    //if (pileup.hap1.empty() && pileup.hap2.empty()) return;
     
-    Vars hiconfvars;
-    // FOr del no qual value???
-    for (const auto& v : pileup.reads[pileup.hiconf_read_idx].variants) 
-        if (v.mean_qual >= params.base_q_thresh) {  hiconfvars.push_back(v); std::cout << v.pos << " " << v.ref << " " << v.alt << std::endl; } 
     
     std::string hiconf_seq = pileup.seq0;
-   // make_sequence(loc_ref, hiconfvars, pileup.start, pileup.end, hiconf_seq);
     
     const char* query = hiconf_seq.c_str();
     int32_t mask_len = strlen(query) < 30 ? 15 : strlen(query) / 2;
     Alignment aln; Filter filter;    
     Aligner aligner(params.match_score, params.mismatch_penal,
                     params.gap_open_penal, params.gap_ext_penal);
+    
+    size_t with_hap1 = count_overlap(pileup.hap0_vars, pileup.hap1_vars);
+    size_t with_hap2 = count_overlap(pileup.hap0_vars, pileup.hap2_vars);
+
+    std::cout << with_hap1 << " " << with_hap2 << " hap overlap cnt " << std::endl;
     
     int aln_score = -1, which_hap = 1;
     std::string cigar_str = ""; 
@@ -293,6 +299,7 @@ void personalize(const Pileup& pileup, LocalReference& loc_ref, const UserParams
     
     char op = '\0'; int op_len = 0, i = 0, j = 0;
     Vars vars;
+    std::cout << i2p.size() << std::endl;
     for (const auto& c : cigar_vec) {
         op = c.first; op_len = c.second;
         switch (op) {

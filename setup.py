@@ -42,15 +42,10 @@ extensions = [
         [
             "variantpost/__search.pyx",
             "variantpost/pileup.cpp",
-            #"variantpost/sequence_model.cpp",
-            #"variantpost/eval.cpp",
             "variantpost/search.cpp",
             "variantpost/reads.cpp",
             "variantpost/match.cpp",
-            #"variantpost/merge.cpp",
             "variantpost/util.cpp",
-            #"variantpost/local_reference.cpp",
-            #"variantpost/substitutes.cpp",
             "variantpost/consensus.cpp",
             "variantpost/ssw/ssw.c",
             "variantpost/ssw/ssw_cpp.cpp",
@@ -61,7 +56,7 @@ extensions = [
         # pysam のヘッダーパスを追加（これが重要）
         include_dirs=pysam_includes + htslib_includes,
         # 最適化フラグを有効化
-        extra_compile_args=["-std=c++17", "-O3", "-fPIC"],
+        extra_compile_args=["-std=c++17"],
         extra_link_args=["-std=c++17"],
     ),
 ]

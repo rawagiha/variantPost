@@ -17,8 +17,7 @@ struct Pileup {
            const Strs& quals, const Bools& are_from_first_bam, const bool has_second,
            const UserParams& params, LocalReference& loc_ref, Variant& target);
     
-    void phaseGermlineVariants(); 
-    
+    void inferGermlineHaplotype(const UserParams& param);    
     
     void gridSearch(const UserParams& params, LocalReference& loc_ref, const Variant& target); 
     
@@ -34,6 +33,7 @@ struct Pileup {
     Reads reads; 
     
     //--------------------------------------------------------------------------
+    Vars hap0_vars;
     Vars hap1_vars;
     Vars hap2_vars;
     Vars homo_vars;

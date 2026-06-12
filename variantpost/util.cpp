@@ -242,7 +242,7 @@ inline bool is_rotatable(std::string_view allele) {
 void average_base_qual(std::string_view qual, int& mean_qual) {
     int n = 0, q_sum = 0;
     for (const auto q : qual) {
-        q_sum += (static_cast<int>(q) - 33); ++n;
+        q_sum += static_cast<int>(q); ++n;
     }
     if (n) mean_qual = q_sum / n;   
 } 
@@ -1297,11 +1297,6 @@ bool del_of_hmp_to_mnv(const int del_len,
 // ins folloed by subsitutions 
 int enumerate_possible_ins(const int i, const int j, const Vars& vars,
                            LocalReference& loc_ref, const Variant& target) { 
-    
-    //for (auto& v : vars)
-    //    std::cout << v.pos << " " << v.ref << " " << v.alt << std::endl;
-    
-    
     // i, j: variant idx two closest to target
     // n, m: starting snv, later n to be moved to the left
     int n = -1, m = -1;
@@ -1318,8 +1313,6 @@ int enumerate_possible_ins(const int i, const int j, const Vars& vars,
         --n;
     }
     
-    
-    //std::cout << vars[n - 1].pos << " " << vars[n].pos << std::endl;
     // testing IXXXX pattern
     std::string ext;
     if (n > 0 && vars[n - 1].pos + 1 == vars[n].pos && vars[n - 1].is_ins) {
@@ -1361,7 +1354,6 @@ int enumerate_possible_ins(const int i, const int j, const Vars& vars,
     } else { new_alt.append(ins_seq).append(ext); } // extened 
     
     Variant new_ins(vars[m].pos, vars[m].ref, new_alt);
-    //std::cout << new_ins.pos << " " << new_ins.ref << " " <<  new_ins.alt << " " <<  target.isEquivalent(new_ins, loc_ref) << " second case  " << std::endl; 
     if (target.isEquivalent(new_ins, loc_ref)) return n;
     else return -1;
 } 
@@ -1388,7 +1380,6 @@ int find_target(LocalReference& loc_ref,
             if (v.mean_qual < params.base_q_thresh) ++qc_failed;
         }   
         
-        // std::cout << vars[idx].pos << " " << vars[idx].ref << " " << vars[idx].alt << std::endl;
         // possible edge_case_02 loci
         if (del_of_hmp && v.is_snv && hom_start <= v.pos && v.pos <= hom_end)
             snvs_in_hmp.push_back(idx);
@@ -1402,7 +1393,6 @@ int find_target(LocalReference& loc_ref,
     // Edge cases only apply to high quality cases with indels
     if (!indel_cnt || qc_failed) return -1;
     
-    //std::cout << i << " " << j << std::endl;
 
     // testing edge_case_02
     if (del_of_hmp && del_of_hmp_to_mnv(target.indel_len, snvs_in_hmp, vars))
@@ -1442,10 +1432,6 @@ void make_sequence(LocalReference& loc_ref, const Vars& variants, const int star
                    const int end, std::string& seq, Ints* p_idx2pos) {
     if (end <= start) return; 
     
-    for (auto& v : variants) {
-        std::cout << v.pos << " " << v.ref << " " << v.alt << std::endl;
-    }
-     
     int pos = start;
     if (start < loc_ref.start) {
         pos = loc_ref.start;
@@ -1482,7 +1468,16 @@ void make_sequence(LocalReference& loc_ref, const Vars& variants, const int star
         }
     }
     
-    for (size_t i = 0; i < variants.size(); ) {
+    // prefilter variant ending befor start(pos) 
+    size_t i = 0;
+    while (i < variants.size() && variants[i]._end_pos <= pos) {
+        ++i;
+    }
+
+    for (; i < variants.size(); ) {
+
+        if (variants[i].pos >= end) break;
+
         // variants (i_th, i+1_th) are not overlapping
         if (i + 1 == variants.size() || variants[i]._end_pos < variants[i + 1].pos) {
             seq.append(variants[i].alt);
@@ -1545,8 +1540,6 @@ void make_sequence(LocalReference& loc_ref, const Vars& variants, const int star
             for (int k = 0; k < len; ++k) p_idx2pos->push_back(pos++);
         }
     }
-
-    std::cout << "all done " << std::endl;
 }
 
 // merge ins and del at same pos to a cplx indel

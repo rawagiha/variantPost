@@ -3,7 +3,6 @@
 #include <unordered_set>
 #include <queue>
 #include <cstring>
-#include <optional>
 
 typedef std::vector<std::pair<std::string_view, size_t>> PatternCnt;
 
@@ -144,7 +143,16 @@ Pileup::Pileup(const Strs& names, const Bools& is_rv, const Strs& cigar_strs,
             
             process_anti_patterns(read);
             annotate_undetermined_signatures(read, i);
-
+            /*
+            if (has_second_bam) {    
+                if (!read.is_control) continue;
+                process_anti_patterns(read);
+                annotate_undetermined_signatures(read, i);
+            } else {
+                process_anti_patterns(read);
+                annotate_undetermined_signatures(read, i);
+            }*/
+              
             if (read.rank != 'n') {
                 starts.push_back(read.covering_start); ends.push_back(read.covering_end);
             }   
@@ -186,9 +194,14 @@ Pileup::Pileup(const Strs& names, const Bools& is_rv, const Strs& cigar_strs,
     }
 }
 
-void Pileup::phaseGermlineVariants() {
+
+void Pileup::inferGermlineHaplotype(const UserParams& params) {
     if (this->sz == 0) return;
 
+    homo_vars.reserve(this->sz / 10); 
+    hap1_vars.reserve(this->sz / 10);
+    hap2_vars.reserve(this->sz / 10);
+            
     struct CountTrack {
         int total_reads = 0;
         int total_depth = 0;
@@ -197,9 +210,11 @@ void Pileup::phaseGermlineVariants() {
 
     for (int i = 0; i < this->sz; ++i) {
         const auto& read = this->reads[i];
-        if (!read.is_control || read.covering_ptrn != 'A' || !read.qc_passed || !read.is_central_mapped) continue;
+        if (!read.is_control) continue;
+        if (read.covering_ptrn != 'A' || !read.qc_passed || !read.is_central_mapped) continue;
+        
         for (const auto& v : read.variants) {
-            if (v.mean_qual < 20) continue;
+            if (v.mean_qual < params.base_q_thresh) continue;
             global_counts[VariantKey{v.pos, v.ref, v.alt}].total_reads++;
         }
     }
@@ -219,10 +234,10 @@ void Pileup::phaseGermlineVariants() {
 
     for (int i = 0; i < this->sz; ++i) {
         const auto& read = this->reads[i];
-        if (!read.is_control || read.covering_ptrn != 'A' || !read.qc_passed ) continue;
-        
+        if (!read.is_control || read.covering_ptrn != 'A' || !read.qc_passed || !read.is_central_mapped) continue;
+
         //--- Count only aligned segments (exclude spliced skips)
-        for (const auto& seg : read.aligned_segments) { // seg は std::pair<int, int> (start, end)
+        for (const auto& seg : read.aligned_segments) {
             int seg_start = seg.first;
             int seg_end = seg.second;
             auto it = std::lower_bound(unique_positions.begin(), unique_positions.end(), seg_start);
@@ -243,15 +258,18 @@ void Pileup::phaseGermlineVariants() {
     backbone_keys.reserve(global_counts.size());
 
     for (const auto& [key, track] : global_counts) {
-        if (track.total_depth == 0) continue; 
+        if (track.total_depth == 0 || track.total_reads < 2) continue;
         double vaf = static_cast<double>(track.total_reads) / track.total_depth;
-        std::cout << key.pos << " " << key.ref << " " << key.alt << " " << vaf << " " << track.total_reads << " " << track.total_depth <<  std::endl;
-        if (vaf >= 0.3 && vaf <= 0.7) {
+        if (vaf > 0.7) { 
+            Variant v(static_cast<int>(key.pos), key.ref, key.alt, "");
+            homo_vars.push_back(v); 
+        }
+        else if (vaf >= 0.2 && vaf <= 0.7) {
             backbone_keys.push_back(key);
         }
     }
-    
-    
+    std::sort(homo_vars.begin(), homo_vars.end());
+       
     std::sort(backbone_keys.begin(), backbone_keys.end(), [](const VariantKey& a, const VariantKey& b) {
         return a.pos < b.pos;
     });
@@ -259,28 +277,26 @@ void Pileup::phaseGermlineVariants() {
     int N = backbone_keys.size();
     if (N == 0) return; // no het case 
 
-    std::cout << " size N " << N <<  std::endl;
-    // --- Making adj matrix
     struct Edge { int same = 0; int diff = 0; };
-    std::vector<std::vector<Edge>> adj(N, std::vector<Edge>(N));
+    std::vector<std::unordered_map<int, Edge>> adj(N);
 
     std::vector<std::pair<int, bool>> read_calls;
     read_calls.reserve(64);
-    
-    for (int i = 0; i < this->sz; ++i) { 
-        const auto& read = this->reads[i]; 
+
+    for (int i = 0; i < this->sz; ++i) {
+        const auto& read = this->reads[i];
         if (!read.is_control || read.covering_ptrn != 'A' || !read.qc_passed) continue;
 
         read_calls.clear();
-        
+
         for (int j = 0; j < N; ++j) {
             const auto& b_key = backbone_keys[j];
 
             if (read.aln_end < b_key.pos) break;
-                
+
             if (b_key.pos < read.aln_start) continue;
-                
-             
+
+
             bool is_mechanically_covered = false;
             for (const auto& seg : read.mapped_segments) {
                 if (seg.first <= b_key.pos && b_key.pos <= seg.second) {
@@ -290,7 +306,7 @@ void Pileup::phaseGermlineVariants() {
             }
 
             if (!is_mechanically_covered) continue;
-            
+
             bool has_alt = false;
             for (const auto& v : read.variants) {
                 if (v.pos == b_key.pos && v.ref == b_key.ref && v.alt == b_key.alt) {
@@ -298,19 +314,19 @@ void Pileup::phaseGermlineVariants() {
                     break;
                 }
             }
-            
+
             read_calls.push_back({j, has_alt});
         }
 
         // --- Within the same read, testing the linkage
-        if (read_calls.size() < 2) continue; 
-            
+        if (read_calls.size() < 2) continue;
+
         for (size_t a = 0; a < read_calls.size(); ++a) {
             for (size_t b = a + 1; b < read_calls.size(); ++b) {
                 int idxA = read_calls[a].first;
                 int idxB = read_calls[b].first;
-                
-                
+
+
                 if (read_calls[a].second == read_calls[b].second) {
                     adj[idxA][idxB].same++;
                     adj[idxB][idxA].same++;
@@ -320,8 +336,8 @@ void Pileup::phaseGermlineVariants() {
                 }
             }
        }
-    }    
-    
+    }
+
     // Pick up the most reliable HET variant as the starting point
     // (Maximize coverage while penalizing deviation from VAF 0.5)
     int best_seed_idx = 0;
@@ -330,16 +346,16 @@ void Pileup::phaseGermlineVariants() {
         int coverage = global_counts[backbone_keys[i]].total_reads;
         int depth = global_counts[backbone_keys[i]].total_depth;
         if (depth == 0) continue;
-        
+
         double vaf = static_cast<double>(coverage) / depth;
         double score = coverage * (0.5 - std::abs(vaf - 0.5));
-        
+
         if (score > best_seed_score) {
             best_seed_score = score;
             best_seed_idx = i;
         }
-    } 
-    
+    }
+
     std::vector<Phase> phased_array(N, Phase::Unphased);
     phased_array[best_seed_idx] = Phase::Hap1; // designate the start as Hap1
 
@@ -357,10 +373,10 @@ void Pileup::phaseGermlineVariants() {
 
             const Edge& edge = adj[curr][neighbor];
             int total_links = edge.same + edge.diff;
-            
+
             if (total_links >= 2) {
                 double purity = static_cast<double>(std::max(edge.same, edge.diff)) / total_links;
-                
+
                 // same /(same + diff) > 0.75 or < 0.25
                 if (purity >= 0.75) {
                     if (edge.same > edge.diff) {
@@ -374,105 +390,18 @@ void Pileup::phaseGermlineVariants() {
             }
         }
     }
-
-    std::unordered_map<VariantKey, Phase, VariantKeyHash> backbone_phase;
-    for (int i = 0; i < N; ++i) {
-        if (phased_array[i] != Phase::Unphased) {
-            backbone_phase[backbone_keys[i]] = phased_array[i];
-        }
-    }
-
-    // assign haplotype to all reads (tumor & normal)
-    for (int i = 0; i < this->sz; ++i) {
-        auto& read = this->reads[i];
-        if (read.covering_ptrn != 'A' || !read.qc_passed) continue;
-
-        int h1_votes = 0;
-        int h2_votes = 0;
-
-        for (int j = 0; j < N; ++j) {
-            const auto& b_key = backbone_keys[j];
-
-            bool is_mechanically_covered = false;
-            for (const auto& seg : read.mapped_segments) {
-                if (seg.first <= b_key.pos && b_key.pos <= seg.second) {
-                    is_mechanically_covered = true; break;
-                }
-            }
-            if (!is_mechanically_covered) continue;
-
-            auto it = backbone_phase.find(b_key);
-            if (it == backbone_phase.end()) continue; 
-
-            bool has_alt = false;
-            for (const auto& v : read.variants) {
-                if (v.pos == b_key.pos && v.ref == b_key.ref && v.alt == b_key.alt) {
-                    has_alt = true; break;
-                }
-            }
-
-            if (has_alt) {
-                if (it->second == Phase::Hap1) h1_votes++;
-                else if (it->second == Phase::Hap2) h2_votes++;
-            } else {
-                if (it->second == Phase::Hap1) h2_votes++;
-                else if (it->second == Phase::Hap2) h1_votes++;
-            }
-        }
-
-        if (h1_votes > h2_votes) read.phase = Phase::Hap1;
-        else if (h2_votes > h1_votes) read.phase = Phase::Hap2;
-        else read.phase = Phase::Unphased;
-    } 
     
-    this->hap1_vars.clear();
-    this->hap2_vars.clear();
-    this->homo_vars.clear();
-
-    struct PhaseVote {
-        int hap1_support = 0;
-        int hap2_support = 0;
-    };
-    std::unordered_map<VariantKey, PhaseVote, VariantKeyHash> var_votes;
-
-    for (int i = 0; i < this->sz; ++i) {
-        const auto& read = this->reads[i];
-        if (read.phase == Phase::Unphased || !read.qc_passed || read.covering_ptrn != 'A') continue;
-
-        for (const auto& v : read.variants) {
-            VariantKey key{v.pos, v.ref, v.alt};
-            if (read.phase == Phase::Hap1) {
-                var_votes[key].hap1_support++;
-            } else if (read.phase == Phase::Hap2) {
-                var_votes[key].hap2_support++;
-            }
+    for (int i = 0; i < N; ++i) {
+        auto& key = backbone_keys[i];
+        auto& phase = phased_array[i];        
+        if (phase == Phase::Hap1) {
+                hap1_vars.emplace_back(static_cast<int>(key.pos), key.ref, key.alt, "");
+        } else if (phase == Phase::Hap2) {
+                hap2_vars.emplace_back(static_cast<int>(key.pos), key.ref, key.alt, "");
         }
     }
-
-    auto sortByPos = [](const Variant& a, const Variant& b) { return a.pos < b.pos; };
-
-    for (const auto& [key, vote] : var_votes) {
-        Variant v(static_cast<int>(key.pos), key.ref, key.alt, "");
-
-        const int MIN_SUPPORT = 2;
-
-        bool in_hap1 = (vote.hap1_support >= MIN_SUPPORT);
-        bool in_hap2 = (vote.hap2_support >= MIN_SUPPORT);
-
-        if (in_hap1 && in_hap2) {
-            this->homo_vars.push_back(v);
-        }
-        else if (in_hap1) {
-            this->hap1_vars.push_back(v);
-        }
-        else if (in_hap2) {
-            this->hap2_vars.push_back(v);
-        }
-    }
-
-    std::sort(this->hap1_vars.begin(), this->hap1_vars.end(), sortByPos);
-    std::sort(this->hap2_vars.begin(), this->hap2_vars.end(), sortByPos);
-    std::sort(this->homo_vars.begin(), this->homo_vars.end(), sortByPos);
+    std::sort(hap1_vars.begin(), hap1_vars.end());
+    std::sort(hap2_vars.begin(), hap2_vars.end());
 }
 
 //-----------------------------------------------------------------------------
@@ -484,20 +413,18 @@ void Pileup::gridSearch(const UserParams& params,
     
     // Condition 0
     // Skip if target is homopolymer extending 
-    if (s_cnt || sig_u.empty() || target.denovo_rep > 2) { std::cout << "grid exit 1 target denov "  << target.denovo_rep << std::endl; return;}
+    if (s_cnt || sig_u.empty() || target.denovo_rep > 2) { return;}
 
     PatternCnt u_sig_cnts;
     count_patterns(sig_u, u_sig_cnts);
     
-    std::cout << ns_vars.size() << " check size " << std::endl;
     const int tot = s_cnt + n_cnt + u_cnt; 
     // Condition 1
     // Skip if background hap involves homoplymer variations
     //   Step1: check for homopolymer involvment (denovo_rep)
     //   Step2: define as background hap if freq is > 0.1
     for (const auto& elem : ns_vars) {
-    //    std::cout << elem.first.pos << " " << elem.first.ref << " " << elem.first.alt << " " << elem.first.denovo_rep << " " << elem.second << " " << tot << std::endl;
-        if (elem.first.denovo_rep > 1 && elem.second * 10 > tot) { std::cout << "grid exit 2 denov " << elem.first.denovo_rep << " freq "  << elem.second << " " << tot << std::endl; return;}
+        if (elem.first.denovo_rep > 1 && elem.second * 10 > tot) { return;}
     }
     
     std::string query;
@@ -530,7 +457,6 @@ void Pileup::gridSearch(const UserParams& params,
             // Do not use low quality variations
             if (v.mean_qual > params.base_q_thresh) vars.push_back(v);
         }
-        std::cout << "grid skip happedn " << skip_this << " " << sig << std::endl;
         if (skip_this ||vars.empty()) continue;
         
         make_sequence(loc_ref, vars, start, end, query);
@@ -576,6 +502,22 @@ void Pileup::gridSearch(const UserParams& params,
     return std::find(anti_sigs.cbegin(), anti_sigs.cend(), hap) != anti_sigs.cend();
 }
 
+
+void collect_variants(const Reads& reads, Vars& vars) {
+    size_t total_size = 0;
+    for (const auto& read : reads) total_size += read.variants.size();
+    vars.reserve(total_size);
+    
+    for (const auto& read : reads) 
+        vars.insert(vars.end(), read.variants.begin(), read.variants.end());
+
+    std::sort(vars.begin(), vars.end());
+
+    auto last = std::unique(vars.begin(), vars.end());
+    vars.erase(last, vars.end());
+}
+
+
 //------------------------------------------------------------------------------
 void Pileup::setHaploTypes(LocalReference& loc_ref, const Variant& target) {
     PatternCnt s_sig_cnt; 
@@ -583,6 +525,8 @@ void Pileup::setHaploTypes(LocalReference& loc_ref, const Variant& target) {
     if (hiconf_read_idx > -1) {
         make_sequence(
             loc_ref, reads[hiconf_read_idx].variants, start, end, seq0, &i2p0);
+        
+        if (has_second_bam) collect_variants(reads, hap0_vars); 
     } else if (!sig_s.empty()) {
         PatternCnt s_sig_cnt;
         count_patterns(sig_s, s_sig_cnt); 
@@ -594,17 +538,71 @@ void Pileup::setHaploTypes(LocalReference& loc_ref, const Variant& target) {
     }
 
     PatternCnt u_sig_cnt; int idx1 = -1, idx2 = -1;
+     
+    if (has_second_bam) {
+        Vars hap1_full = homo_vars;
+        Vars hap2_full = homo_vars;
+        for (auto& v : hap1_vars) { hap1_full.push_back(v); }
+        for (auto& v : hap2_vars) { hap2_full.push_back(v); }
+        std::sort(hap1_full.begin(), hap1_full.end());
+        std::sort(hap2_full.begin(), hap2_full.end());
+        if (!hap1_full.empty()) {
+            make_sequence(loc_ref, hap1_full, start, end, seq1, &i2p1);
+            std::cout << " hap 1 set " << std::endl;
+            for (auto& v : hap1_full) std::cout << v.pos << " " << v.ref << " " << v.alt << std::endl; 
+        } else {
+             std::cout << " ref ref !! " << std::endl; return;
+        }
+
+        if (has_ref_hap) return;
+        
+        if (hap1_full == hap2_full) {
+            std::cout << " homozygous !! " << std::endl;
+        } else if (!hap2_full.empty()) {
+            make_sequence(loc_ref, hap2_full, start, end, seq2, &i2p2);
+            std::cout << " hap 2 set " << std::endl;
+            for (auto& v : hap2_full) std::cout << v.pos << " " << v.ref << " " << v.alt << std::endl;
+        }
+        return;
+    }
+    
     
     //--- Paired BAM file case
-    if (has_second_bam && control_bam_cov) {
-        // pass for now
+    if (false) {
+    //if (has_second_bam && control_bam_cov && hiconf_read_idx > -1) {
+        if (sig_u.empty()) return;
+        
+        int rough_coverage = 0;
+        for (const auto& read : reads) {
+            if (!read.fail_to_cover_flankings && read.covering_ptrn == 'A' && read.is_control) ++rough_coverage;
+        }
+        if (rough_coverage == 0) return;
+        
+        count_patterns(sig_u, u_sig_cnt);
+        const int hap1_cnt = static_cast<int>(u_sig_cnt[0].second);
+        
+        double vaf1 = static_cast<double>(hap1_cnt) / rough_coverage;
+        if (vaf1 < 0.25) return;
+        hap1 = u_sig_cnt[0].first;
+        idx1 = sig_u[hap1][0];
+        make_sequence(loc_ref, reads[idx1].variants, start, end, seq1, &i2p1);
+        
+        if (vaf1 > 0.8 || has_ref_hap) return;
+        
+        // het with alt/alt (rare)
+        const int hap2_cnt = static_cast<int>(u_sig_cnt[1].second);
+        double vaf2 = static_cast<double>(hap2_cnt) / rough_coverage;
+        if (vaf2 < 0.25) return;
+        hap2 = u_sig_cnt[1].first;
+        idx2 = sig_u[hap2][0];
+        make_sequence(loc_ref, reads[idx2].variants, start, end, seq2, &i2p2);
+        return;
     }
     
     int cntl_cov = 0;
     for (const auto& read : reads) {
         if (!read.fail_to_cover_flankings && read.covering_ptrn == 'A' && read.is_control) ++cntl_cov;
     }
-    std::cout << cntl_cov << " control coverage " << std::endl; 
     
     
     if (!sig_u.empty()) {
@@ -618,7 +616,6 @@ void Pileup::setHaploTypes(LocalReference& loc_ref, const Variant& target) {
         if (hap2_cnt > 4 && hap2_cnt * 5 >= cntl_cov) set_hap2 = true; 
 
         hap1 = u_sig_cnt[0].first; 
-        std::cout << hap1 << " " << u_sig_cnt[0].second << std::endl;
         if (hap_settable(s_cnt, hap1, anti_sigs) && set_hap1) {
             idx1 = sig_u[hap1][0];  
             make_sequence(loc_ref, reads[idx1].variants, start, end, seq1, &i2p1);
@@ -627,7 +624,6 @@ void Pileup::setHaploTypes(LocalReference& loc_ref, const Variant& target) {
         
         if (u_sig_cnt.size() > 1) {
             hap2 = u_sig_cnt[1].first;
-            std::cout << hap2 << " " << u_sig_cnt[1].second << std::endl;
             if (hap_settable(s_cnt, hap2, anti_sigs) && set_hap2) {
                 idx2 = sig_u[hap2][0];
                 make_sequence(loc_ref, reads[idx2].variants, start, end, seq2, &i2p2);
@@ -636,9 +632,10 @@ void Pileup::setHaploTypes(LocalReference& loc_ref, const Variant& target) {
         }
     } else if (has_excess_ins_hap) {
     // Haplotype with additional ins-repeats may be clipped and may not be captured    
+    // TODO: add example or remove this part -> too complex look so ad-hoc
         std::string alt_added = target.alt + target.alt.substr(1);
         Vars vlst = {Variant(target.pos, target.ref, alt_added)};
-        make_sequence(loc_ref, vlst, start, end, seq1); idx1 = 0; //pseudo index
+        make_sequence(loc_ref, vlst, start, end, seq1, &i2p1); idx1 = 0; //pseudo index
     }
     
     if (seq1.empty() && seq2.empty()) no_non_target_haps = true;
@@ -711,7 +708,6 @@ void Pileup::differentialKmerAnalysis(const UserParams& params,
     const int rad_end = target.pos + target.event_radius;
     Strs anti_sig;
     for (auto& read : reads) {
-        std::cout << read.name << " " << read.cigar_str << " " << read.rank << std::endl;
         if (!read.qc_passed || read.rank != 'u') continue;
          
         std::unordered_map<size_t, int> dict;
@@ -740,10 +736,10 @@ void Pileup::differentialKmerAnalysis(const UserParams& params,
             if (read.qs <= _i && _i + kmer_sz <= read.qe) ++(read.smer);
         }
 
-        
+        std::cout << read.smer << " " << read.nmer << " " << read.cigar_str << " " << read.rank << std::endl; 
         if (non_target_kmer_sz && read.smer > read.nmer) { 
-            std::cout << " this is y " << read.name << " " << read.cigar_str << " " << read.smer << " " << read.nmer << " " << read.non_ref_sig << std::endl;
             read.rank = 'y'; --u_cnt; ++y_cnt; //Likely supporting
+            std::cout << read.name <<  " y nct " << std::endl;
             if (!read.nmer && read.smer > 1) {
                 if (has_hiconf_support 
                     || no_non_target_haps 
@@ -775,9 +771,6 @@ void Pileup::differentialKmerAnalysis(const UserParams& params,
     }
 
     has_likely_support = (y_cnt);
-    
-    std::cout << " y cnt ! " << y_cnt << std::endl; 
-     
 }
 
 //------------------------------------------------------------------------------
@@ -791,7 +784,6 @@ void Pileup::searchByRealignment(const UserParams& params,
     
     int fss = -1, fse = -1, fes = -1, fee = -1, ts = -1, te = -1;  
     
-    std::cout << "y cnt " << y_cnt << std::endl;
     
     for (int i = 0; i < static_cast<int>(i2p0.size()); ++i) {
         if (i2p0[i] == loc_ref.flanking_start) fss = i;
@@ -807,10 +799,7 @@ void Pileup::searchByRealignment(const UserParams& params,
     Aligner aligner(params.match_score, params.mismatch_penal,
                     params.gap_open_penal, params.gap_ext_penal);
     
-    //std::cout << seq0 << std::endl;
     aligner.SetReferenceSequence(seq0.c_str(), seq0.size());
-    //std::cout << fss << " " << fse << " " << ts << " " << te << " " << fes << " " << fee << std::endl; 
-    //std::string u_seq; i
     
     std::bitset<3> check_points;
     for (auto& read : reads) {
@@ -821,9 +810,7 @@ void Pileup::searchByRealignment(const UserParams& params,
 
         int32_t mask_len = strlen(ss.c_str()) < 30 ? 15 : strlen(ss.c_str()) / 2;
         aligner.Align(ss.c_str(), filter, &aln, mask_len);
-        std::cout << ss << " " << aln.cigar_string << std::endl;
         check_match_pattern(aln, check_points, fss, fse, ts, te, fes, fee); 
-        std::cout <<  check_points.count() << std::endl;
         
         // perferct match
         if (check_points.count() == 3) {
@@ -838,32 +825,5 @@ void Pileup::searchByRealignment(const UserParams& params,
             if (read.rank == 'y') { read.rank = 's'; --y_cnt; ++s_cnt; }
         }
     }
-         
-    /*
-    for (const auto& elem : sig_u) {
-        
-        // realn only if ineffctive kmer and no anti-pattern
-        if (!u_sig_annot[elem.first][0] || u_sig_annot[elem.first][2]) continue; // realn only if kmer analysis wont work
-        
-        make_sequence(loc_ref, reads[elem.second[0]].variants, start, end, u_seq);
-        int32_t mask_len = strlen(u_seq.c_str()) < 30 ? 15 : strlen(u_seq.c_str()) / 2;
-        aligner.Align(u_seq.c_str(), filter, &aln, mask_len);
-        std::cout << u_seq << " " << aln.cigar_string << std::endl;
-        check_match_pattern(aln, check_points, fss, fse, ts, te, fes, fee);
-        if (check_points.count() == 3) {
-            for (auto n : elem.second) { if (reads[n].rank != 'n') reads[n].rank = 's'; }           
-        } else if (check_points.test(1) && u_sig_annot[elem.first][1]) {
-            for (auto n : elem.second) { if (reads[n].rank != 'n') reads[n].rank = 's'; }
-        } else if (!check_points.test(1)) { 
-            for (auto n : elem.second) reads[n].rank = 'n';
-        } 
-        u_seq.clear(); check_points.reset();
-    }*/
-    
-    // loop over u (make u_sig_cnt as pileup member)
-    //
-    // next loop over remaining 'u'/'y'-reads
-
-    //aligner.SetReferenceSequence(seq0.c_str(), seq0.size());
 }
 
