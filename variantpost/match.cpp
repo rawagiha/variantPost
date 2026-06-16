@@ -236,7 +236,7 @@ void match2haplotypes(Pileup& pileup, const Strs& read_seqs, const UserParams& p
 }
 
 
-size_t count_overlap(const Vars& v1, const Vars& v2) {
+inline size_t count_overlap(const Vars& v1, const Vars& v2) {
     Vars intersection;
     intersection.reserve(std::min(v1.size(), v2.size()));
     std::set_intersection(v1.begin(), v1.end(),
@@ -246,107 +246,46 @@ size_t count_overlap(const Vars& v1, const Vars& v2) {
     return intersection.size();
 }
 
-void personalize(const Pileup& pileup, LocalReference& loc_ref, const UserParams& params, const Variant& target, Variant& per, std::string& pltseq, std::string& prtseq) {
+void realn_to_perfonalized_genome(
+    LocalReference& loc_ref,
+    Aligner& alngr, Filter& fltr, Alignment& aln,
+    Variant& pv, bool& is_personalized, 
+    const std::string& mut_seq, 
+    const std::string& hap_seq, const Ints& i2p) {
     
-    
-    if (pileup.hiconf_read_idx < 0) return;
-    //if (pileup.hap1.empty() && pileup.hap2.empty()) return;
-    
-    
-    std::string hiconf_seq = pileup.seq0;
-    
-    const char* query = hiconf_seq.c_str();
+    const char* query = mut_seq.c_str();
     int32_t mask_len = strlen(query) < 30 ? 15 : strlen(query) / 2;
-    Alignment aln; Filter filter;    
-    Aligner aligner(params.match_score, params.mismatch_penal,
-                    params.gap_open_penal, params.gap_ext_penal);
+    alngr.SetReferenceSequence(hap_seq.c_str(), hap_seq.size());
+    alngr.Align(query, fltr, &aln, mask_len);
     
-    size_t with_hap1 = count_overlap(pileup.hap0_vars, pileup.hap1_vars);
-    size_t with_hap2 = count_overlap(pileup.hap0_vars, pileup.hap2_vars);
-
-    std::cout << with_hap1 << " " << with_hap2 << " hap overlap cnt " << std::endl;
-    
-    int aln_score = -1, which_hap = 1;
-    std::string cigar_str = ""; 
-    if (!pileup.seq1.empty()) {
-        aligner.SetReferenceSequence(pileup.seq1.c_str(), pileup.seq1.size());
-        aligner.Align(query, filter, &aln, mask_len);
-        aln_score = aln.sw_score; cigar_str = aln.cigar_string;
-        std::cout << aln.cigar_string << std::endl;
-    }    
-    
-    if (!pileup.seq2.empty()) {
-        aligner.SetReferenceSequence(pileup.seq2.c_str(), pileup.seq2.size());
-        aligner.Align(query, filter, &aln, mask_len);
-        std::cout << "second " << aln.sw_score << std::endl;
-        std::cout << aln.cigar_string << std::endl;
-        if (aln.sw_score > aln_score) {
-            which_hap = 2; cigar_str = aln.cigar_string;
-        }
-    }
-
     CigarVec cigar_vec;
-    fill_cigar_vector(cigar_str, cigar_vec); 
-    const std::string& background = (which_hap == 1) ? pileup.seq1 : pileup.seq2;
-    //const Coord& i2p = (which_hap == 1) ? pileup.i2p_1 : pileup.i2p_2;
-    const Ints& i2p = (which_hap == 1) ? pileup.i2p1 : pileup.i2p2;
-    
-    // test vector version
-    //Ints ip;
-    //for (auto elem : i2p) {
-    //    ip.push_back(elem.second);
-    //}
-    
-    char op = '\0'; int op_len = 0, i = 0, j = 0;
-    Vars vars;
-    std::cout << i2p.size() << std::endl;
-    for (const auto& c : cigar_vec) {
-        op = c.first; op_len = c.second;
+    fill_cigar_vector(aln.cigar_string, cigar_vec);
+
+    Vars vars; 
+    int i = 0, j = 0;
+    for (const auto& [op, op_len] : cigar_vec) {
         switch (op) {
             case '=':
                 i += op_len; j += op_len; break;
             case 'X':
-                //vars.emplace_back(i2p[i].second, background.substr(i, op_len), hiconf_seq.substr(j, op_len));
-                vars.emplace_back(i2p[i], background.substr(i, op_len), hiconf_seq.substr(j, op_len));
+                vars.emplace_back(i2p[i], hap_seq.substr(i, op_len), mut_seq.substr(j, op_len));
                 i += op_len; j+= op_len;   
                 break;
             case 'I': {
-                //Variant v(i2p[i - 1].second, background.substr(i - 1, 1), hiconf_seq.substr(j - 1 , op_len +1));
-                Variant v(i2p[i - 1], background.substr(i - 1, 1), hiconf_seq.substr(j - 1 , op_len +1));
+                Variant v(i2p[i - 1], hap_seq.substr(i - 1, 1), mut_seq.substr(j - 1 , op_len +1));
                 int lt_lim = std::max(i - 1 - 10, 0);
-                v.sample_lt_seq = background.substr(lt_lim, i - lt_lim);
-                pltseq = v.sample_lt_seq;
-                v.sample_rt_seq = background.substr(i, loc_ref.flanking_end - i2p[i - 1]);
-                prtseq = v.sample_rt_seq;
+                v.sample_lt_seq = hap_seq.substr(lt_lim, i - lt_lim);
+                v.sample_rt_seq = hap_seq.substr(i, loc_ref.flanking_end - i2p[i - 1]);
                 vars.push_back(v);
-                //vars.emplace_back(i2p[i - 1].second, background.substr(i - 1, 1), hiconf_seq.substr(j - 1 , op_len +1));
                 j += op_len;
-                /*
-                std::cout << i << " " << i2p[i].first << " " << i2p[i].second << std::endl;
-                std::cout << i2p[i - 2].first << " " << i2p[i - 2].second << std::endl;
-                std::cout << i2p[i - 1].first << " " << i2p[i - 1].second << std::endl;
-                std::cout << i2p[i - 1 + op_len].first << " " << i2p[i - 1 + op_len ].second << std::endl;
-                std::cout << i2p[i + op_len].first << " " << i2p[i + op_len ].second << std::endl;
-                std::cout << i2p[i + op_len + 1].first << " " << i2p[i + op_len + 1].second << std::endl;
-                */
-                break;
+                break; 
             }
             case 'D': {
-                Variant _v(i2p[i - 1], background.substr(i - 1, op_len + 1), hiconf_seq.substr(j - 1 , 1));
-                int _lt_lim = std::max(i - 1 - 10, 0);
-                _v.sample_lt_seq = background.substr(_lt_lim, i - _lt_lim);
-                pltseq =  _v.sample_lt_seq;
-                _v.sample_rt_seq = background.substr(i + op_len, loc_ref.flanking_end - i2p[i - 1]);
-                prtseq = _v.sample_rt_seq;
-                //vars.emplace_back(i2p[i - 1].second, background.substr(i - 1, op_len + 1), hiconf_seq.substr(j - 1 , 1));
-                vars.push_back(_v);
-                /*
-                std::cout << i << " " << i2p[i].first << " " << i2p[i].second << std::endl;
-                std::cout << i2p[i - 1].first << " " << i2p[i - 1].second << std::endl;
-                std::cout << i2p[i - 1 + op_len].first << " " << i2p[i - 1 + op_len ].second << std::endl;
-                std::cout << i2p[i + op_len].first << " " << i2p[i + op_len ].second << std::endl;
-                std::cout << i2p[i + op_len + 1].first << " " << i2p[i + op_len + 1].second << std::endl;
-                */
+                Variant v(i2p[i - 1], hap_seq.substr(i - 1, op_len + 1), mut_seq.substr(j - 1 , 1));
+                int lt_lim = std::max(i - 1 - 10, 0);
+                v.sample_lt_seq = hap_seq.substr(lt_lim, i - lt_lim);
+                v.sample_rt_seq = hap_seq.substr(i + op_len, loc_ref.flanking_end - i2p[i - 1]);
+                vars.push_back(v);
                 i += op_len;
                 break;
            }
@@ -356,20 +295,58 @@ void personalize(const Pileup& pileup, LocalReference& loc_ref, const UserParams
         }
         
     } 
+    
     int closest = -1, min_dist = INT_MAX, dist = INT_MAX;
     for (int i = 0; i < static_cast<int>(vars.size()); ++i) {
-        auto& v = vars[i]; 
-        std::cout << v.pos << " " << v.ref << " " << v.alt << std::endl; 
+        const auto& v = vars[i]; 
         if (!v.is_substitute) {
-            dist = std::abs(v.pos - target.pos);
+            dist = std::abs(v.pos - pv.pos); // pv.pos == target.pos
             if (dist < min_dist) {closest = i; min_dist = dist; } 
         }
-    } 
-    if (closest == -1) { per = target; return; }
-    bool is_same = (vars[closest] == target);
-    std::cout << vars[closest].pos << " " << vars[closest].ref << " " << vars[closest].alt << " " << is_same << std::endl;
-    std::cout << vars[closest].sample_lt_seq << " " << vars[closest].sample_rt_seq << std::endl;
-    pltseq = vars[closest].sample_lt_seq;
-    prtseq = vars[closest].sample_rt_seq;
-    if (is_same) { per = target; } else { per = vars[closest]; }
+    }
+     
+    if (closest == -1) return; 
+    pv = vars[closest]; // should be move?
+    is_personalized = true;
+}
+
+void personalize(const Pileup& pileup, LocalReference& loc_ref, const UserParams& params, const Variant& target, Variant& per, std::string& pltseq, std::string& prtseq) {
+        
+    if (pileup.hiconf_read_idx < 0 || pileup.seq0.empty()) return;
+    
+    // REF/REF case -> no personalization
+    if (pileup.is_ref_hom) return;
+    
+    std::string hiconf_seq = pileup.seq0;
+    const char* query = hiconf_seq.c_str();
+    int32_t mask_len = strlen(query) < 30 ? 15 : strlen(query) / 2;
+    Alignment aln; Filter filter;
+    Aligner aligner(params.match_score, params.mismatch_penal,
+                    params.gap_open_penal, params.gap_ext_penal);
+    
+    size_t with_hap1 = count_overlap(pileup.hap0_vars, pileup.hap1_vars);
+
+    Variant pv1(target.pos, target.ref, target.alt);
+    bool is_personalized_hap1 = false;
+    if (pileup.is_alt_het) {    
+        size_t with_hap2 = count_overlap(pileup.hap0_vars, pileup.hap2_vars);
+        
+        Variant pv2(target.pos, target.ref, target.alt);
+        bool is_personalized_hap2 = false;
+        if (with_hap1 > with_hap2) {
+            // hard
+            realn_to_perfonalized_genome(loc_ref, aligner, filter, aln, pv1, is_personalized_hap1, hiconf_seq, pileup.seq1, pileup.i2p1);
+        } else if (with_hap1 < with_hap2) {
+            // hard
+            realn_to_perfonalized_genome(loc_ref, aligner, filter, aln, pv2, is_personalized_hap2, hiconf_seq, pileup.seq2, pileup.i2p2);
+        } else {
+            // infer
+            realn_to_perfonalized_genome(loc_ref, aligner, filter, aln, pv1, is_personalized_hap1, hiconf_seq, pileup.seq1, pileup.i2p1);
+            realn_to_perfonalized_genome(loc_ref, aligner, filter, aln, pv2, is_personalized_hap2, hiconf_seq, pileup.seq2, pileup.i2p2);
+        }
+    } else {
+        realn_to_perfonalized_genome(loc_ref, aligner, filter, aln, pv1, is_personalized_hap1, hiconf_seq, pileup.seq1, pileup.i2p1);
+        // hard if (with_hap1)
+    }
+    
 }

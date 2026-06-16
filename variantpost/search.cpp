@@ -67,13 +67,19 @@ void _search_target(SearchResult& rslt,
                   are_from_first_bam, has_second, 
                   params, loc_ref, target);
     
-    if (pileup.has_second_bam) pileup.inferGermlineHaplotype(params); 
+    if (pileup.has_second_bam) {
+        pileup.inferGermlineHaplotype(params); 
+        make_sequence(
+            loc_ref, pileup.homo_vars, pileup.start, pileup.end, pileup.rseq, &pileup.i2pr);
+    } else {
+        make_sequence(loc_ref, {}, pileup.start, pileup.end, pileup.rseq, &pileup.i2pr);
+    }
     
     pileup.gridSearch(params, loc_ref, target);
     if (pileup.u_cnt) {
         pileup.setHaploTypes(loc_ref, target);
         pileup.differentialKmerAnalysis(params, loc_ref, target);
-        //pileup.searchByRealignment(params, loc_ref, target);
+        pileup.searchByRealignment(params, loc_ref, target);
         
         if (pileup.has_hiconf_support)
              match2haplotypes(pileup, read_seqs, params); 

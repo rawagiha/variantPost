@@ -169,7 +169,6 @@ Pileup::Pileup(const Strs& names, const Bools& is_rv, const Strs& cigar_strs,
     //--- Define pileup start/end within local reference start/end 
     start = set_start(starts, loc_ref, kmer_sz); 
     end = set_end(ends, loc_ref, kmer_sz);
-    make_sequence(loc_ref, {}, start, end, rseq, &i2pr);
     
     //--- Focus on high confidence case (supporting reads with no mapping ambiguity)
     //    --> pick up most frequent pattern 
@@ -503,18 +502,25 @@ void Pileup::gridSearch(const UserParams& params,
 }
 
 
-void collect_variants(const Reads& reads, Vars& vars) {
+inline void collect_target_hap_variants(const Reads& reads, Vars& vars) {
     size_t total_size = 0;
     for (const auto& read : reads) total_size += read.variants.size();
-    vars.reserve(total_size);
+        vars.reserve(total_size);
     
-    for (const auto& read : reads) 
-        vars.insert(vars.end(), read.variants.begin(), read.variants.end());
+    for (const auto& read : reads) {
+        if (read.rank == 's') 
+            vars.insert(vars.end(), read.variants.begin(), read.variants.end());
+    }
 
     std::sort(vars.begin(), vars.end());
 
     auto last = std::unique(vars.begin(), vars.end());
     vars.erase(last, vars.end());
+}
+
+inline void prep_vars(Vars& dest, const Vars& source) {
+    for (const auto& v : source) dest.push_back(v);
+    std::sort(dest.begin(), dest.end());
 }
 
 
@@ -525,8 +531,6 @@ void Pileup::setHaploTypes(LocalReference& loc_ref, const Variant& target) {
     if (hiconf_read_idx > -1) {
         make_sequence(
             loc_ref, reads[hiconf_read_idx].variants, start, end, seq0, &i2p0);
-        
-        if (has_second_bam) collect_variants(reads, hap0_vars); 
     } else if (!sig_s.empty()) {
         PatternCnt s_sig_cnt;
         count_patterns(sig_s, s_sig_cnt); 
@@ -534,98 +538,69 @@ void Pileup::setHaploTypes(LocalReference& loc_ref, const Variant& target) {
         make_sequence(
             loc_ref, reads[sig_s[hap0][0]].variants, start, end, seq0, &i2p0);
     } else {
-        make_sequence(loc_ref, {target}, start, end, seq0, &i2p0);
+        if (homo_vars.empty()) // NOTE: homo_vars empty if has_second_bam is false
+            make_sequence(loc_ref, {target}, start, end, seq0, &i2p0);
     }
-
-    PatternCnt u_sig_cnt; int idx1 = -1, idx2 = -1;
      
     if (has_second_bam) {
+        // keep variants on target haplotype
+        if (hiconf_read_idx > -1)  
+            collect_target_hap_variants(reads, hap0_vars); 
+
+        // personalize target with homozygous if unset
+        if (seq0.empty()) {
+            Vars hap0_full = {target};
+            prep_vars(hap0_full, homo_vars); 
+            make_sequence(loc_ref, hap0_full, start, end, seq0, &i2p0);
+        }
+        
         Vars hap1_full = homo_vars;
+        prep_vars(hap1_full, hap1_vars); 
+        
         Vars hap2_full = homo_vars;
-        for (auto& v : hap1_vars) { hap1_full.push_back(v); }
-        for (auto& v : hap2_vars) { hap2_full.push_back(v); }
-        std::sort(hap1_full.begin(), hap1_full.end());
-        std::sort(hap2_full.begin(), hap2_full.end());
-        if (!hap1_full.empty()) {
-            make_sequence(loc_ref, hap1_full, start, end, seq1, &i2p1);
-            std::cout << " hap 1 set " << std::endl;
-            for (auto& v : hap1_full) std::cout << v.pos << " " << v.ref << " " << v.alt << std::endl; 
-        } else {
-             std::cout << " ref ref !! " << std::endl; return;
+        prep_vars(hap2_full, hap2_vars);
+        
+        // REF/REF case
+        if (hap1_full.empty() && hap2_full.empty()) {
+            is_ref_hom = true; return;
         }
 
-        if (has_ref_hap) return;
+        // NOTE: hap1_vars empty but hap2_vars Non-empty never occurs
+        if (!hap1_full.empty())
+            make_sequence(loc_ref, hap1_full, start, end, seq1, &i2p1);    
         
+        // REF/non_REF case
+        if (has_ref_hap) return; 
+        
+        // homozygous for non_REF
         if (hap1_full == hap2_full) {
-            std::cout << " homozygous !! " << std::endl;
-        } else if (!hap2_full.empty()) {
-            make_sequence(loc_ref, hap2_full, start, end, seq2, &i2p2);
-            std::cout << " hap 2 set " << std::endl;
-            for (auto& v : hap2_full) std::cout << v.pos << " " << v.ref << " " << v.alt << std::endl;
+            is_alt_hom = true; return;
         }
+
+        // heterozygous for non_REF
+        if (!hap2_full.empty())
+            make_sequence(loc_ref, hap2_full, start, end, seq2, &i2p2); 
+        
+        // Exit here.
+        // We only set the background haplotypes if control alignments provided  
         return;
     }
     
-    
-    //--- Paired BAM file case
-    if (false) {
-    //if (has_second_bam && control_bam_cov && hiconf_read_idx > -1) {
-        if (sig_u.empty()) return;
-        
-        int rough_coverage = 0;
-        for (const auto& read : reads) {
-            if (!read.fail_to_cover_flankings && read.covering_ptrn == 'A' && read.is_control) ++rough_coverage;
-        }
-        if (rough_coverage == 0) return;
-        
-        count_patterns(sig_u, u_sig_cnt);
-        const int hap1_cnt = static_cast<int>(u_sig_cnt[0].second);
-        
-        double vaf1 = static_cast<double>(hap1_cnt) / rough_coverage;
-        if (vaf1 < 0.25) return;
-        hap1 = u_sig_cnt[0].first;
-        idx1 = sig_u[hap1][0];
-        make_sequence(loc_ref, reads[idx1].variants, start, end, seq1, &i2p1);
-        
-        if (vaf1 > 0.8 || has_ref_hap) return;
-        
-        // het with alt/alt (rare)
-        const int hap2_cnt = static_cast<int>(u_sig_cnt[1].second);
-        double vaf2 = static_cast<double>(hap2_cnt) / rough_coverage;
-        if (vaf2 < 0.25) return;
-        hap2 = u_sig_cnt[1].first;
-        idx2 = sig_u[hap2][0];
-        make_sequence(loc_ref, reads[idx2].variants, start, end, seq2, &i2p2);
-        return;
-    }
-    
-    int cntl_cov = 0;
-    for (const auto& read : reads) {
-        if (!read.fail_to_cover_flankings && read.covering_ptrn == 'A' && read.is_control) ++cntl_cov;
-    }
-    
-    
+    PatternCnt u_sig_cnt; int idx1 = -1, idx2 = -1;
+
     if (!sig_u.empty()) {
         count_patterns(sig_u, u_sig_cnt);
-        
-        //TODO this is test purpose
-        const int hap1_cnt = static_cast<int>(u_sig_cnt[0].second);
-        const int hap2_cnt = static_cast<int>(u_sig_cnt[1].second);
-        bool set_hap1 = false, set_hap2 = false;
-        if (hap1_cnt > 4 && hap1_cnt * 5 >= cntl_cov) set_hap1 = true;
-        if (hap2_cnt > 4 && hap2_cnt * 5 >= cntl_cov) set_hap2 = true; 
-
         hap1 = u_sig_cnt[0].first; 
-        if (hap_settable(s_cnt, hap1, anti_sigs) && set_hap1) {
-            idx1 = sig_u[hap1][0];  
+        if (hap_settable(s_cnt, hap1, anti_sigs)) {
+            idx1 = sig_u[hap1][0]; // Not -1 
             make_sequence(loc_ref, reads[idx1].variants, start, end, seq1, &i2p1);
             if (seq0 == seq1) seq1.clear();
         }
         
         if (u_sig_cnt.size() > 1) {
             hap2 = u_sig_cnt[1].first;
-            if (hap_settable(s_cnt, hap2, anti_sigs) && set_hap2) {
-                idx2 = sig_u[hap2][0];
+            if (hap_settable(s_cnt, hap2, anti_sigs)) {
+                idx2 = sig_u[hap2][0]; // Not -1
                 make_sequence(loc_ref, reads[idx2].variants, start, end, seq2, &i2p2);
                 if (seq0 == seq2 || seq1 == seq2 ) seq2.clear();
             }
@@ -743,7 +718,8 @@ void Pileup::differentialKmerAnalysis(const UserParams& params,
             if (!read.nmer && read.smer > 1) {
                 if (has_hiconf_support 
                     || no_non_target_haps 
-                    || read.is_quality_map) {
+                    || read.is_quality_map
+                    || target.indel_len > 19) {
                    read.rank = 's'; --y_cnt; ++s_cnt;
                 }
             }
@@ -760,12 +736,11 @@ void Pileup::differentialKmerAnalysis(const UserParams& params,
     // reclassify
     for (auto& read : reads) {
         const char rank_ = read.rank;
-        if (rank_ == 's' || rank_ == 'n') continue; 
+        if (rank_ == 's' || rank_ == 'y' || rank_ == 'n') continue; 
         const bool has_it = has_the_sig(read.non_ref_sig, anti_sig);
         if (has_it){
             read.rank = 'n'; ++n_cnt;
             if (rank_ == 'u') --u_cnt;
-            else if (rank_ == 'y') --y_cnt;
             else --z_cnt;
         }
     }
@@ -780,7 +755,7 @@ void Pileup::differentialKmerAnalysis(const UserParams& params,
 void Pileup::searchByRealignment(const UserParams& params,
                                  LocalReference& loc_ref, const Variant& target) {
     //if (s_cnt || !u_cnt || seq0.empty()) return;
-    if (s_cnt || seq0.empty()) return;
+    //if (s_cnt || seq0.empty()) return;
     
     int fss = -1, fse = -1, fes = -1, fee = -1, ts = -1, te = -1;  
     
@@ -803,8 +778,9 @@ void Pileup::searchByRealignment(const UserParams& params,
     
     std::bitset<3> check_points;
     for (auto& read : reads) {
-        if (!read.qc_passed) continue;
-        if (read.rank != 'y' && !read.covered_in_clip) continue;
+        if (read.rank == 's' || read.rank == 'n' || !read.qc_passed) continue;
+        if (read.rank != 'y' && !read.covered_in_clip && !read.has_local_clip) continue;
+        //if (read.rank != 'y' && !read.covered_in_clip) continue;
         
         std::string ss{read.seq}; // may be improved 
 
@@ -812,6 +788,7 @@ void Pileup::searchByRealignment(const UserParams& params,
         aligner.Align(ss.c_str(), filter, &aln, mask_len);
         check_match_pattern(aln, check_points, fss, fse, ts, te, fes, fee); 
         
+        std::cout << read.cigar_str << " " << read.smer << " " << read.nmer << " " << check_points.count() << std::endl;
         // perferct match
         if (check_points.count() == 3) {
             read.rank = 's'; --y_cnt; ++s_cnt;

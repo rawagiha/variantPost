@@ -97,6 +97,10 @@ struct Pileup {
     bool vs_ref_hap = false; // true to perform kmer analysis vs ref hap
     bool no_non_target_haps = false; // non-target haplotypes not inferred
     bool has_valid_boundary = false; // valid flanking start/end event start/end   
+    bool is_ref_hom = false; 
+    bool is_ref_het = false;
+    bool is_alt_hom = false;
+    bool is_alt_het = false;
 };
 
 #endif

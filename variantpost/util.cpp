@@ -1490,28 +1490,54 @@ void make_sequence(LocalReference& loc_ref, const Vars& variants, const int star
         } 
         // overlapping 
         else {
+            // Find the end (j) of overlapping variant cluster
             size_t j = i;
-            while (j + 1 < variants.size() && variants[j]._end_pos >= variants[j + 1].pos) {
+            int max_end_pos = variants[j]._end_pos;
+            while (j + 1 < variants.size() && max_end_pos >= variants[j + 1].pos) {
                 ++j;
+                max_end_pos = std::max(max_end_pos, variants[j]._end_pos);
             }
 
-            int prev = pos;
+            int cluster_base_pos = variants[i].pos;
             while (i <= j) {
-                if (pos <= variants[i].pos) {
+                // Note that when i-th is a large deletion. 
+                // In the first pass, this is false.
+                // pos will be updated to the end of deletion (before ++i)
+                // when the i+n are included in the del. They are skipped.
+                if (variants[i].pos > cluster_base_pos && pos > variants[i].pos) {
+                    pos = std::max(pos, variants[i]._end_pos);
+                    ++i;
+                    continue;
+                }
+                
+                // This part is to process the starting variant in the cluster
+                if (pos <= variants[i].pos) { 
+                    // Example: padding of large del, complex indel alt with large del (as ref)
                     seq.append(variants[i].alt);
                     if (p_idx2pos) {
                         for (int k = 0; k < variants[i].alt_len; ++k) p_idx2pos->push_back(pos);
                     }
                 } else {
-                    if (variants[i].alt_len > 1) {
-                        seq.append(variants[i].alt, 1, variants[i].alt_len - 1);
+                    if (variants[i].is_complex) { 
+                        // This may not happen. just in case.
+                        seq.append(variants[i].alt);
                         if (p_idx2pos) {
-                            for (int k = 0; k < variants[i].alt_len - 1; ++k) p_idx2pos->push_back(prev);
+                            for (int k = 0; k < variants[i].alt_len; ++k) {
+                                p_idx2pos->push_back(variants[i].pos);
+                            }
+                        }
+                    } else {
+                        // Intended to include the insertion when the starting indel is 
+                        // complex but decomposed into del + ins.
+                        if (variants[i].alt_len > 1) {
+                            seq.append(variants[i].alt, 1, variants[i].alt_len - 1);
+                            if (p_idx2pos) {
+                                for (int k = 0; k < variants[i].alt_len - 1; ++k) p_idx2pos->push_back(variants[i].pos);
+                            }
                         }
                     }
                 }
-                prev = pos;
-                pos = variants[i]._end_pos;
+                pos = std::max(pos, variants[i]._end_pos);
                 ++i;
             }
             --i; 
