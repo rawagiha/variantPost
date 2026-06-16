@@ -598,6 +598,28 @@ bool operator < (const Variant& lhs, const Variant& rhs) {
 
 std::string to_tandem_rep(std::string_view seq)
 {
+    if (seq.empty()) return "";
+
+    // doubling the seq ATAATA -> ATAATAATAATA
+    std::string doubled = std::string(seq) + std::string(seq);
+
+    // find the seq after index 0  
+    size_t pos = doubled.find(seq, 1);
+
+    // test if it is found before the seq len
+    if (pos != std::string::npos && pos < seq.size()) 
+    {
+        return std::string(seq.substr(0, pos));
+    }
+
+    // no repeat if not found
+    return std::string{seq};
+}
+
+
+/*
+std::string to_tandem_rep(std::string_view seq)
+{
     int seq_size = seq.size();
     if (seq_size < 2) 
     {
@@ -626,7 +648,7 @@ std::string to_tandem_rep(std::string_view seq)
         }
     }
     return std::string{seq};
-}
+}*/
 
 void find_shared_variants(
     std::vector<Variant>& shared,

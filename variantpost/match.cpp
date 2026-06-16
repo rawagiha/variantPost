@@ -318,8 +318,8 @@ void personalize(const Pileup& pileup, LocalReference& loc_ref, const UserParams
     if (pileup.is_ref_hom) return;
     
     std::string hiconf_seq = pileup.seq0;
-    const char* query = hiconf_seq.c_str();
-    int32_t mask_len = strlen(query) < 30 ? 15 : strlen(query) / 2;
+    //const char* query = hiconf_seq.c_str();
+    //int32_t mask_len = strlen(query) < 30 ? 15 : strlen(query) / 2;
     Alignment aln; Filter filter;
     Aligner aligner(params.match_score, params.mismatch_penal,
                     params.gap_open_penal, params.gap_ext_penal);
