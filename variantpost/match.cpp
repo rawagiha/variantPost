@@ -1,4 +1,5 @@
 #include "match.h"
+#include "hap_likelihood.h"
 
 //------------------------------------------------------------------------------
 NonMatch::NonMatch(const int i_, const string& ref_, const string& alt_) 
@@ -318,35 +319,59 @@ void personalize(const Pileup& pileup, LocalReference& loc_ref, const UserParams
     if (pileup.is_ref_hom) return;
     
     std::string hiconf_seq = pileup.seq0;
-    //const char* query = hiconf_seq.c_str();
-    //int32_t mask_len = strlen(query) < 30 ? 15 : strlen(query) / 2;
+    
     Alignment aln; Filter filter;
     Aligner aligner(params.match_score, params.mismatch_penal,
                     params.gap_open_penal, params.gap_ext_penal);
     
     size_t with_hap1 = count_overlap(pileup.hap0_vars, pileup.hap1_vars);
-
+     
     Variant pv1(target.pos, target.ref, target.alt);
-    bool is_personalized_hap1 = false;
+    
+    HapLL::RepeatInfo ri1, ri2, rir;
+    bool is_personalized_hap1 = false, is_personalized_hap2 = false;
     if (pileup.is_alt_het) {    
         size_t with_hap2 = count_overlap(pileup.hap0_vars, pileup.hap2_vars);
         
         Variant pv2(target.pos, target.ref, target.alt);
-        bool is_personalized_hap2 = false;
         if (with_hap1 > with_hap2) {
-            // hard
+            // assigned to hap1. 
+            // is_personalized_hap1 will remainfalse if the realignment fails
             realn_to_perfonalized_genome(loc_ref, aligner, filter, aln, pv1, is_personalized_hap1, hiconf_seq, pileup.seq1, pileup.i2p1);
         } else if (with_hap1 < with_hap2) {
-            // hard
+            // assigned to hap2
+            // is_personalized_hap2 will remainfalse if the realignment fails
             realn_to_perfonalized_genome(loc_ref, aligner, filter, aln, pv2, is_personalized_hap2, hiconf_seq, pileup.seq2, pileup.i2p2);
         } else {
-            // infer
+            // inference hap1 vs. hap2
             realn_to_perfonalized_genome(loc_ref, aligner, filter, aln, pv1, is_personalized_hap1, hiconf_seq, pileup.seq1, pileup.i2p1);
             realn_to_perfonalized_genome(loc_ref, aligner, filter, aln, pv2, is_personalized_hap2, hiconf_seq, pileup.seq2, pileup.i2p2);
+
+            double ll_hap1 = is_personalized_hap1 ? HapLL::evaluate_variant(pv1, ri1) : -std::numeric_limits<double>::infinity();
+            double ll_hap2 = is_personalized_hap2 ? HapLL::evaluate_variant(pv2, ri2) : -std::numeric_limits<double>::infinity();
+
+            if (ll_hap1 >= ll_hap2) {
+                is_personalized_hap2 = false; // discard hap2, favor hap1 on exact ties
+            } else {
+                is_personalized_hap1 = false; // discard hap1
+            }
         }
     } else {
         realn_to_perfonalized_genome(loc_ref, aligner, filter, aln, pv1, is_personalized_hap1, hiconf_seq, pileup.seq1, pileup.i2p1);
-        // hard if (with_hap1)
+        
+        // inference hap1 vs. hap_ref
+        if (!with_hap1) {
+            Variant pv_ref = target;
+            pv_ref.sample_lt_seq = std::string{target.lt_seq};
+            pv_ref.sample_rt_seq = std::string{target.rt_seq};
+            
+            double ll_hap1 = HapLL::evaluate_variant(pv1, ri1);
+            double ll_ref  = HapLL::evaluate_variant(pv_ref, rir);
+            if (ll_hap1 < ll_ref) {
+                is_personalized_hap1 = false;
+            } 
+        }   
     }
     
+    std::cout << "with hap 1 " << is_personalized_hap1 << " is hap 2 " << is_personalized_hap2 << " is hap ref " << (!is_personalized_hap1 && !is_personalized_hap2) << std::endl;
 }
