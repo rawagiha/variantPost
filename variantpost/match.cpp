@@ -1,4 +1,5 @@
 #include "match.h"
+#include "search.h"
 #include "hap_likelihood.h"
 
 //------------------------------------------------------------------------------
@@ -311,7 +312,15 @@ void realn_to_perfonalized_genome(
     is_personalized = true;
 }
 
-void personalize(const Pileup& pileup, LocalReference& loc_ref, const UserParams& params, const Variant& target, Variant& per, std::string& pltseq, std::string& prtseq) {
+inline void fill_result(const Variant& v, SearchResult& rslt) {
+    rslt.ppos = v.pos;
+    rslt.pref = v.ref;
+    rslt.palt = v.alt;
+    rslt.pltseq = v.sample_lt_seq;
+    rslt.prtseq = v.sample_rt_seq;    
+}
+
+void personalize(const Pileup& pileup, LocalReference& loc_ref, const UserParams& params, const Variant& target, SearchResult& rslt) {
         
     if (pileup.hiconf_read_idx < 0 || pileup.seq0.empty()) return;
     
@@ -327,13 +336,13 @@ void personalize(const Pileup& pileup, LocalReference& loc_ref, const UserParams
     size_t with_hap1 = count_overlap(pileup.hap0_vars, pileup.hap1_vars);
      
     Variant pv1(target.pos, target.ref, target.alt);
-    
+    Variant pv2(target.pos, target.ref, target.alt);
+        
     HapLL::RepeatInfo ri1, ri2, rir;
     bool is_personalized_hap1 = false, is_personalized_hap2 = false;
     if (pileup.is_alt_het) {    
         size_t with_hap2 = count_overlap(pileup.hap0_vars, pileup.hap2_vars);
         
-        Variant pv2(target.pos, target.ref, target.alt);
         if (with_hap1 > with_hap2) {
             // assigned to hap1. 
             // is_personalized_hap1 will remainfalse if the realignment fails
@@ -367,11 +376,16 @@ void personalize(const Pileup& pileup, LocalReference& loc_ref, const UserParams
             
             double ll_hap1 = HapLL::evaluate_variant(pv1, ri1);
             double ll_ref  = HapLL::evaluate_variant(pv_ref, rir);
+            
             if (ll_hap1 < ll_ref) {
                 is_personalized_hap1 = false;
             } 
         }   
     }
     
-    std::cout << "with hap 1 " << is_personalized_hap1 << " is hap 2 " << is_personalized_hap2 << " is hap ref " << (!is_personalized_hap1 && !is_personalized_hap2) << std::endl;
+    if (is_personalized_hap1) {
+        fill_result(pv1, rslt);
+    } else if (is_personalized_hap2) {
+        fill_result(pv2, rslt);
+    } 
 }
