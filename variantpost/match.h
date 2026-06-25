@@ -7,18 +7,6 @@
 
 struct SearchResult;
 
-//------------------------------------------------------------------------------
-struct NonMatch {
-    NonMatch(const int i_, const string& ref, const string& alt);
-    
-    int i = -1; 
-    std::string ref, alt; 
-
-    bool is_snv = false, is_mnv = false, is_ins = false, is_del = false;
-};
-
-typedef std::vector<NonMatch> NMS;
-
 void gap_grid(const UserParams& params, std::vector<Ints>& grid);
 
 bool search_over_grid(const int start, LocalReference& loc_ref,
@@ -30,38 +18,13 @@ void check_match_pattern(Alignment& aln, std::bitset<3>& check_points,
                          const int fss, const int fse, 
                          const int ts, const int te,
                          const int fes, const int fee);
-//------------------------------------------------------------------------------
-// fs/fe: flanking start/end defined by 2-mer complexity
-// es/ee: event start/end defined by left/right realignment and variant length
-// 
-// ............fs....es...****...ee.....fe............
-// 
-// es-ee is a subregion in fs-fe
-//
-// COVERAGE FLAGS (CF)
-// flag 0: fs is covered 
-// flag 1: es is covered 
-// flag 2: ee is covered
-// flag 3: fe is covered
-// 
-// MATCH FLAGS (MF)
-// flag 0: non-matches (X/I/D/S) occured in fs-es
-// flag 1: non-matches occurred in es-ee
-// flag 2: non-matches occurred in ee-fe
-/*
-typedef std::bitset<4> CF;
-typedef std::bitset<3> MF;
-void match_flag(Alignment& aln, const int fl_start, const int event_start,
-                const int event_end, const int fl_end, CF& cf, MF& mf);
 
-void rerank_by_realn(Pileup& pileup, const Strs& read_seqs, 
-                     const UserParams& params, Variant& target);
-*/
 void match2haplotypes(Pileup& pileup, const Strs& read_seqs,
-                      //const std::string& seq_t, const std::string& seq_nt0,
-                      //const std::string& seq_nt1, const std::string& seq_nt2,
                       const UserParams& params);
 
-void personalize(const Pileup& pileup, LocalReference& loc_ref, const UserParams& params, const Variant& target, SearchResult& rslt);
+void personalize(const Pileup& pileup, 
+                 LocalReference& loc_ref, 
+                 const UserParams& params, 
+                 const Variant& target, SearchResult& rslt);
 
 #endif

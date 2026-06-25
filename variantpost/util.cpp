@@ -450,13 +450,14 @@ void Variant::setEndPos(const LocalReference& loc_ref)
 //------------------------------------------------------------------------------
 void Variant::setFlankingSequences(const LocalReference& loc_ref)
 {
-    if (!loc_ref.has_flankings || !is_complex) return; 
+    //if (!loc_ref.has_flankings || !is_complex) return; 
+    if (!loc_ref.has_flankings) return; 
 
     lt_seq = loc_ref.seq.substr(loc_ref.flanking_start - loc_ref.start, 
                                 pos - loc_ref.flanking_start);
     mid_seq = alt;
     rt_seq = loc_ref.seq.substr(pos - loc_ref.start + ref_len, 
-                                loc_ref.flanking_end - end_pos);
+                                loc_ref.flanking_end - _end_pos);
     has_flankings = true;
 }
 
@@ -1479,23 +1480,23 @@ void make_sequence(LocalReference& loc_ref, const Vars& variants, const int star
         return;
     }
     
-    // filling upto the first variant
-    if (variants.front().pos > pos) {
-        int len = variants.front().pos - pos;
-        seq.append(ref_str, pos - ref_offset, len);
-        if (p_idx2pos) {
-            for (int k = 0; k < len; ++k) p_idx2pos->push_back(pos++);
-        } else {
-            pos = variants.front().pos;
-        }
-    }
-    
-    // prefilter variant ending befor start(pos) 
+    // prefilter variant ending befor start(pos)
     size_t i = 0;
     while (i < variants.size() && variants[i]._end_pos <= pos) {
         ++i;
     }
-
+    
+    // filling upto the first variant
+    if (variants[i].pos > pos) {
+        int len = variants[i].pos - pos;
+        seq.append(ref_str, pos - ref_offset, len);
+        if (p_idx2pos) {
+            for (int k = 0; k < len; ++k) p_idx2pos->push_back(pos++);
+        } else {
+            pos = variants[i].pos;
+        }
+    }
+    
     for (; i < variants.size(); ) {
 
         if (variants[i].pos >= end) break;

@@ -2,60 +2,6 @@
 #include "search.h"
 #include "hap_likelihood.h"
 
-//------------------------------------------------------------------------------
-NonMatch::NonMatch(const int i_, const string& ref_, const string& alt_) 
-    : i(i_), ref(ref_), alt(alt_) { 
-    
-    if (ref.size() == alt.size()){
-        if (ref.size() == 1) is_snv = true;
-        else is_mnv = true;
-    } else if (ref.size() < alt.size()) {
-        is_ins = true;
-    } else is_del = true;  
-}
-
-//------------------------------------------------------------------------------
-void aln2nms(Alignment& aln, NMS& nms,
-             const std::string& ref, const std::string& query) {
-    if (!aln.cigar_string.size()) return;
-
-    CigarVec cigar_vec; fill_cigar_vector(aln.cigar, cigar_vec);
-    
-    char op = '\0';
-    int op_len = 0, ri = aln.ref_begin, qi = aln.query_begin;
-    for (const auto& cigar : cigar_vec) {
-        op = cigar.first; op_len = cigar.second;
-        switch (op) {
-            case '=':
-                ri += op_len; qi += op_len;
-                break;
-            case 'X':
-                nms.emplace_back(ri, 
-                                 ref.substr(ri, op_len),
-                                 query.substr(qi, op_len));
-                ri += op_len; qi += op_len;
-                break;
-            case 'D':
-                if (ri) {
-                    nms.emplace_back(ri - 1,
-                                     ref.substr(ri - 1, op_len + 1),
-                                     ref.substr(ri - 1, 1));
-                    ri += op_len;
-                } break;
-            case 'I':
-                if (ri) {
-                    std::string base = ref.substr(ri - 1, 1);
-                    nms.emplace_back(ri - 1,
-                                     ref.substr(ri - 1, 1),
-                                     base.append(query.substr(qi, op_len)));
-                    qi += op_len;
-                } break;
-            case 'S':
-                break;
-        }
-    }
-} 
-
 
 void aln2variants(Alignment& aln, Vars& vars, const int start,
                   const std::string& ref, const std::string& query) {
@@ -132,25 +78,6 @@ void check_match_pattern(Alignment& aln,
     }
     //check_points fully set -> all matched. 
 }
-
-
-/*
-//------------------------------------------------------------------------------
-int find_target(const int start, const NMS& nms, 
-                LocalReference& loc_ref, const Variant& target) {
-    for (size_t j = 0; j < nms.size(); ++j) {
-        if (target.pos == start + nms[j].i
-            && target.ref == nms[j].ref && target.alt == nms[j].alt) return nms[j].i;
-         
-        //swappable
-        if (j + 1 < nms.size()) {
-            if (target.is_ins && nms[j].is_del && nms[j + 1].is_ins  
-        }
-
-    
-    }
-    return -1;
-}*/
 
 //------------------------------------------------------------------------------
 // uint8_t (penal) -> 255 max
@@ -262,9 +189,9 @@ void realn_to_perfonalized_genome(
     
     CigarVec cigar_vec;
     fill_cigar_vector(aln.cigar_string, cigar_vec);
-
+    
     Vars vars; 
-    int i = 0, j = 0;
+    int i = aln.ref_begin, j = aln.query_begin;
     for (const auto& [op, op_len] : cigar_vec) {
         switch (op) {
             case '=':
@@ -277,7 +204,8 @@ void realn_to_perfonalized_genome(
                 Variant v(i2p[i - 1], hap_seq.substr(i - 1, 1), mut_seq.substr(j - 1 , op_len +1));
                 int lt_lim = std::max(i - 1 - 10, 0);
                 v.sample_lt_seq = hap_seq.substr(lt_lim, i - lt_lim);
-                v.sample_rt_seq = hap_seq.substr(i, loc_ref.flanking_end - i2p[i - 1]);
+                //v.sample_rt_seq = hap_seq.substr(i, loc_ref.flanking_end - i2p[i - 1]);
+                v.sample_rt_seq = hap_seq.substr(i);
                 vars.push_back(v);
                 j += op_len;
                 break; 
@@ -286,13 +214,14 @@ void realn_to_perfonalized_genome(
                 Variant v(i2p[i - 1], hap_seq.substr(i - 1, op_len + 1), mut_seq.substr(j - 1 , 1));
                 int lt_lim = std::max(i - 1 - 10, 0);
                 v.sample_lt_seq = hap_seq.substr(lt_lim, i - lt_lim);
-                v.sample_rt_seq = hap_seq.substr(i + op_len, loc_ref.flanking_end - i2p[i - 1]);
+                //v.sample_rt_seq = hap_seq.substr(i + op_len, loc_ref.flanking_end - i2p[i - 1]);
+                v.sample_rt_seq = hap_seq.substr(i + op_len);
                 vars.push_back(v);
                 i += op_len;
                 break;
            }
             case 'S':
-                j += op_len;
+                //j += op_len;
                 break;
         }
         
@@ -371,12 +300,15 @@ void personalize(const Pileup& pileup, LocalReference& loc_ref, const UserParams
         // inference hap1 vs. hap_ref
         if (!with_hap1) {
             Variant pv_ref = target;
+            std::cout << target.lt_seq << " <- tar lt, tar rt -> " << target.rt_seq << std::endl; 
             pv_ref.sample_lt_seq = std::string{target.lt_seq};
             pv_ref.sample_rt_seq = std::string{target.rt_seq};
-            
+            std::cout << pv_ref.sample_lt_seq << " " << pv_ref.sample_rt_seq << std::endl; 
             double ll_hap1 = HapLL::evaluate_variant(pv1, ri1);
             double ll_ref  = HapLL::evaluate_variant(pv_ref, rir);
             
+            std::cout << ll_hap1 << " " << ll_ref << std::endl;
+             
             if (ll_hap1 < ll_ref) {
                 is_personalized_hap1 = false;
             } 
@@ -388,4 +320,6 @@ void personalize(const Pileup& pileup, LocalReference& loc_ref, const UserParams
     } else if (is_personalized_hap2) {
         fill_result(pv2, rslt);
     } 
+    
+    std::cout << rslt.ppos << " " <<  rslt.pref<< " " << rslt.palt << " " << rslt.pltseq << " " << rslt.prtseq << std::endl;
 }

@@ -1,7 +1,8 @@
 #ifndef SEARCH_H
 #define SEARCH_H
 
-//#include "contig.h"
+#include "reads.h"
+#include "variant_types.h"
 
 struct SearchResult 
 {
@@ -22,11 +23,19 @@ struct SearchResult
     //std::vector<bool> are_reverse;
     std::vector<int> target_statuses;
     std::vector<bool> are_from_first_bam;
-    //std::vector<std::string> trans_vars;
+    std::vector<std::string> trans_vars;
+
+    // Variants in high-quality non-supporting reads
+    // -> to be used for complex variant reconstruction
+    std::unordered_map<VariantKey, int, VariantKeyHash> hq_negative_cnts;
+    
     //bool is_retargeted;
 
     SearchResult();
                                                 
+    void setReadInfo(const Read& read, const char qual_thresh);
+    void finalize(); 
+    
     //void fill_read_info(const Reads& reads, const int target_status);
     
     /*

@@ -2,6 +2,7 @@ from collections import namedtuple
 from typing import Optional, List, Tuple, Any
 
 from .variant import Variant, to_minimal_repeat_unit, repeat_counter
+from .indel_taxonomy import IndelTaxon
 from .phaser import _phase
 from variantpost.__search import search_target
 
@@ -141,7 +142,8 @@ class VariantAlignment(object):
             self.pltseq,
             self.prtseq,
             self.ref,
-            self.alt
+            self.alt,
+            self.trans_vars
         ) = search_target(
             bam,
             second_bam,
@@ -182,7 +184,6 @@ class VariantAlignment(object):
         #############TODO#################
         #implement later
         self.skips = []
-        self.trans_vars = []
 
 
         #for tglst in self.tags:
@@ -195,6 +196,19 @@ class VariantAlignment(object):
         # print(self.contig_dict)
         # self.is_with_target = any([status == 1 for status in self.target_status])
     
+    def tax(self):
+        rtxn = IndelTaxon(self.variant.ref, self.variant.alt, self.variant.left_flank(), self.variant.right_flank())
+        print(self.pref, self.palt, self.pltseq, self.prtseq, "DDDDD")
+        if self.pref:
+            ptxn = IndelTaxon(self.pref, self.palt, self.pltseq, self.prtseq)
+        else:
+            ptxn = rtxn
+
+        return rtxn.class_83, rtxn.class_89, ptxn.class_83, ptxn.class_89
+        #print(rtxn.rep, rtxn.flank_5p, rtxn.mlen, rtxn.unit, rtxn.seq, rtxn.flank_3p, rtxn.class_83, rtxn.class_89)
+        #print(ptxn.rep, ptxn.flank_5p, ptxn.mlen, ptxn.unit, ptxn.seq, ptxn.flank_3p, ptxn.class_83, ptxn.class_89)
+
+
     def perso(self):
         if len(self.pref) >  len(self.palt):
             unit = to_minimal_repeat_unit(self.pref[1:])
@@ -394,9 +408,14 @@ class VariantAlignment(object):
         v = self.variant
         v.cpos, v.cref, v.calt = v.pos, v.ref, v.alt
         
-        try:
+        v.phased_as_complex = False
+        base_quality_threshold = 20
+        match_penalty_for_phasing = 3 
+        max_common_substr_len = 15
+        if True:
             if cis:
                 trans_vars = self.trans_vars
+                print(trans_vars)
             else:
                 trans_vars = []
 
@@ -418,7 +437,15 @@ class VariantAlignment(object):
                 v.cpos = phased[0]
                 v.cref = phased[1]
                 v.calt = phased[2]
-                v.is_phased = True
+                
+                if len(v.cref) < len(v.calt):
+                    v.phased_as_complex = (v.cref != v.calt[:len(v.cref)])
+                elif len(v.cref) > len(v.calt):
+                     v.phased_as_complex = (v.calt != v.cref[:len(v.calt)])
+                else:
+                    if len(v.cref) > 1:
+                        v.phased_as_complex = (v.calt != v.cref)
+
                 v.normalize(inplace=True)
             else:
                 pass     
@@ -433,8 +460,8 @@ class VariantAlignment(object):
             #    return Variant(
             #        self.chrom, self.target_pos, ref_base, ref_base, self.reference
             #    )
-        except:
-            pass
+        #except:
+        #    pass
             #if self.is_with_target:
             #    return self.variant
             #else:

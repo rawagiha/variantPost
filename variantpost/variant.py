@@ -68,7 +68,7 @@ class Variant(object):
     """
     
     __slots__ = (
-        'chrom', 'pos', 'ref', 'alt', 'cpos', 'cref', 'calt', 'is_phased', 'spos', 'sref', 'salt', 'reference', 'window',
+        'chrom', 'pos', 'ref', 'alt', 'cpos', 'cref', 'calt', 'phased_as_complex', 'spos', 'sref', 'salt', 'reference', 'window',
         'reference_len', 'k', 'unspliced_local_reference_start', 'unspliced_local_reference_end'
     )
 
@@ -86,7 +86,7 @@ class Variant(object):
         self.cpos = -1
         self.cref = "N"
         self.calt = "N"
-        self.is_phased = False
+        self.phased_as_complex = False
 
         self.spos = -1
         self.sref = "N"
@@ -386,13 +386,15 @@ class Variant(object):
         
         if by_repeat_unit:
             seq = to_minimal_repeat_unit(seq)
-
+        
         lt_flank = self.left_flank()
-        lr_repeat = repeat_counter(seq, lt_flank[::-1])
-        rt_flank = self.right_flank()
+        lt_repeat = repeat_counter(seq, lt_flank[::-1])
+        
+        rt_flank = self.indel_seq[len(seq):] 
+        rt_flank += self.right_flank()
         rt_repeat = repeat_counter(seq, rt_flank)
         
-        return lr_repeat + rt_repeat
+        return lt_repeat + rt_repeat
 
     def query_vcf(self, vcf: VariantFile, chrom_name: Optional[str] = None, match_by_equivalence: bool = True) -> List[MatchedRecord]:
         """returns a `list <https://docs.python.org/3/library/stdtypes.html#list>`__ of :class:`MatchedRecord`.

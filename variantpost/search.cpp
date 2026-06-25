@@ -1,12 +1,86 @@
 #include "util.h"
-#include "reads.h"
 #include "match.h"
 #include "search.h"
 #include "pileup.h"
 #include "consensus.h"
 #include "variant_types.h"
 
+
+// pasted from reads.cpp
+inline auto append_num = [](std::string& target, auto val) {
+    std::array<char, 20> buffer; 
+    auto [ptr, ec] = std::to_chars(buffer.data(), buffer.data() + buffer.size(), val);
+    if (ec == std::errc{}) {
+        target.append(buffer.data(), ptr - buffer.data());
+    }
+};
+
+
 SearchResult::SearchResult() {}
+
+void SearchResult::setReadInfo(const Read& read, const char qual_thresh) {
+    
+    are_from_first_bam.push_back(!read.is_control);
+    const char rank = read.rank;
+    
+    if (rank == 's') {
+        target_statuses.push_back(1);
+    } else if (rank == 'n' && !read.covered_in_clip) {
+        target_statuses.push_back(0);
+        //if (!read.is_quality_map || !read.qc_passed || !read.has_local_clip) return;
+        
+        // Collect variants from high-qual negatives
+        for (const auto& v : read.variants) {
+            if (v.mean_qual < qual_thresh) continue;
+            
+            hq_negative_cnts[VariantKey{v.pos, v.ref, v.alt}]++;
+        }    
+    } else if (rank == 'u') {
+        target_statuses.push_back(-1);
+    } else {
+        target_statuses.push_back(-2);
+    }
+
+
+    /* 
+    switch(rank) {
+        case 's':
+            target_statuses.push_back(1);
+        case 'n': {
+            if (read.covered_in_clip) break; //TODO reconsider
+            target_statuses.push_back(0); 
+            
+            if (!read.is_quality_map || !read.qc_passed || !read.has_local_clip ) break;
+            
+            // Collect variants from high-qual negatives
+            for (const auto& v : read.variants) {
+                if (v.mean_qual < qual_thresh) continue;
+                hq_negative_cnts[VariantKey{v.pos, v.ref, v.alt}]++;
+            }
+            break;
+        }
+        case 'u':
+            target_statuses.push_back(-1);
+            break;
+        default:
+            target_statuses.push_back(-2); //TODO resolve y/z cases 
+            break;
+    }*/    
+} 
+
+void SearchResult::finalize() {
+    for (const auto& [key, cnt] : hq_negative_cnts) {
+        std::cout << key.pos << " " << key.ref << " " << key.alt << " " << cnt << " " << std::endl;
+        if (cnt < 2) continue;
+        std::string v_str;
+        v_str.reserve(256);
+        append_num(v_str, key.pos);
+        v_str.append("_").append(key.ref).append("_").append(key.alt);
+        trans_vars.push_back(v_str);
+        std::cout << trans_vars.size() << std::endl;
+    }
+
+}
 
 void _search_target(SearchResult& rslt,
                     
@@ -50,7 +124,11 @@ void _search_target(SearchResult& rslt,
     
     // Annotation for low complex tags
     loc_ref.findLowComplexRegion();
+    std::cout << loc_ref.flanking_start << " " << loc_ref.flanking_end << std::endl;
     target.setFlankingSequences(loc_ref); 
+    std::cout << target.lt_seq << " has it >> " << target.rt_seq << std::endl;
+    
+    
     target.countRepeats(loc_ref);
     target.testForDeNovoRepeats(loc_ref);
     if (loc_ref.locplx_start <= target.pos
@@ -85,6 +163,10 @@ void _search_target(SearchResult& rslt,
              match2haplotypes(pileup, read_seqs, params); 
         for (const auto& read : pileup.reads) {
             if (read.covering_ptrn == 'C') continue;
+            
+            rslt.setReadInfo(read, params.base_q_thresh);
+
+            /*
             bool is_first = (read.is_control) ? false : true;
 
             rslt.are_from_first_bam.push_back(is_first);
@@ -94,17 +176,22 @@ void _search_target(SearchResult& rslt,
             }
             //else if (read.rank == 'u' || read.rank == 'y') rslt.target_statuses.push_back(-1);
             else if (read.rank == 'y') rslt.target_statuses.push_back(-1);
-            else rslt.target_statuses.push_back(-2);
+            else rslt.target_statuses.push_back(-2);*/
         }
     } else {
         for (const auto& read : pileup.reads) {
             if (read.covering_ptrn == 'C') continue;
+            
+            rslt.setReadInfo(read, params.base_q_thresh);
+
+            /*
             bool is_first = (read.is_control) ? false : true;
             rslt.are_from_first_bam.push_back(is_first);
             if (read.rank == 's') rslt.target_statuses.push_back(1);
             else if (read.rank == 'n' && !read.covered_in_clip) rslt.target_statuses.push_back(0);
             else if (read.rank == 'u' || read.rank == 'y') rslt.target_statuses.push_back(-1);
             else rslt.target_statuses.push_back(-2);
+            */
         }
     }
 
@@ -123,5 +210,10 @@ void _search_target(SearchResult& rslt,
         rslt.positions = con.pos;
         rslt.ref_bases = con.ref;
         rslt.alt_bases = con.alt;
-    } 
+
+        //for (size_t i = 0; i < rslt.positions.size(); ++i)
+        //    std::cout << rslt.positions[i] << " " << rslt.ref_bases[i] << " " << rslt.alt_bases[i] << std::endl;
+    }
+    
+    rslt.finalize(); 
 }   

@@ -23,6 +23,7 @@ cdef extern from "search.h":
         string ref, alt, pref, palt, pltseq, prtseq
         vector[int] target_statuses
         vector[bool_t] are_from_first_bam
+        vector[string] trans_vars
 
     void _search_target(
         SearchResult&, string&, string&, int, string&, string&,
@@ -189,9 +190,12 @@ cpdef object search_target(
             "F"
         )
     
+    # Decode with utf-8 as v_str contains characters other than ACGTN
+    trans_vars_str = [v_str.decode("utf-8") for v_str in rslt.trans_vars]
+     
     return (
         contig_dict, rslt.target_statuses, are_reverse, rslt.are_from_first_bam, tags,
         rslt.ppos, rslt.pref.decode("ascii"), rslt.palt.decode("ascii"),
         rslt.pltseq.decode("ascii"), rslt.prtseq.decode("ascii"),
-        rslt.ref.decode("ascii"), rslt.alt.decode("ascii")
+        rslt.ref.decode("ascii"), rslt.alt.decode("ascii"), trans_vars_str
     )

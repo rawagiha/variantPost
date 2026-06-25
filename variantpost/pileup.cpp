@@ -143,16 +143,7 @@ Pileup::Pileup(const Strs& names, const Bools& is_rv, const Strs& cigar_strs,
             
             process_anti_patterns(read);
             annotate_undetermined_signatures(read, i);
-            /*
-            if (has_second_bam) {    
-                if (!read.is_control) continue;
-                process_anti_patterns(read);
-                annotate_undetermined_signatures(read, i);
-            } else {
-                process_anti_patterns(read);
-                annotate_undetermined_signatures(read, i);
-            }*/
-              
+             
             if (read.rank != 'n') {
                 starts.push_back(read.covering_start); ends.push_back(read.covering_end);
             }   
@@ -227,14 +218,20 @@ void Pileup::inferGermlineHaplotype(const UserParams& params) {
     }
     std::sort(unique_positions.begin(), unique_positions.end());
     unique_positions.erase(std::unique(unique_positions.begin(), unique_positions.end()), unique_positions.end());
-
+    
     //--- Calculate depths at sorted variant positions
     std::unordered_map<long long, int> pos_depth;
-
+    
     for (int i = 0; i < this->sz; ++i) {
         const auto& read = this->reads[i];
-        if (!read.is_control || read.covering_ptrn != 'A' || !read.qc_passed || !read.is_central_mapped) continue;
-
+        
+        if (!read.is_control) continue;
+         
+        //--- To include ref reads. This is because that ref reads are not annotated for most flags
+        if (!read.is_ref) {
+            if (read.covering_ptrn != 'A' || !read.qc_passed || !read.is_central_mapped) continue;
+        } 
+        
         //--- Count only aligned segments (exclude spliced skips)
         for (const auto& seg : read.aligned_segments) {
             int seg_start = seg.first;
@@ -259,7 +256,11 @@ void Pileup::inferGermlineHaplotype(const UserParams& params) {
     for (const auto& [key, track] : global_counts) {
         if (track.total_depth == 0 || track.total_reads < 2) continue;
         double vaf = static_cast<double>(track.total_reads) / track.total_depth;
-        if (vaf > 0.7) { 
+        
+        bool is_snv = (key.ref.length() == 1 && key.alt.length() == 1);
+        std::cout << key.pos << " " << key.ref << " " << key.alt << " " << vaf << std::endl;
+        // revise? 
+        if ((is_snv && vaf > 0.9) || (!is_snv && vaf > 0.7)) { 
             Variant v(static_cast<int>(key.pos), key.ref, key.alt, "");
             homo_vars.push_back(v); 
         }
@@ -529,8 +530,10 @@ void Pileup::setHaploTypes(LocalReference& loc_ref, const Variant& target) {
     PatternCnt s_sig_cnt; 
     
     if (hiconf_read_idx > -1) {
+        std::cout << " hi gonf " << hiconf_read_idx << " " << reads[hiconf_read_idx].cigar_str << std::endl;
         make_sequence(
             loc_ref, reads[hiconf_read_idx].variants, start, end, seq0, &i2p0);
+        std::cout << " hap zero " << seq0 << std::endl;
     } else if (!sig_s.empty()) {
         PatternCnt s_sig_cnt;
         count_patterns(sig_s, s_sig_cnt); 
@@ -553,12 +556,20 @@ void Pileup::setHaploTypes(LocalReference& loc_ref, const Variant& target) {
             prep_vars(hap0_full, homo_vars); 
             make_sequence(loc_ref, hap0_full, start, end, seq0, &i2p0);
         }
-        
+        for (const auto& v : homo_vars) {
+            std::cout << v.pos << " " << v.ref << " " << v.alt << " homo var " << std::endl;
+        }
+
+
         Vars hap1_full = homo_vars;
         prep_vars(hap1_full, hap1_vars); 
-        
+        for (const auto& v : hap1_vars)
+            std::cout << v.pos << " " << v.ref << " " << v.alt << " hap1 var " << std::endl;
+         
         Vars hap2_full = homo_vars;
         prep_vars(hap2_full, hap2_vars);
+        for (const auto& v : hap2_vars)
+            std::cout << v.pos << " " << v.ref << " " << v.alt << " hap2 var " << std::endl;
         
         // REF/REF case
         if (hap1_full.empty() && hap2_full.empty()) {
@@ -566,8 +577,10 @@ void Pileup::setHaploTypes(LocalReference& loc_ref, const Variant& target) {
         }
 
         // NOTE: hap1_vars empty but hap2_vars Non-empty never occurs
-        if (!hap1_full.empty())
+        if (!hap1_full.empty()) {
             make_sequence(loc_ref, hap1_full, start, end, seq1, &i2p1);    
+            std::cout << seq1 << " hap 111 " << std::endl;
+        }
         
         // REF/non_REF case
         if (has_ref_hap) return; 
@@ -578,6 +591,7 @@ void Pileup::setHaploTypes(LocalReference& loc_ref, const Variant& target) {
         }
 
         // heterozygous for non_REF
+        // this may include case hap1_vars = {homo_snp1, het_snp1} hap2_vars = {homo_snp1} 
         if (!hap2_full.empty())
             make_sequence(loc_ref, hap2_full, start, end, seq2, &i2p2); 
         
@@ -741,6 +755,7 @@ void Pileup::differentialKmerAnalysis(const UserParams& params,
         if (has_it){
             read.rank = 'n'; ++n_cnt;
             if (rank_ == 'u') --u_cnt;
+            //else if (rank_ == 'y') --y_cnt;
             else --z_cnt;
         }
     }

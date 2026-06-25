@@ -28,6 +28,44 @@ namespace HapLL {
     /**
      * @brief Computes Levenshtein distance normalized similarity (0.0 to 1.0)
      */
+    
+    /**
+     * @brief Computes anchored microhomology length strictly from the breakpoint.
+     * is_5_prime = true : matches suffixes (backwards from the left breakpoint)
+     * is_5_prime = false: matches prefixes (forwards from the right breakpoint)
+     */
+    inline double calculate_anchored_homology(const std::string& target, const std::string& flank, bool is_5_prime) {
+        if (target.empty() || flank.empty()) return 0.0;
+
+        int match_len = 0;
+        int n = std::min(target.length(), flank.length());
+
+        if (is_5_prime) {
+            // 5'側(左)フランク: ブレイクポイントから「後ろから前へ」遡って比較
+            for (int i = 1; i <= n; ++i) {
+                if (target[target.length() - i] == flank[flank.length() - i]) {
+                    match_len++;
+                } else {
+                    break; // 連続一致が途切れた瞬間に終了（ズレを許容しない）
+                }
+            }
+        } else {
+            // 3'側(右)フランク: ブレイクポイントから「前から後ろへ」順に比較
+            for (int i = 0; i < n; ++i) {
+                if (target[i] == flank[i]) {
+                    match_len++;
+                } else {
+                    break; // 連続一致が途切れた瞬間に終了
+                }
+            }
+        }
+
+        // ターゲット長に対する「連続完全一致」の割合 (0.0 ~ 1.0)
+        return static_cast<double>(match_len) / target.length();
+    }
+
+
+    /*
     inline double calculate_similarity(const std::string& s1, const std::string& s2) {
         if (s1.empty() && s2.empty()) return 1.0;
         if (s1.empty() || s2.empty()) return 0.0;
@@ -45,7 +83,7 @@ namespace HapLL {
             }
         }
         return std::max(0.0, 1.0 - (static_cast<double>(dp[m][n]) / std::max(m, n)));
-    }
+    }*/
 
     /**
      * @brief Finds the smallest sub-repeat unit within the indel sequence itself.
@@ -105,7 +143,8 @@ namespace HapLL {
         }
         return count;
     }
-
+    
+    /*
     inline double calc_log_likelihood(bool is_insertion, int k, int L, 
                                       const std::string& ins_seq, const std::string& ref_prev) {
         double log_mu = std::log(is_insertion ? MU_INS : MU_DEL);
@@ -120,7 +159,33 @@ namespace HapLL {
             log_omega = std::log(prob_dup + prob_rand);
         }
         return log_mu + log_phi + log_psi + log_omega;
+    }*/
+
+     inline double calc_log_likelihood(bool is_insertion, int k, int L, 
+                                      const std::string& target_seq, 
+                                      const std::string& ref_prev,
+                                      const std::string& ref_next) { // 引数に ref_next を追加
+        double log_mu = std::log(is_insertion ? MU_INS : MU_DEL);
+        double log_phi = BETA * std::max(0, L - k); 
+        double log_psi = std::log(1.0 - GAMMA) + (k - 1) * std::log(GAMMA) - (0.5 * k * k * 0.1);
+        
+        // --- 5'側と3'側の両方でマイクロホモロジーを評価し、高い方を採用 ---
+        double sim_prev = calculate_anchored_homology(target_seq, ref_prev, true);
+        double sim_next = calculate_anchored_homology(target_seq, ref_next, false);
+        double best_sim = std::max(sim_prev, sim_next);
+        
+        
+        //double sim_prev = calculate_similarity(target_seq, ref_prev);
+        //double sim_next = calculate_similarity(target_seq, ref_next);
+        //double best_sim = std::max(sim_prev, sim_next);
+        
+        double prob_homology = ALPHA * best_sim;
+        double prob_rand = (1.0 - ALPHA) * std::pow(P_BG, k);
+        double log_omega = std::log(prob_homology + prob_rand);
+        
+        return log_mu + log_phi + log_psi + log_omega;
     }
+
 
     /**
      * @brief Main evaluation pipeline factoring in internal repeat structural breakdown
@@ -156,10 +221,32 @@ namespace HapLL {
         }
         
         out_repeat.total_length = std::max(1, out_repeat.total_template_count * static_cast<int>(out_repeat.unit.length()));
+        
+        std::string target_seq = indel_seq;
+        std::string ref_prev = "";
+        std::string ref_next = "";
 
+        // 5' Flanking (左側: ref_prev) の抽出
+        if (v.sample_lt_seq.length() >= static_cast<size_t>(k)) {
+            ref_prev = v.sample_lt_seq.substr(v.sample_lt_seq.length() - k);
+        } else {
+            ref_prev = v.sample_lt_seq;
+        }
+
+        // 3' Flanking (右側: ref_next) の抽出を追加
+        if (v.sample_rt_seq.length() >= static_cast<size_t>(k)) {
+            ref_next = v.sample_rt_seq.substr(0, k);
+        } else {
+            ref_next = v.sample_rt_seq;
+        }
+
+        return calc_log_likelihood(is_insertion, k, out_repeat.total_length, target_seq, ref_prev, ref_next);
+         
+        /* 
         // 5. Setup sequence matching profile for insertion models
         std::string ins_seq = "";
         std::string ref_prev = "";
+        std::string ref_next = "";
         if (is_insertion) {
             ins_seq = indel_seq;
             if (v.sample_lt_seq.length() >= static_cast<size_t>(k)) {
@@ -169,7 +256,7 @@ namespace HapLL {
             }
         }
 
-        return calc_log_likelihood(is_insertion, k, out_repeat.total_length, ins_seq, ref_prev);
+        return calc_log_likelihood(is_insertion, k, out_repeat.total_length, ins_seq, ref_prev);*/
     }
 }
 
