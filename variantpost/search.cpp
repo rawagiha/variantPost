@@ -40,32 +40,6 @@ void SearchResult::setReadInfo(const Read& read, const char qual_thresh) {
     } else {
         target_statuses.push_back(-2);
     }
-
-
-    /* 
-    switch(rank) {
-        case 's':
-            target_statuses.push_back(1);
-        case 'n': {
-            if (read.covered_in_clip) break; //TODO reconsider
-            target_statuses.push_back(0); 
-            
-            if (!read.is_quality_map || !read.qc_passed || !read.has_local_clip ) break;
-            
-            // Collect variants from high-qual negatives
-            for (const auto& v : read.variants) {
-                if (v.mean_qual < qual_thresh) continue;
-                hq_negative_cnts[VariantKey{v.pos, v.ref, v.alt}]++;
-            }
-            break;
-        }
-        case 'u':
-            target_statuses.push_back(-1);
-            break;
-        default:
-            target_statuses.push_back(-2); //TODO resolve y/z cases 
-            break;
-    }*/    
 } 
 
 void SearchResult::finalize() {
@@ -162,36 +136,15 @@ void _search_target(SearchResult& rslt,
         if (pileup.has_hiconf_support)
              match2haplotypes(pileup, read_seqs, params); 
         for (const auto& read : pileup.reads) {
-            if (read.covering_ptrn == 'C') continue;
+            //if (read.covering_ptrn == 'C') continue;
             
             rslt.setReadInfo(read, params.base_q_thresh);
-
-            /*
-            bool is_first = (read.is_control) ? false : true;
-
-            rslt.are_from_first_bam.push_back(is_first);
-            if (read.rank == 's' ) { rslt.target_statuses.push_back(1); }
-            else if (read.rank == 'n' && !read.covered_in_clip) { 
-                rslt.target_statuses.push_back(0); 
-            }
-            //else if (read.rank == 'u' || read.rank == 'y') rslt.target_statuses.push_back(-1);
-            else if (read.rank == 'y') rslt.target_statuses.push_back(-1);
-            else rslt.target_statuses.push_back(-2);*/
         }
     } else {
         for (const auto& read : pileup.reads) {
-            if (read.covering_ptrn == 'C') continue;
+            //if (read.covering_ptrn == 'C') continue;
             
             rslt.setReadInfo(read, params.base_q_thresh);
-
-            /*
-            bool is_first = (read.is_control) ? false : true;
-            rslt.are_from_first_bam.push_back(is_first);
-            if (read.rank == 's') rslt.target_statuses.push_back(1);
-            else if (read.rank == 'n' && !read.covered_in_clip) rslt.target_statuses.push_back(0);
-            else if (read.rank == 'u' || read.rank == 'y') rslt.target_statuses.push_back(-1);
-            else rslt.target_statuses.push_back(-2);
-            */
         }
     }
 
@@ -201,7 +154,8 @@ void _search_target(SearchResult& rslt,
 
     
     // Realn against personalized genome
-    personalize(pileup, loc_ref, params, target, rslt);    
+    if (pileup.has_second_bam)
+        personalize(pileup, loc_ref, params, target, rslt);    
     
     Consensus con;
     if (pileup.hiconf_read_idx > -1) {

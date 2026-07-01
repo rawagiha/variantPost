@@ -43,11 +43,11 @@ def _phase(
 ]:  # None will be returned if failed to phase (thus, Optional)
     if not contig_dict:
         return None
-
+    
     snvs, indels, actual_target = profile_non_refs(contig_dict, target_pos, is_indel)
     if actual_target.is_null():
         return None
-
+    
     contig_dict, snvs, indels = crop_contig(
         contig_dict,
         skips,
@@ -57,11 +57,11 @@ def _phase(
         base_qual_thresh,
         trans_vars,
     )
-
+    
     if not snvs and not indels:
         trim_contig(contig_dict, actual_target.pos, actual_target.end_pos)
         return greedy_phasing(contig_dict)
-
+    
     lt_max = lt_max_lim(actual_target, indels, max_common_substr_len, contig_dict)
     phasable_dist = phasable_dist_to_mismatch(match_penal, local_thresh, contig_dict)
     rt_min = rt_min_lim(
@@ -88,7 +88,7 @@ def _phase(
 
 
 def phasable_dist_to_mismatch(
-    match_penal: float, local_thres: float, contig_dict: ContigDict
+    match_penal: float, local_thresh: float, contig_dict: ContigDict
 ) -> int:
     score = 0.0
     for i in range(len(contig_dict)):

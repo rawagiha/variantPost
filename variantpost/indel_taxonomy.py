@@ -4,6 +4,20 @@ revcomp = {"A": "T", "T": "A", "C": "G", "G": "C", "N": "N"}
 
 
 class IndelTaxon(object):
+    __slots__ = (
+        "class_89",
+        "class_83",
+        "_type",
+        "seq",
+        "len",
+        "unit",
+        "ulen",
+        "rep",
+        "mlen",
+        "flank_5p",
+        "flank_3p",
+    )
+
     def __init__(self, ref, alt, lt_flank, rt_flank):
         self.class_89 = "NA"
         self.class_83 = "NA"
@@ -20,46 +34,39 @@ class IndelTaxon(object):
         self.len = len(self.seq)
         self.unit = ""
         self.ulen = -1
+        self.rep = 0
         if self._type == "Ins":
-            # Do not count repeats in the inserted seq
-            self.rep = 0
-            # Count by seq
+            # Do not include  repeats in the inserted seq
             self.rep += repeat_counter(self.seq, rt_flank)
         else:
             self.unit = to_minimal_repeat_unit(self.seq)
             self.ulen = len(self.unit)
-            # Count repeats in the deleted seq
-            self.rep = repeat_counter(self.unit, self.seq)
-            # Count by unit
-            self.rep += repeat_counter(self.unit, rt_flank)
+            # Include repeats in the deleted seq
+            self.rep = repeat_counter(self.unit, self.seq) + repeat_counter(
+                self.unit, rt_flank
+            )
 
         self.mlen = -1
         if self._type == "Del" and self.len > 1 and self.rep == 1:
-            i = 0
-            is_same = self.seq[i] == rt_flank[i]
-            while is_same:
-                i += 1
-                is_same = self.seq[i] == rt_flank[i]
-
-            if i > 0:
-                self.mlen = i
+            m_len = 0
+            for s, r in zip(self.seq, rt_flank):
+                if s == r:
+                    m_len += 1
+                else:
+                    break
+            if m_len > 0:
+                self.mlen = m_len
 
         self.flank_5p = ""
         self.flank_3p = ""
         if self.len == 1:
             self.flank_5p = lt_flank[-1]
 
-            i = 0
-            is_same = self.seq == rt_flank[i]
-            while is_same:
-                i += 1
-                is_same = self.seq == rt_flank[i]
-
-            if i < len(rt_flank):
-                self.flank_3p = rt_flank[i]
-
-            else:
-                self.flank_3p = "N"
+            self.flank_3p = "N"
+            for base in rt_flank:
+                if base != self.seq:
+                    self.flank_3p = base
+                    break
 
             if self.seq in ("G", "A"):
                 self.seq = revcomp[self.seq]
@@ -68,6 +75,9 @@ class IndelTaxon(object):
 
                 self.flank_3p = revcomp[tmp]
 
+        self._dispatch_classification()
+
+    def _dispatch_classification(self):
         if self._type == "Ins":
             if self.len == 1:
                 if self.seq == "C":
@@ -90,7 +100,7 @@ class IndelTaxon(object):
 
     def single_C_insertion_classify(self, tuck_in=True):
         rep_83 = min(5, self.rep)
-        self.class_83 = "1:Ins:C:{}".format(rep_83)
+        self.class_83 = f"1:Ins:C:{rep_83}"
 
         if 0 <= self.rep <= 3:
             self.class_89 = "Ins(C):R(0,3)"
@@ -113,7 +123,7 @@ class IndelTaxon(object):
 
     def single_T_insertion_classify(self, tuck_in=True):
         rep_83 = min(5, self.rep)
-        self.class_83 = "1:Ins:T:{}".format(rep_83)
+        self.class_83 = f"1:Ins:T:{rep_83}"
 
         if 0 <= self.rep <= 4:
             rep_89 = "R(0,4)"
@@ -127,20 +137,20 @@ class IndelTaxon(object):
             else:
                 return
 
-        self.class_89 = "{}[Ins(T):{}]{}".format(self.flank_5p, rep_89, self.flank_3p)
+        self.class_89 = f"{self.flank_5p}[Ins(T):{rep_89}]{self.flank_3p}"
 
     def single_C_deletion_classify(self, tuck_in=True):
         rep_83 = min(5, self.rep - 1)
-        self.class_83 = "1:Del:C:{}".format(rep_83)
+        self.class_83 = f"1:Del:C:{rep_83}"
 
         if 1 <= self.rep <= 3:
             if self.flank_3p in ("A", "T"):
-                self.class_89 = "[Del(C):R{}]{}".format(self.rep, self.flank_3p)
+                self.class_89 = f"[Del(C):R{self.rep}]{self.flank_3p}"
             else:
                 self.class_89 = "[Del(C):R(1,5)]G"
         elif 4 <= self.rep <= 5:
             if self.flank_3p in ("A", "T"):
-                self.class_89 = "[Del(C):R(4,5)]{}".format(self.flank_3p)
+                self.class_89 = f"[Del(C):R(4,5)]{self.flank_3p}"
             else:
                 self.class_89 = "[Del(C):R(1,5)]G"
         elif 6 <= self.rep <= 9:
@@ -151,25 +161,23 @@ class IndelTaxon(object):
 
     def single_T_deletion_classify(self, tuck_in=True):
         rep_83 = min(5, self.rep - 1)
-        self.class_83 = "1:Del:T:{}".format(rep_83)
+        self.class_83 = f"1:Del:T:{rep_83}"
 
         if 1 <= self.rep <= 4:
-            self.class_89 = "{}[Del(T):R(1,4)]{}".format(self.flank_5p, self.flank_3p)
+            self.class_89 = f"{self.flank_5p}[Del(T):R(1,4)]{self.flank_3p}"
         elif 5 <= self.rep <= 7:
-            self.class_89 = "{}[Del(T):R(5,7)]{}".format(self.flank_5p, self.flank_3p)
+            self.class_89 = f"{self.flank_5p}[Del(T):R(5,7)]{self.flank_3p}"
         elif 8 <= self.rep <= 9:
-            self.class_89 = "{}[Del(T):R(8,9)]{}".format(self.flank_5p, self.flank_3p)
+            self.class_89 = f"{self.flank_5p}[Del(T):R(8,9)]{self.flank_3p}"
         else:
             if tuck_in:
-                self.class_89 = "{}[Del(T):R(8,9)]{}".format(
-                    self.flank_5p, self.flank_3p
-                )
+                self.class_89 = f"{self.flank_5p}[Del(T):R(8,9)]{self.flank_3p}"
 
     def longer_insertion_classify(self, tuck_in=True):
         rep_83 = min(5, self.rep)
         len_83 = min(5, self.len)
 
-        self.class_83 = "{}:Ins:R:{}".format(len_83, rep_83)
+        self.class_83 = f"{len_83}:Ins:R:{rep_83}"
 
         if self.rep == 0:
             if 2 <= self.len <= 4:
@@ -193,7 +201,7 @@ class IndelTaxon(object):
         rep_83 = min(5, self.rep - 1)
         len_83 = min(5, self.len)
 
-        self.class_83 = "{}:Del:R:{}".format(len_83, rep_83)
+        self.class_83 = f"{len_83}:Del:R:{rep_83}"
 
         if self.rep == 1:
             if 2 <= self.len <= 4:
@@ -225,7 +233,7 @@ class IndelTaxon(object):
         len_83 = min(5, self.len)
         mh_83 = min(4, self.mlen)
 
-        self.class_83 = "{}:Del:M:{}".format(len_83, mh_83)
+        self.class_83 = f"{len_83}:Del:M:{mh_83}"
 
         if self.mlen == 1:
             if 2 <= self.len <= 5:

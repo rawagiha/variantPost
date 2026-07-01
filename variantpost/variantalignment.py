@@ -79,7 +79,8 @@ class VariantAlignment(object):
         "window", "reference", "base_quality_thresh", "local_thresh",
         "has_second", "contig_dict", "target_status", "are_reverse",
         "are_first_bam", "tags", "ppos", "pref", "palt", "pltseq",
-        "prtseq", "ref", "alt", "skips", "trans_vars", "read_names", "is_with_target"
+        "prtseq", "ref", "alt", "skips", "trans_vars", "read_names", "is_with_target",
+        "likely_simple_on_personalized_genome"
     )
 
     
@@ -143,7 +144,8 @@ class VariantAlignment(object):
             self.prtseq,
             self.ref,
             self.alt,
-            self.trans_vars
+            self.trans_vars,
+            self.likely_simple_on_personalized_genome
         ) = search_target(
             bam,
             second_bam,
@@ -175,26 +177,15 @@ class VariantAlignment(object):
         
         self.is_with_target = (1 in self.target_status)
 
-
-        ###########################
-        #testing
-
-        
+        self.variant.spos = self.ppos
+        self.variant.sref = self.pref
+        self.variant.salt = self.palt
         
         #############TODO#################
         #implement later
         self.skips = []
 
 
-        #for tglst in self.tags:
-        #    for _ in tglst:
-        #        if _[0] == "CB":
-        #            print(_[1])
-        
-        #print(self.tags)
-        # print(a)
-        # print(self.contig_dict)
-        # self.is_with_target = any([status == 1 for status in self.target_status])
     
     def tax(self):
         rtxn = IndelTaxon(self.variant.ref, self.variant.alt, self.variant.left_flank(), self.variant.right_flank())
@@ -409,6 +400,15 @@ class VariantAlignment(object):
         v.cpos, v.cref, v.calt = v.pos, v.ref, v.alt
         
         v.phased_as_complex = False
+        
+        if cis and self.likely_simple_on_personalized_genome:
+            if not v.is_simple_indel:
+                v.cpos = v.spos
+                v.cref = v.sref
+                v.calt = v.salt
+            
+            return
+        
         base_quality_threshold = 20
         match_penalty_for_phasing = 3 
         max_common_substr_len = 15
@@ -431,8 +431,6 @@ class VariantAlignment(object):
                 max_common_substr_len,
             )
             
-            v = self.variant
-
             if phased and self.is_with_target:
                 v.cpos = phased[0]
                 v.cref = phased[1]

@@ -6,6 +6,8 @@
 
 struct SearchResult 
 {
+    bool likely_simple_on_personalized_genome = false; 
+    
     std::vector<int> positions;
     std::vector<std::string> ref_bases;
     std::vector<std::string> alt_bases;

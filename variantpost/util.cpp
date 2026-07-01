@@ -1111,7 +1111,7 @@ void read2variants(const int aln_start, std::string_view ref_seq,
                                       base_qualities.substr(read_idx, op_len));
                 
                 for (int i = 0; i < op_len; ++i) {
-                    if (i) var_idx.push_back(read_idx + 1); // index for inserted seq (excl. padding) 
+                    if (i) var_idx.push_back(read_idx + i); // index for inserted seq (excl. padding) 
                     idx2pos.push_back(pos - 1);
                 }
                 read_idx += op_len; break; 

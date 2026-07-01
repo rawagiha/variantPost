@@ -175,10 +175,36 @@ inline size_t count_overlap(const Vars& v1, const Vars& v2) {
     return intersection.size();
 }
 
+inline void fill_matched_sides(size_t curr, 
+                               const size_t last, 
+                               const CigarVec& cigar_vec,
+                               std::vector<std::pair<int, int>>& matched_sides) {
+    if (curr == 0 && last == 0) return;
+
+    int lt_matched_len = 0, rt_matched_len = 0;
+    
+    char prev_op = '\0', next_op = '\0';
+    if (curr > 0) {
+        prev_op = cigar_vec[curr - 1].first;
+        if (prev_op == '=')
+            lt_matched_len = cigar_vec[curr - 1].second;
+    }
+    
+    if (curr < last) {
+        next_op = cigar_vec[curr + 1].first;
+        if (next_op == '=')
+            rt_matched_len = cigar_vec[curr + 1].second;
+    } 
+    
+    matched_sides.emplace_back(lt_matched_len, rt_matched_len); 
+}
+
 void realn_to_perfonalized_genome(
     LocalReference& loc_ref,
     Aligner& alngr, Filter& fltr, Alignment& aln,
-    Variant& pv, bool& is_personalized, 
+    Variant& pv, 
+    bool& is_personalized, 
+    bool& is_likely_simple, 
     const std::string& mut_seq, 
     const std::string& hap_seq, const Ints& i2p) {
     
@@ -187,26 +213,31 @@ void realn_to_perfonalized_genome(
     alngr.SetReferenceSequence(hap_seq.c_str(), hap_seq.size());
     alngr.Align(query, fltr, &aln, mask_len);
     
+    std::cout << aln.cigar_string << " realn " << std::endl; 
     CigarVec cigar_vec;
     fill_cigar_vector(aln.cigar_string, cigar_vec);
     
     Vars vars; 
+    std::vector<std::pair<int, int>> matched_sides;
     int i = aln.ref_begin, j = aln.query_begin;
+    size_t curr = 0;
+    const size_t last = cigar_vec.size() - 1; 
     for (const auto& [op, op_len] : cigar_vec) {
         switch (op) {
             case '=':
                 i += op_len; j += op_len; break;
             case 'X':
                 vars.emplace_back(i2p[i], hap_seq.substr(i, op_len), mut_seq.substr(j, op_len));
-                i += op_len; j+= op_len;   
+                fill_matched_sides(curr, last, cigar_vec, matched_sides);
+                i += op_len; j+= op_len;    
                 break;
             case 'I': {
                 Variant v(i2p[i - 1], hap_seq.substr(i - 1, 1), mut_seq.substr(j - 1 , op_len +1));
                 int lt_lim = std::max(i - 1 - 10, 0);
                 v.sample_lt_seq = hap_seq.substr(lt_lim, i - lt_lim);
-                //v.sample_rt_seq = hap_seq.substr(i, loc_ref.flanking_end - i2p[i - 1]);
                 v.sample_rt_seq = hap_seq.substr(i);
                 vars.push_back(v);
+                fill_matched_sides(curr, last, cigar_vec, matched_sides);
                 j += op_len;
                 break; 
             }
@@ -214,9 +245,9 @@ void realn_to_perfonalized_genome(
                 Variant v(i2p[i - 1], hap_seq.substr(i - 1, op_len + 1), mut_seq.substr(j - 1 , 1));
                 int lt_lim = std::max(i - 1 - 10, 0);
                 v.sample_lt_seq = hap_seq.substr(lt_lim, i - lt_lim);
-                //v.sample_rt_seq = hap_seq.substr(i + op_len, loc_ref.flanking_end - i2p[i - 1]);
                 v.sample_rt_seq = hap_seq.substr(i + op_len);
                 vars.push_back(v);
+                fill_matched_sides(curr, last, cigar_vec, matched_sides);
                 i += op_len;
                 break;
            }
@@ -224,21 +255,29 @@ void realn_to_perfonalized_genome(
                 //j += op_len;
                 break;
         }
-        
+        ++curr;
     } 
     
     int closest = -1, min_dist = INT_MAX, dist = INT_MAX;
     for (int i = 0; i < static_cast<int>(vars.size()); ++i) {
         const auto& v = vars[i]; 
-        if (!v.is_substitute) {
+        if (loc_ref.flanking_start <= v.pos && v.pos <= loc_ref.flanking_end) {
             dist = std::abs(v.pos - pv.pos); // pv.pos == target.pos
             if (dist < min_dist) {closest = i; min_dist = dist; } 
         }
     }
-     
+    std::cout << closest << " closet " << " " << loc_ref.locplx_start << " " << loc_ref.locplx_end << std::endl; 
     if (closest == -1) return; 
-    pv = vars[closest]; // should be move?
+    pv = std::move(vars[closest]); 
+    
+    // Checking for complex indels on the personalized genome
+    if (matched_sides[closest].first > 19 && matched_sides[closest].second > 19) {
+        // exclude MNVs 
+        if (!pv.is_complex) is_likely_simple = true;
+    }
+
     is_personalized = true;
+
 }
 
 inline void fill_result(const Variant& v, SearchResult& rslt) {
@@ -266,24 +305,32 @@ void personalize(const Pileup& pileup, LocalReference& loc_ref, const UserParams
      
     Variant pv1(target.pos, target.ref, target.alt);
     Variant pv2(target.pos, target.ref, target.alt);
+    
+    std::cout << pv1.ref << " " << pv1.alt << " snv? " << std::endl;
+
         
     HapLL::RepeatInfo ri1, ri2, rir;
     bool is_personalized_hap1 = false, is_personalized_hap2 = false;
+    bool is_likely_simple_hap1 = false, is_likely_simple_hap2 = false;
     if (pileup.is_alt_het) {    
         size_t with_hap2 = count_overlap(pileup.hap0_vars, pileup.hap2_vars);
         
         if (with_hap1 > with_hap2) {
             // assigned to hap1. 
             // is_personalized_hap1 will remainfalse if the realignment fails
-            realn_to_perfonalized_genome(loc_ref, aligner, filter, aln, pv1, is_personalized_hap1, hiconf_seq, pileup.seq1, pileup.i2p1);
+            realn_to_perfonalized_genome(loc_ref, aligner, filter, aln, pv1, 
+                                         is_personalized_hap1, is_likely_simple_hap1, hiconf_seq, pileup.seq1, pileup.i2p1);
         } else if (with_hap1 < with_hap2) {
             // assigned to hap2
             // is_personalized_hap2 will remainfalse if the realignment fails
-            realn_to_perfonalized_genome(loc_ref, aligner, filter, aln, pv2, is_personalized_hap2, hiconf_seq, pileup.seq2, pileup.i2p2);
+            realn_to_perfonalized_genome(loc_ref, aligner, filter, aln, pv2, 
+                                         is_personalized_hap2, is_likely_simple_hap2, hiconf_seq, pileup.seq2, pileup.i2p2);
         } else {
             // inference hap1 vs. hap2
-            realn_to_perfonalized_genome(loc_ref, aligner, filter, aln, pv1, is_personalized_hap1, hiconf_seq, pileup.seq1, pileup.i2p1);
-            realn_to_perfonalized_genome(loc_ref, aligner, filter, aln, pv2, is_personalized_hap2, hiconf_seq, pileup.seq2, pileup.i2p2);
+            realn_to_perfonalized_genome(loc_ref, aligner, filter, aln, pv1, 
+                                         is_personalized_hap1, is_likely_simple_hap1, hiconf_seq, pileup.seq1, pileup.i2p1);
+            realn_to_perfonalized_genome(loc_ref, aligner, filter, aln, pv2, 
+                                         is_personalized_hap2, is_likely_simple_hap2, hiconf_seq, pileup.seq2, pileup.i2p2);
 
             double ll_hap1 = is_personalized_hap1 ? HapLL::evaluate_variant(pv1, ri1) : -std::numeric_limits<double>::infinity();
             double ll_hap2 = is_personalized_hap2 ? HapLL::evaluate_variant(pv2, ri2) : -std::numeric_limits<double>::infinity();
@@ -295,8 +342,10 @@ void personalize(const Pileup& pileup, LocalReference& loc_ref, const UserParams
             }
         }
     } else {
-        realn_to_perfonalized_genome(loc_ref, aligner, filter, aln, pv1, is_personalized_hap1, hiconf_seq, pileup.seq1, pileup.i2p1);
+        realn_to_perfonalized_genome(loc_ref, aligner, filter, aln, pv1, 
+                                     is_personalized_hap1, is_likely_simple_hap1, hiconf_seq, pileup.seq1, pileup.i2p1);
         
+        std::cout << pv1.ref << " " << pv1.alt << " snv? " << std::endl; 
         // inference hap1 vs. hap_ref
         if (!with_hap1) {
             Variant pv_ref = target;
@@ -317,8 +366,10 @@ void personalize(const Pileup& pileup, LocalReference& loc_ref, const UserParams
     
     if (is_personalized_hap1) {
         fill_result(pv1, rslt);
+        rslt.likely_simple_on_personalized_genome = is_likely_simple_hap1;
     } else if (is_personalized_hap2) {
         fill_result(pv2, rslt);
+        rslt.likely_simple_on_personalized_genome = is_likely_simple_hap2;
     } 
     
     std::cout << rslt.ppos << " " <<  rslt.pref<< " " << rslt.palt << " " << rslt.pltseq << " " << rslt.prtseq << std::endl;

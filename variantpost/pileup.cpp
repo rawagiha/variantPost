@@ -249,25 +249,56 @@ void Pileup::inferGermlineHaplotype(const UserParams& params) {
         track.total_depth = pos_depth[key.pos];
     }
 
-    //--- Extract heterozygous variants (VAF: 0.3 - 0.7)
-    std::vector<VariantKey> backbone_keys;
-    backbone_keys.reserve(global_counts.size());
-
+    //--- Profile positions for the presence of variants (any)
+    std::unordered_map<long long, std::vector<std::pair<VariantKey, int>>> pos_to_vars;
     for (const auto& [key, track] : global_counts) {
         if (track.total_depth == 0 || track.total_reads < 2) continue;
-        double vaf = static_cast<double>(track.total_reads) / track.total_depth;
+        pos_to_vars[key.pos].push_back({key, track.total_reads});
+    }
+    
+    //--- Het/Hom classification
+    std::vector<VariantKey> backbone_keys;
+    backbone_keys.reserve(global_counts.size());
+    
+    for (auto& [pos, vars] : pos_to_vars) {
+        // Coverage at the locus (pos)
+        int total_depth = global_counts[vars[0].first].total_depth;
         
-        bool is_snv = (key.ref.length() == 1 && key.alt.length() == 1);
-        std::cout << key.pos << " " << key.ref << " " << key.alt << " " << vaf << std::endl;
-        // revise? 
-        if ((is_snv && vaf > 0.9) || (!is_snv && vaf > 0.7)) { 
-            Variant v(static_cast<int>(key.pos), key.ref, key.alt, "");
+        // Sort variants with N of supporting reads (total_reads)
+        std::sort(vars.begin(), vars.end(), [](const auto& a, const auto& b) {
+            return a.second > b.second; // 降順
+        });
+
+        const auto& major_key = vars[0].first;
+        int major_reads = vars[0].second;
+
+        // Total count of NON-reference (alt) reads
+        int total_alt_reads = 0;
+        for (const auto& v : vars) total_alt_reads += v.second;
+
+        // Get the reference read counts as total_depth(coverage) - total_alt-reads
+        int ref_reads = total_depth - total_alt_reads;
+        if (ref_reads < 0) ref_reads = 0; //zero-clip for safety
+
+        double ref_vaf = static_cast<double>(ref_reads) / total_depth;
+        double major_vaf = static_cast<double>(major_reads) / total_depth;
+
+        bool is_snv = (major_key.ref.length() == 1 && major_key.alt.length() == 1);
+        std::cout << major_key.pos << " " << major_key.ref << " " << major_key.alt 
+                  << " Major_VAF:" << major_vaf << " Ref_VAF:" << ref_vaf << std::endl;
+
+        // Homozygous if ref reads is so few (< 5%) 
+        // or the locus has a dominant variant (SNV: vaf > 0.9 or indel: vaf > 0.7                    
+        if (ref_vaf < 0.05 || ((is_snv && major_vaf > 0.9) || (!is_snv && major_vaf > 0.7))) {
+            Variant v(static_cast<int>(major_key.pos), major_key.ref, major_key.alt, "");
             homo_vars.push_back(v); 
         }
-        else if (vaf >= 0.2 && vaf <= 0.7) {
-            backbone_keys.push_back(key);
+        // Othewise Het, but require a vaf > 0.2 to remove technical artifacts
+        else if (major_vaf >= 0.2) {
+            backbone_keys.push_back(major_key);
         }
     }
+
     std::sort(homo_vars.begin(), homo_vars.end());
        
     std::sort(backbone_keys.begin(), backbone_keys.end(), [](const VariantKey& a, const VariantKey& b) {
