@@ -88,19 +88,22 @@ void Read::setReference(LocalReference& loc_ref) {
     is_ref = (seq == ref_seq);
     
     // aligned segments
-    int current_pos = read_start; // reset to read_start
+    int current_pos = read_start; //<- I don't member why reset to read_start (keep for now, definitely investigate laater)
+                                  //july 3. I think that this was to include cases here the target pos is only covered by softclipped read
+                                  //in long indels. aligned_segments is misleading name. Reconder
+    current_pos = aln_start;
     for (const auto& [skip_start, skip_end] : skipped_segments) {
         aligned_segments.emplace_back(current_pos, skip_start - 1);
         current_pos = skip_end + 1;
     }
     aligned_segments.emplace_back(current_pos, read_end);
 
-    current_pos = read_start;
+    current_pos = aln_start;
     for (const auto& [un_start, un_end] : unmapped_segments) {
         mapped_segments.emplace_back(current_pos, un_start - 1);
         current_pos = un_end + 1;
     }
-    mapped_segments.emplace_back(current_pos, read_end);
+    mapped_segments.emplace_back(current_pos, aln_end);
 }
 
 //------------------------------------------------------------------------------
@@ -112,12 +115,32 @@ void Read::setVariants(LocalReference& loc_ref) {
     read2variants(aln_start, ref_seq, seq, base_quals, 
                   cigar_vector, loc_ref, variants, var_idx, idx2pos);
 
-    for (auto& v : variants) { v.isInFlanking(loc_ref); ++flnk_v_cnt; }
+    for (auto& v : variants) { 
+        var_pos.push_back(v.pos);
+
+        v.isInFlanking(loc_ref); 
+        if (v.in_target_flnk) ++flnk_v_cnt;
+    }
     
     // sorted -> var_idx will be changed.
     // This is okay. var_idx is only used for quality check
-    if (variants.size() > 1)
+    if (variants.size() > 1) {
         std::sort(variants.begin(), variants.end()); 
+        std::sort(var_pos.begin(), var_pos.end()); 
+    }
+}
+
+bool Read::IsRefAt(const int pos) const {
+    bool res = false;
+    if (pos < covering_start || covering_end < pos) return res; 
+    for (const auto& [start, end] : mapped_segments) {
+        if (start <= pos && pos <= end) {
+            res = (std::binary_search(var_pos.begin(), var_pos.end(), pos)) ? false : true;
+            break;
+        }
+    }
+    
+    return res; 
 }
 
 //------------------------------------------------------------------------------
@@ -138,7 +161,8 @@ void Read::parseCoveringPattern(LocalReference& loc_ref, const Variant& target) 
     for (const auto& [seg_start, seg_end] : aligned_segments) {
         if (seg_start <= target.lpos && target.rpos < seg_end) {
             covering_start = seg_start; covering_end = seg_end; 
-            covering_ptrn = 'A'; return;
+            covering_ptrn = 'A'; 
+            return;
         }
     }
              
@@ -177,6 +201,8 @@ void Read::trimLowQualBases(const char qual_thresh) {
 //Calc. freq of low quality non-ref bases between start/end
 void Read::qualityCheck(const int start, const int end, 
                         const char qual_thresh, const double freq_thresh) {   
+    if (is_ref) qc_passed = true;
+    
     if (idx2pos.empty()) return;
 
     auto it_i = std::find_if(idx2pos.begin(), idx2pos.end(), [start](int pos){ return pos >= start; });
@@ -404,25 +430,28 @@ void Read::isStableNonReferenceAlignment(LocalReference& loc_ref) {
 // TODO use this for long-read cases?
 void Read::isCenterMapped(const Variant& target) {
     
-     
+    int d = INT_MAX, i = -1, thresh = 0;
+    if (is_ref) {
+        i = target.pos - aln_start;
+        if (i > 0) {
+            thresh = (aln_end - aln_start + 1) / 8;
+            is_central_mapped = (thresh <= i && i <= thresh * 7);
+            return;
+        }
+    }
     
-    int d = INT_MAX, i = -1;
-    //for (const auto& elem : idx2pos) {
-    //    if (std::abs(elem.second - target.pos) < d) {
-    //        i = elem.first; d = std::abs(elem.second - target.pos);
-    //    }
-    //}
+    if (idx2pos.empty()) return;
+    thresh = static_cast<int>(idx2pos.size() / 8);
+     
     for (int j = 0; j < static_cast<int>(idx2pos.size()); ++j) {
         if (std::abs(idx2pos[j] - target.pos) < d) {
             i = j; d = std::abs(idx2pos[j] - target.pos); 
         }
     }
 
-
     if (i < qs || qe < i) has_local_events = false; 
     
-    int quintile = static_cast<int>(idx2pos.size() / 8);
-    is_central_mapped = (quintile <= i && i <= quintile * 7);             
+    is_central_mapped = (thresh <= i && i <= thresh * 7);             
 }
 
 //------------------------------------------------------------------------------

@@ -98,7 +98,7 @@ class IndelTaxon(object):
                 else:
                     self.longer_non_microhomo_deletion_classify()
 
-    def single_C_insertion_classify(self, tuck_in=True):
+    def single_C_insertion_classify(self, tuck_in=False):
         rep_83 = min(5, self.rep)
         self.class_83 = f"1:Ins:C:{rep_83}"
 
@@ -119,9 +119,9 @@ class IndelTaxon(object):
             if tuck_in:
                 self.class_89 = "Ins(C):R(7,9)"
             else:
-                pass
+                self.class_89 = f"HomoplymerIns(C)Rep{self.rep}"
 
-    def single_T_insertion_classify(self, tuck_in=True):
+    def single_T_insertion_classify(self, tuck_in=False):
         rep_83 = min(5, self.rep)
         self.class_83 = f"1:Ins:T:{rep_83}"
 
@@ -135,11 +135,12 @@ class IndelTaxon(object):
             if tuck_in:
                 rep_89 = "R(8,9)"
             else:
+                self.class_89 = f"HomoplymerIns(T)Rep{self.rep}"
                 return
 
         self.class_89 = f"{self.flank_5p}[Ins(T):{rep_89}]{self.flank_3p}"
 
-    def single_C_deletion_classify(self, tuck_in=True):
+    def single_C_deletion_classify(self, tuck_in=False):
         rep_83 = min(5, self.rep - 1)
         self.class_83 = f"1:Del:C:{rep_83}"
 
@@ -158,8 +159,10 @@ class IndelTaxon(object):
         else:
             if tuck_in:
                 self.class_89 = "Del(C):R(6,9)"
+            else:
+                self.class_89 = f"HomoplymerDel(C)Rep{self.rep}"
 
-    def single_T_deletion_classify(self, tuck_in=True):
+    def single_T_deletion_classify(self, tuck_in=False):
         rep_83 = min(5, self.rep - 1)
         self.class_83 = f"1:Del:T:{rep_83}"
 
@@ -172,8 +175,10 @@ class IndelTaxon(object):
         else:
             if tuck_in:
                 self.class_89 = f"{self.flank_5p}[Del(T):R(8,9)]{self.flank_3p}"
+            else:
+                self.class_89 = f"HomoplymerDel(T)Rep{self.rep}"
 
-    def longer_insertion_classify(self, tuck_in=True):
+    def longer_insertion_classify(self, tuck_in=False):
         rep_83 = min(5, self.rep)
         len_83 = min(5, self.len)
 
@@ -196,8 +201,10 @@ class IndelTaxon(object):
         else:
             if tuck_in:
                 self.class_89 = "Ins(2,):R(5,9)"
+            else:
+                self.class_89 = f"Len{self.len}InsRep{self.rep}"
 
-    def longer_non_microhomo_deletion_classify(self, tuck_in=True):
+    def longer_non_microhomo_deletion_classify(self, tuck_in=False):
         rep_83 = min(5, self.rep - 1)
         len_83 = min(5, self.len)
 
@@ -228,6 +235,8 @@ class IndelTaxon(object):
                     self.class_89 = "Del(2,):U(1,2):R(5,9)"
                 else:
                     self.class_89 = "Del(3,):U(3,):R(3,9)"
+            else:
+                self.class_89 = f"Len{self.len}UnitLen{self.ulen}DelRep{self.rep}"
 
     def micro_homology_deletion_classify(self):
         len_83 = min(5, self.len)

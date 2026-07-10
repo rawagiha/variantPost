@@ -22,7 +22,7 @@ void check_match_pattern(Alignment& aln, std::bitset<3>& check_points,
 void match2haplotypes(Pileup& pileup, const Strs& read_seqs,
                       const UserParams& params);
 
-void personalize(const Pileup& pileup, 
+void personalize(Pileup& pileup, 
                  LocalReference& loc_ref, 
                  const UserParams& params, 
                  const Variant& target, SearchResult& rslt);

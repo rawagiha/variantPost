@@ -5,6 +5,26 @@
 #include "util.h"
 #include "fasta/Fasta.h"
 
+
+//------------------------------------------------------------------------------
+// the input vector is assumed to be sorted
+int get_closest_index(const Ints& vec, int target_pos) {
+    // guarantee no empty
+    if (vec.empty()) return -1;
+    
+    // not covered cases
+    if (target_pos < vec[0] || vec.back() < target_pos) return -1;
+    
+    auto it = std::lower_bound(vec.begin(), vec.end(), target_pos);
+    
+    auto prev_it = it - 1;
+    if (std::abs(*it - target_pos) < std::abs(*prev_it - target_pos)) {
+        return std::distance(vec.begin(), it);
+    } else {
+        return std::distance(vec.begin(), prev_it);
+    }
+}
+
 //------------------------------------------------------------------------------
 // converting base to 2-bit (0-3)
 inline int b2i(char b) {

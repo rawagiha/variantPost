@@ -1,5 +1,6 @@
 #include "pileup.h"
 #include "match.h"
+#include "consensus.h"
 #include <unordered_set>
 #include <queue>
 #include <cstring>
@@ -46,6 +47,8 @@ Pileup::Pileup(const Strs& names, const Bools& is_rv, const Strs& cigar_strs,
                const Strs& quals, const Bools& is_first_bam, bool has_scnd,
                const UserParams& params, LocalReference& loc_ref, Variant& target) 
     : has_second_bam(has_scnd) {
+    
+    //TODO do we use control_bam_cov?? 
     if (has_second_bam) control_bam_cov = 0;
     
     sz = static_cast<int>(names.size());
@@ -122,11 +125,12 @@ Pileup::Pileup(const Strs& names, const Bools& is_rv, const Strs& cigar_strs,
         read.trimLowQualBases(params.base_q_thresh);    
         read.isStableNonReferenceAlignment(loc_ref); 
 
-        if (read.covering_ptrn == 'A' && !read.idx2pos.empty()) {
-            read.isCenterMapped(target);
-            if (has_second_bam && read.is_control 
+        if (read.covering_ptrn == 'A') read.isCenterMapped(target);
+        
+        /* this part may be no use    
+        if (has_second_bam && read.is_control 
                 &&!read.fail_to_cover_flankings) ++control_bam_cov; 
-        }
+        }*/
         
         read.is_quality_map = (read.is_stable_non_ref && read.is_central_mapped);
         search_complex_target(read);
@@ -134,8 +138,17 @@ Pileup::Pileup(const Strs& names, const Bools& is_rv, const Strs& cigar_strs,
         //--- Read classification
         if (read.has_target) {
             read.rank = 's'; ++s_cnt;
+
+            s_read_idx.push_back(i);
+
             read.setSignatureStrings(params); sig_s[read.non_ref_sig].push_back(i);
-            if (read.is_quality_map) { sig_s_hiconf[read.non_ref_sig].push_back(i); has_hiconf_support = true; }
+            if (read.is_quality_map) { 
+                sig_s_hiconf[read.non_ref_sig].push_back(i); has_hiconf_support = true; 
+
+                hiconf_s_read_idx.push_back(i);
+
+
+            }
         } else if (read.has_local_events) {
             read.rank = 'u'; ++u_cnt;
             read.setSignatureStrings(params);             
@@ -152,7 +165,7 @@ Pileup::Pileup(const Strs& names, const Bools& is_rv, const Strs& cigar_strs,
             else { read.rank = 'n'; ++n_cnt; } 
             
             // Catch reference haplotype in control BAM here
-            if (read.is_control && read.is_quality_map) { ++ref_hap_n; has_ref_hap = true; }              
+            if (read.is_control && read.is_quality_map && read.is_ref) { ++ref_hap_n; has_ref_hap = true; }              
         }       
     }
     if (!s_cnt && !u_cnt) { has_no_support = true; return; }
@@ -185,120 +198,148 @@ Pileup::Pileup(const Strs& names, const Bools& is_rv, const Strs& cigar_strs,
 }
 
 
-void Pileup::inferGermlineHaplotype(const UserParams& params) {
-    if (this->sz == 0) return;
+void Pileup::inferGermlineHaplotype(const UserParams& params, const int target_pos) {
+    if (sz == 0) return;
 
-    homo_vars.reserve(this->sz / 10); 
-    hap1_vars.reserve(this->sz / 10);
-    hap2_vars.reserve(this->sz / 10);
-            
-    struct CountTrack {
-        int total_reads = 0;
-        int total_depth = 0;
-    };
-    std::unordered_map<VariantKey, CountTrack, VariantKeyHash> global_counts;
-
-    for (int i = 0; i < this->sz; ++i) {
-        const auto& read = this->reads[i];
-        if (!read.is_control) continue;
+    homo_vars.reserve(sz / 10); hap1_vars.reserve(sz / 10); hap2_vars.reserve(sz / 10);
+    
+    // Tracking variant occurrence and QC
+    std::unordered_map<VariantKey, VarStat, VariantKeyHash> variant_counts;
+    
+    Ints evaluated;
+    evaluated.reserve(sz);
+    for (int i = 0; i < sz; ++i) {
+        const auto& read = reads[i];   
+        
+        if (!read.is_control || read.rank == 's') continue;
         if (read.covering_ptrn != 'A' || !read.qc_passed || !read.is_central_mapped) continue;
         
+        // Fix demoninator reads
+        evaluated.push_back(i);
+        
         for (const auto& v : read.variants) {
+            // NOTE: Read::setVariants runs Variant::isInFlanking
+            //       -> this sets lpos/rpos and end_pos
+            VariantKey vk{v.pos, v.end_pos, v.ref, v.alt}; 
+            variant_counts[vk].occurrence++;
+            
+            //LOGIC: variants with good base score
+            //       + found in the middle (0.25-0.75 location)
+            // ----> QUALITY OCCURRENCE (required to be included for inference)        
             if (v.mean_qual < params.base_q_thresh) continue;
-            global_counts[VariantKey{v.pos, v.ref, v.alt}].total_reads++;
+            
+            int read_i = get_closest_index(read.idx2pos, v.pos);
+            if (read_i < 0) continue; // -1 returned if idx2pos empty
+            
+            // Relative location within read
+            int idx_len = static_cast<int>(read.idx2pos.size());
+            double rel_loc = static_cast<double>(read_i + 1) / idx_len;
+            std::cout  << v.pos << " " << v.ref << " " << v.alt << " " << read_i << " " << " " << idx_len << " " << rel_loc << std::endl;
+            if (0.25 <= rel_loc && rel_loc <= 0.75) variant_counts[vk].quality_occurrence++;
         }
     }
-
-    if (global_counts.empty()) return;
-
-    //--- Sort variant postions to calculate VAF
-    std::vector<long long> unique_positions;
-    for (const auto& [key, _] : global_counts) {
-        unique_positions.push_back(key.pos);
+    
+    for (const auto& [k, v] : variant_counts) {
+        std::cout << k.pos << " " << " " << k.end_pos << " " << k.ref << " " << k.alt << " " << v.occurrence << " " << v.quality_occurrence  << std::endl;
     }
-    std::sort(unique_positions.begin(), unique_positions.end());
-    unique_positions.erase(std::unique(unique_positions.begin(), unique_positions.end()), unique_positions.end());
+
+    if (variant_counts.empty()) return;
     
-    //--- Calculate depths at sorted variant positions
-    std::unordered_map<long long, int> pos_depth;
+    for (const auto i : evaluated) {
+        const auto& read = reads[i];
+        
+        for (auto& [vk, vs] : variant_counts) {
+            // Test if the read is qualified to depth calculation for this variant
+            if (vk.pos < read.covering_start || read.covering_end <= vk.end_pos) continue;
+            
+            vs.read_depth++; 
+            if (read.IsRefAt(vk.pos)) vs.ref_depth++;
+        }
+    }
     
-    for (int i = 0; i < this->sz; ++i) {
-        const auto& read = this->reads[i];
+    // Store quality variants by position with their VAF
+    // This is to take care of multi-allelic cases (variable indels at homopolymer)
+    // Using map here so that variants will be sorted by pos
+    std::map<long long, std::vector<std::pair<VariantKey, double>>> pos_to_vars;
+    for (auto& [vk, vs] : variant_counts) {
+        if (vs.read_depth == 0) continue;
         
-        if (!read.is_control) continue;
-         
-        //--- To include ref reads. This is because that ref reads are not annotated for most flags
-        if (!read.is_ref) {
-            if (read.covering_ptrn != 'A' || !read.qc_passed || !read.is_central_mapped) continue;
-        } 
+        // recurrent variants with quality occurrence
+        if (vs.occurrence < 2 || vs.quality_occurrence == 0) continue;
         
-        //--- Count only aligned segments (exclude spliced skips)
-        for (const auto& seg : read.aligned_segments) {
-            int seg_start = seg.first;
-            int seg_end = seg.second;
-            auto it = std::lower_bound(unique_positions.begin(), unique_positions.end(), seg_start);
-            while (it != unique_positions.end() && *it <= seg_end) {
-                pos_depth[*it]++;
-                ++it;
+        // also require VAF >=0.2
+        vs.vaf = static_cast<double>(vs.occurrence) / vs.read_depth;
+        std::cout << vk.pos << " " <<  vk.ref << " " <<  vk.alt << " " << vs.vaf << std::endl;
+        if (vs.vaf < 0.2) {  
+            if (vk.ref.size() == vk.alt.size()) continue;
+            else if (vs.quality_occurrence < 2 || vs.vaf < 0.1) continue; // indels kept if quality occ >= 2
+        }
+        pos_to_vars[vk.pos].push_back({vk, vs.vaf});
+    }
+    
+    // Het/Hom classification
+    bool prev_overlapping = false;
+    std::vector<VariantKey> backbone_keys; // Het backbone container
+    backbone_keys.reserve(variant_counts.size());
+    for (auto it = pos_to_vars.begin(); it != pos_to_vars.end(); ++it) {
+        const auto& vars = it->second;
+
+        if (vars.size() == 1) {
+            const auto& vk = vars[0].first;
+            int ref_depth = variant_counts[vk].ref_depth;
+            int depth = variant_counts[vk].read_depth;
+            double ref_vaf = static_cast<double>(ref_depth) / depth;
+            
+            std::cout << vk.pos << " "<< vk.ref << " " << vk.alt << " " << ref_depth << " " << depth << " " << ref_vaf << " " << variant_counts[vk].vaf << std::endl;
+             
+            if (prev_overlapping) {
+                // Previous variant affecting this -> Multi-allelism -> Het 
+                backbone_keys.push_back(vk);
+            } else {
+                if (std::next(it) == pos_to_vars.end()){
+                   // No-overlap from prev and this is last
+                    if (ref_vaf < 0.1 && vars[0].second > 0.7) {
+                        Variant v(static_cast<int>(vk.pos), vk.ref, vk.alt, "");
+                        homo_vars.push_back(v);
+                    } else {
+                        backbone_keys.push_back(vk);
+                    }
+                } else {
+                    // No-overlap from prev and this has next
+                    auto next_it = std::next(it);
+                    if (vk.pos <= next_it->first && next_it->first < vk.end_pos) {
+                        // Overlapping with next -> Multi-allelism -> Het
+                        prev_overlapping = true;
+                        backbone_keys.push_back(vk);
+                    } else {
+                        // Non-overlapping
+                        prev_overlapping = false;
+                        if (ref_vaf < 0.1 && vars[0].second > 0.7) {
+                            Variant v(static_cast<int>(vk.pos), vk.ref, vk.alt, "");
+                            homo_vars.push_back(v);
+                        } else {
+                            backbone_keys.push_back(vk);
+                        }
+                    }
+                }
             }
-        }
-    }
-
-    //--- Map the depth to global count
-    for (auto& [key, track] : global_counts) {
-        track.total_depth = pos_depth[key.pos];
-    }
-
-    //--- Profile positions for the presence of variants (any)
-    std::unordered_map<long long, std::vector<std::pair<VariantKey, int>>> pos_to_vars;
-    for (const auto& [key, track] : global_counts) {
-        if (track.total_depth == 0 || track.total_reads < 2) continue;
-        pos_to_vars[key.pos].push_back({key, track.total_reads});
+        } else {
+            // This locus has multiple variants with VAF >0.2 -> Multi-allelism 
+            // Add as Het upto 2 (diploid)
+            prev_overlapping = false;
+            for (int i = 0; i < 2; ++i) {
+                const auto& vk = vars[i].first;
+                backbone_keys.push_back(vk);
+                if (std::next(it) != pos_to_vars.end()){
+                    auto next_it = std::next(it);
+                    if (vk.pos <= next_it->first && next_it->first < vk.end_pos) {
+                        prev_overlapping = true;
+                    }
+                }
+            }
+        } 
     }
     
-    //--- Het/Hom classification
-    std::vector<VariantKey> backbone_keys;
-    backbone_keys.reserve(global_counts.size());
-    
-    for (auto& [pos, vars] : pos_to_vars) {
-        // Coverage at the locus (pos)
-        int total_depth = global_counts[vars[0].first].total_depth;
-        
-        // Sort variants with N of supporting reads (total_reads)
-        std::sort(vars.begin(), vars.end(), [](const auto& a, const auto& b) {
-            return a.second > b.second; // 降順
-        });
-
-        const auto& major_key = vars[0].first;
-        int major_reads = vars[0].second;
-
-        // Total count of NON-reference (alt) reads
-        int total_alt_reads = 0;
-        for (const auto& v : vars) total_alt_reads += v.second;
-
-        // Get the reference read counts as total_depth(coverage) - total_alt-reads
-        int ref_reads = total_depth - total_alt_reads;
-        if (ref_reads < 0) ref_reads = 0; //zero-clip for safety
-
-        double ref_vaf = static_cast<double>(ref_reads) / total_depth;
-        double major_vaf = static_cast<double>(major_reads) / total_depth;
-
-        bool is_snv = (major_key.ref.length() == 1 && major_key.alt.length() == 1);
-        std::cout << major_key.pos << " " << major_key.ref << " " << major_key.alt 
-                  << " Major_VAF:" << major_vaf << " Ref_VAF:" << ref_vaf << std::endl;
-
-        // Homozygous if ref reads is so few (< 5%) 
-        // or the locus has a dominant variant (SNV: vaf > 0.9 or indel: vaf > 0.7                    
-        if (ref_vaf < 0.05 || ((is_snv && major_vaf > 0.9) || (!is_snv && major_vaf > 0.7))) {
-            Variant v(static_cast<int>(major_key.pos), major_key.ref, major_key.alt, "");
-            homo_vars.push_back(v); 
-        }
-        // Othewise Het, but require a vaf > 0.2 to remove technical artifacts
-        else if (major_vaf >= 0.2) {
-            backbone_keys.push_back(major_key);
-        }
-    }
-
     std::sort(homo_vars.begin(), homo_vars.end());
        
     std::sort(backbone_keys.begin(), backbone_keys.end(), [](const VariantKey& a, const VariantKey& b) {
@@ -313,30 +354,13 @@ void Pileup::inferGermlineHaplotype(const UserParams& params) {
 
     std::vector<std::pair<int, bool>> read_calls;
     read_calls.reserve(64);
-
-    for (int i = 0; i < this->sz; ++i) {
-        const auto& read = this->reads[i];
-        if (!read.is_control || read.covering_ptrn != 'A' || !read.qc_passed) continue;
+    for (const auto i : evaluated) {
+        const auto& read = reads[i];
 
         read_calls.clear();
 
         for (int j = 0; j < N; ++j) {
             const auto& b_key = backbone_keys[j];
-
-            if (read.aln_end < b_key.pos) break;
-
-            if (b_key.pos < read.aln_start) continue;
-
-
-            bool is_mechanically_covered = false;
-            for (const auto& seg : read.mapped_segments) {
-                if (seg.first <= b_key.pos && b_key.pos <= seg.second) {
-                    is_mechanically_covered = true;
-                    break;
-                }
-            }
-
-            if (!is_mechanically_covered) continue;
 
             bool has_alt = false;
             for (const auto& v : read.variants) {
@@ -348,15 +372,22 @@ void Pileup::inferGermlineHaplotype(const UserParams& params) {
 
             read_calls.push_back({j, has_alt});
         }
-
+         
         // --- Within the same read, testing the linkage
         if (read_calls.size() < 2) continue;
-
+        
+        //  -v1-------v3---
+        //  ------v2------
+        //  -v1-------v3--
+        //
+        //      v1   v2   v3    
+        //  v1  *    0/1  2/0
+        //  v2  0/0   *   0/0 
+        //  v3  2/0  0/1   *     
         for (size_t a = 0; a < read_calls.size(); ++a) {
             for (size_t b = a + 1; b < read_calls.size(); ++b) {
                 int idxA = read_calls[a].first;
                 int idxB = read_calls[b].first;
-
 
                 if (read_calls[a].second == read_calls[b].second) {
                     adj[idxA][idxB].same++;
@@ -368,25 +399,41 @@ void Pileup::inferGermlineHaplotype(const UserParams& params) {
             }
        }
     }
-
-    // Pick up the most reliable HET variant as the starting point
-    // (Maximize coverage while penalizing deviation from VAF 0.5)
-    int best_seed_idx = 0;
+    
+    // Pick up the HET variant closest to the target position as the starting point
+    // (Minimize distance to target_pos, with a tie-breaker using original score)
+    int best_seed_idx = -1;
+    long long min_distance = std::numeric_limits<long long>::max();
     double best_seed_score = -1.0;
+
     for (int i = 0; i < N; ++i) {
-        int coverage = global_counts[backbone_keys[i]].total_reads;
-        int depth = global_counts[backbone_keys[i]].total_depth;
+        int occurrence = variant_counts[backbone_keys[i]].occurrence;
+        int depth = variant_counts[backbone_keys[i]].read_depth;
         if (depth == 0) continue;
 
-        double vaf = static_cast<double>(coverage) / depth;
-        double score = coverage * (0.5 - std::abs(vaf - 0.5));
+        long long distance = std::abs(backbone_keys[i].pos - target_pos);
+        
+        double vaf = static_cast<double>(occurrence) / depth;
+        double score = occurrence * (0.5 - std::abs(vaf - 0.5));
 
-        if (score > best_seed_score) {
+        if (distance < min_distance) {
+            min_distance = distance;
             best_seed_score = score;
             best_seed_idx = i;
+        } 
+        else if (distance == min_distance) {
+            if (score > best_seed_score) {
+                best_seed_score = score;
+                best_seed_idx = i;
+            }
         }
     }
-
+    
+    if (best_seed_idx == -1) {
+        if (N > 0) best_seed_idx = 0; 
+        else return;
+    }
+    
     std::vector<Phase> phased_array(N, Phase::Unphased);
     phased_array[best_seed_idx] = Phase::Hap1; // designate the start as Hap1
 
@@ -404,19 +451,13 @@ void Pileup::inferGermlineHaplotype(const UserParams& params) {
 
             const Edge& edge = adj[curr][neighbor];
             int total_links = edge.same + edge.diff;
-
             if (total_links >= 2) {
-                double purity = static_cast<double>(std::max(edge.same, edge.diff)) / total_links;
-
-                // same /(same + diff) > 0.75 or < 0.25
-                if (purity >= 0.75) {
-                    if (edge.same > edge.diff) {
-                        phased_array[neighbor] = curr_phase;
-                        queue.push_back(neighbor);
-                    } else {
-                        phased_array[neighbor] = (curr_phase == Phase::Hap1) ? Phase::Hap2 : Phase::Hap1;
-                        queue.push_back(neighbor);
-                    }
+                if (edge.same > edge.diff) {
+                    phased_array[neighbor] = curr_phase;
+                    queue.push_back(neighbor);
+                } else if (edge.same < edge.diff){
+                    phased_array[neighbor] = (curr_phase == Phase::Hap1) ? Phase::Hap2 : Phase::Hap1;
+                    queue.push_back(neighbor);
                 }
             }
         }
@@ -560,6 +601,20 @@ inline void prep_vars(Vars& dest, const Vars& source) {
 void Pileup::setHaploTypes(LocalReference& loc_ref, const Variant& target) {
     PatternCnt s_sig_cnt; 
     
+    
+    Vars target_hap{target};
+    if (hiconf_s_read_idx.size() > 1) {
+        variant_consensus(reads, hiconf_s_read_idx, target_hap);
+    } else if (hiconf_s_read_idx.size() <= 1 && s_read_idx.size() > 0) {
+        variant_consensus(reads, s_read_idx, target_hap);
+    }  
+    for (const auto& v : target_hap) {
+        if (loc_ref.flanking_start <= v.pos && v.pos <= loc_ref.flanking_end) ++v_cnt;
+    }
+     
+    make_sequence(loc_ref, target_hap, start, end, seq0, &i2p0); 
+    
+    /*
     if (hiconf_read_idx > -1) {
         std::cout << " hi gonf " << hiconf_read_idx << " " << reads[hiconf_read_idx].cigar_str << std::endl;
         make_sequence(
@@ -574,7 +629,7 @@ void Pileup::setHaploTypes(LocalReference& loc_ref, const Variant& target) {
     } else {
         if (homo_vars.empty()) // NOTE: homo_vars empty if has_second_bam is false
             make_sequence(loc_ref, {target}, start, end, seq0, &i2p0);
-    }
+    }*/
      
     if (has_second_bam) {
         // keep variants on target haplotype
@@ -602,7 +657,7 @@ void Pileup::setHaploTypes(LocalReference& loc_ref, const Variant& target) {
         for (const auto& v : hap2_vars)
             std::cout << v.pos << " " << v.ref << " " << v.alt << " hap2 var " << std::endl;
         
-        // REF/REF case
+        // REF/REF case (ref_homo)
         if (hap1_full.empty() && hap2_full.empty()) {
             is_ref_hom = true; return;
         }
@@ -613,9 +668,10 @@ void Pileup::setHaploTypes(LocalReference& loc_ref, const Variant& target) {
             std::cout << seq1 << " hap 111 " << std::endl;
         }
         
-        // REF/non_REF case
-        if (has_ref_hap) return; 
-        
+        // REF/non_REF case (ref_het)
+        if (has_ref_hap && hap2_full.empty()) {
+            is_ref_het = true; return; 
+        }
         // homozygous for non_REF
         if (hap1_full == hap2_full) {
             is_alt_hom = true; return;
@@ -623,8 +679,10 @@ void Pileup::setHaploTypes(LocalReference& loc_ref, const Variant& target) {
 
         // heterozygous for non_REF
         // this may include case hap1_vars = {homo_snp1, het_snp1} hap2_vars = {homo_snp1} 
-        if (!hap2_full.empty())
+        if (!hap2_full.empty()) { 
             make_sequence(loc_ref, hap2_full, start, end, seq2, &i2p2); 
+            is_alt_het = true;
+        }
         
         // Exit here.
         // We only set the background haplotypes if control alignments provided  

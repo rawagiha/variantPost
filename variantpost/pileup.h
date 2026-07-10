@@ -17,7 +17,7 @@ struct Pileup {
            const Strs& quals, const Bools& are_from_first_bam, const bool has_second,
            const UserParams& params, LocalReference& loc_ref, Variant& target);
     
-    void inferGermlineHaplotype(const UserParams& param);    
+    void inferGermlineHaplotype(const UserParams& param, const int target_pos);    
     
     void gridSearch(const UserParams& params, LocalReference& loc_ref, const Variant& target); 
     
@@ -42,6 +42,9 @@ struct Pileup {
     // variants between flank start/end in non-supporting reads
     std::unordered_map<Variant, int>  ns_vars; 
     
+    Ints hiconf_s_read_idx;
+    Ints s_read_idx;
+    
     //--------------------------------------------------------------------------
     // signature related 
     Idx sig_s_hiconf, sig_s, sig_u; // {sig : read idx with the sig} 
@@ -54,6 +57,7 @@ struct Pileup {
     int sz = -1;
     int s_cnt = 0, n_cnt = 0, u_cnt = 0, y_cnt = 0, z_cnt = 0; //cnt for supporting, non, undetermined
     int control_bam_cov = -1;
+    int v_cnt = 0; // variants in flanking regions
      
     //--------------------------------------------------------------------------
     //Ints starts, ends; // storing coverings starts/ends

@@ -2,6 +2,9 @@
 #define CONSENSUS_H
 
 #include "util.h"
+#include "reads.h"
+#include "variant_types.h"
+
 /*
 struct LocusAlignments {
     std::vector<std::string_view> refs; 
@@ -27,5 +30,5 @@ struct Consensus {
                         UserParams& params, LocalReference& loc_ref);
 };
 
-
+void variant_consensus(const std::vector<Read>& reads, const Ints& idx, Vars& consensus);
 #endif

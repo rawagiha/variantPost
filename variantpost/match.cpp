@@ -199,14 +199,31 @@ inline void fill_matched_sides(size_t curr,
     matched_sides.emplace_back(lt_matched_len, rt_matched_len); 
 }
 
+inline bool is_in_flankings(const int pos, const int flanking_start, const int flanking_end) {
+    return (flanking_start <= pos && pos <= flanking_end); 
+}
+
+struct ReAlnQc {
+     bool alignable_as_snvs = false;
+     bool too_many_events = false;
+     bool out_of_flanking = false;
+     bool is_likely_simple = false;
+     int start = 0, end = 0; // flanking start/end pos
+     int expected_event_num = 0;
+     int local_thresh = 0;
+
+     ReAlnQc(int a, int b, int c, int d) 
+        : start(a), end(b), expected_event_num(c), local_thresh(d) { }
+
+     bool pass() const {
+        return (!too_many_events && !out_of_flanking);
+     }
+};
+
+
 void realn_to_perfonalized_genome(
-    LocalReference& loc_ref,
-    Aligner& alngr, Filter& fltr, Alignment& aln,
-    Variant& pv, 
-    bool& is_personalized, 
-    bool& is_likely_simple, 
-    const std::string& mut_seq, 
-    const std::string& hap_seq, const Ints& i2p) {
+    Aligner& alngr, Filter& fltr, Alignment& aln, Variant& pv, ReAlnQc& qc, 
+    const std::string& mut_seq, const std::string& hap_seq, const Ints& i2p) {
     
     const char* query = mut_seq.c_str();
     int32_t mask_len = strlen(query) < 30 ? 15 : strlen(query) / 2;
@@ -218,21 +235,33 @@ void realn_to_perfonalized_genome(
     fill_cigar_vector(aln.cigar_string, cigar_vec);
     
     Vars vars; 
-    std::vector<std::pair<int, int>> matched_sides;
-    int i = aln.ref_begin, j = aln.query_begin;
+    std::vector<std::pair<int, int>> matched_sides; // To test for complex indels  
+    
+    int i = aln.ref_begin, j = aln.query_begin; 
+    
+    int cnt = 0; // count variants in flankings
     size_t curr = 0;
     const size_t last = cigar_vec.size() - 1; 
+    bool has_indels_in_flankings = false;
     for (const auto& [op, op_len] : cigar_vec) {
         switch (op) {
             case '=':
                 i += op_len; j += op_len; break;
             case 'X':
                 vars.emplace_back(i2p[i], hap_seq.substr(i, op_len), mut_seq.substr(j, op_len));
+                
+                if (is_in_flankings(i2p[i], qc.start, qc.end)) ++cnt;
+                
                 fill_matched_sides(curr, last, cigar_vec, matched_sides);
                 i += op_len; j+= op_len;    
                 break;
             case 'I': {
                 Variant v(i2p[i - 1], hap_seq.substr(i - 1, 1), mut_seq.substr(j - 1 , op_len +1));
+                
+                if (is_in_flankings(i2p[i - 1], qc.start, qc.end)) {
+                     ++cnt; has_indels_in_flankings = true;
+                }
+
                 int lt_lim = std::max(i - 1 - 10, 0);
                 v.sample_lt_seq = hap_seq.substr(lt_lim, i - lt_lim);
                 v.sample_rt_seq = hap_seq.substr(i);
@@ -243,6 +272,11 @@ void realn_to_perfonalized_genome(
             }
             case 'D': {
                 Variant v(i2p[i - 1], hap_seq.substr(i - 1, op_len + 1), mut_seq.substr(j - 1 , 1));
+                
+                if (is_in_flankings(i2p[i - 1], qc.start, qc.end)) {
+                    ++cnt; has_indels_in_flankings = true;
+                }
+                
                 int lt_lim = std::max(i - 1 - 10, 0);
                 v.sample_lt_seq = hap_seq.substr(lt_lim, i - lt_lim);
                 v.sample_rt_seq = hap_seq.substr(i + op_len);
@@ -258,37 +292,75 @@ void realn_to_perfonalized_genome(
         ++curr;
     } 
     
+    // Early exit if the alignment on personalized genome is possibly SNVs
+    // QC will PASS
+    if (!has_indels_in_flankings) {
+       qc.alignable_as_snvs = true; return;
+    }
+
+    // Early eixt if the alingment on personalized genome is with indels but more complicated 
+    // -> complicated variations are unlikely to occur 
+    if (qc.expected_event_num == 1 && cnt > qc.expected_event_num) {
+        qc.too_many_events = true; return;
+    }
+
     int closest = -1, min_dist = INT_MAX, dist = INT_MAX;
     for (int i = 0; i < static_cast<int>(vars.size()); ++i) {
         const auto& v = vars[i]; 
-        if (loc_ref.flanking_start <= v.pos && v.pos <= loc_ref.flanking_end) {
-            dist = std::abs(v.pos - pv.pos); // pv.pos == target.pos
+        if (is_in_flankings(v.pos, qc.start, qc.end)) {
+            // Skip if it is SNV, while there are indels in the flankings
+            if (has_indels_in_flankings && (v.ref.size() == v.alt.size())) continue;
+
+            dist = std::abs(v.pos - pv.pos); // target.pos is supplied by pv (initialized by target)
             if (dist < min_dist) {closest = i; min_dist = dist; } 
         }
     }
-    std::cout << closest << " closet " << " " << loc_ref.locplx_start << " " << loc_ref.locplx_end << std::endl; 
-    if (closest == -1) return; 
-    pv = std::move(vars[closest]); 
     
-    // Checking for complex indels on the personalized genome
-    if (matched_sides[closest].first > 19 && matched_sides[closest].second > 19) {
-        // exclude MNVs 
-        if (!pv.is_complex) is_likely_simple = true;
+    // Early exit if no indels in the flanking 
+    // -> Realignment on personalzed genome is too different from the original 
+    if (closest == -1) {
+        qc.out_of_flanking = true;  return; 
     }
 
-    is_personalized = true;
-
+    pv = std::move(vars[closest]); 
+    std::cout << closest <<  " closet " << " " << pv.pos << " " << pv.ref << " " << pv.alt << " " << cnt << " v cnt on ref " << qc.expected_event_num  << std::endl; 
+       
+    // Complex indels on the personalized genome
+    if (matched_sides[closest].first >= qc.local_thresh && matched_sides[closest].second >= qc.local_thresh) {
+        // exclude MNVs 
+        if (!pv.is_complex) qc.is_likely_simple = true;
+    }
 }
 
-inline void fill_result(const Variant& v, SearchResult& rslt) {
+inline bool expect_to_share_hets(const int start, const int end, Vars& vars, LocalReference& loc_ref, const Variant& target) {
+    const int target_start = target.lpos;
+    const int target_end = target.end_pos; 
+    
+    for (auto& v : vars) {
+        v.setEndPos(loc_ref);
+        // v is on the target contig
+        if (v.end_pos < start || end < v.lpos) continue;
+        // v does not interact with target -> should be found if on the same hap
+        if (v.end_pos < target_start || target_end < v.lpos) return true;
+    }
+    return false;
+}
+
+inline void fill_result(const Variant& v, const ReAlnQc& qc, SearchResult& rslt) {
     rslt.ppos = v.pos;
     rslt.pref = v.ref;
     rslt.palt = v.alt;
     rslt.pltseq = v.sample_lt_seq;
     rslt.prtseq = v.sample_rt_seq;    
+    
+    if (!qc.pass()) return;
+    
+    rslt.personalized = true; // Successful analysis meant here NOT allele changed.   
+    rslt.possible_snv = qc.alignable_as_snvs;
+    rslt.likely_simple_on_personalized_genome = qc.is_likely_simple; 
 }
 
-void personalize(const Pileup& pileup, LocalReference& loc_ref, const UserParams& params, const Variant& target, SearchResult& rslt) {
+void personalize(Pileup& pileup, LocalReference& loc_ref, const UserParams& params, const Variant& target, SearchResult& rslt) {
         
     if (pileup.hiconf_read_idx < 0 || pileup.seq0.empty()) return;
     
@@ -297,80 +369,92 @@ void personalize(const Pileup& pileup, LocalReference& loc_ref, const UserParams
     
     std::string hiconf_seq = pileup.seq0;
     
+    // Heuristic for longer (>20bp) indels to align it as a signle gap
+    int gap_open_penal = params.gap_open_penal;
+    int gap_ext_penal =  params.gap_ext_penal;
+    if (target.indel_len > 19) {
+        gap_open_penal = 10; gap_ext_penal = 0;
+    }
     Alignment aln; Filter filter;
     Aligner aligner(params.match_score, params.mismatch_penal,
-                    params.gap_open_penal, params.gap_ext_penal);
+                    gap_open_penal, gap_ext_penal);
     
     size_t with_hap1 = count_overlap(pileup.hap0_vars, pileup.hap1_vars);
      
     Variant pv1(target.pos, target.ref, target.alt);
     Variant pv2(target.pos, target.ref, target.alt);
     
-    std::cout << pv1.ref << " " << pv1.alt << " snv? " << std::endl;
-
+    std::cout << pv1.ref << " " << pv1.alt << " this is target " << std::endl;
+    if (pileup.is_alt_het)
+        std::cout << "This is Het/Het" << std::endl;
         
     HapLL::RepeatInfo ri1, ri2, rir;
-    bool is_personalized_hap1 = false, is_personalized_hap2 = false;
-    bool is_likely_simple_hap1 = false, is_likely_simple_hap2 = false;
+    ReAlnQc qc_hap1(loc_ref.flanking_start, loc_ref.flanking_end, pileup.v_cnt, params.local_thresh);
+    ReAlnQc qc_hap2 = qc_hap1;
+    
+    bool hap1_inferred = false, hap2_inferred = false;
     if (pileup.is_alt_het) {    
         size_t with_hap2 = count_overlap(pileup.hap0_vars, pileup.hap2_vars);
         
+        std::cout << "over lap this hap1 " << with_hap1 << " " <<  " over lap this hap1 " << with_hap2 << std::endl;
         if (with_hap1 > with_hap2) {
-            // assigned to hap1. 
-            // is_personalized_hap1 will remainfalse if the realignment fails
-            realn_to_perfonalized_genome(loc_ref, aligner, filter, aln, pv1, 
-                                         is_personalized_hap1, is_likely_simple_hap1, hiconf_seq, pileup.seq1, pileup.i2p1);
+            realn_to_perfonalized_genome(aligner, filter, aln, pv1, qc_hap1, hiconf_seq, pileup.seq1, pileup.i2p1);
+            if (qc_hap1.pass()) hap1_inferred = true;
         } else if (with_hap1 < with_hap2) {
-            // assigned to hap2
-            // is_personalized_hap2 will remainfalse if the realignment fails
-            realn_to_perfonalized_genome(loc_ref, aligner, filter, aln, pv2, 
-                                         is_personalized_hap2, is_likely_simple_hap2, hiconf_seq, pileup.seq2, pileup.i2p2);
+            realn_to_perfonalized_genome(aligner, filter, aln, pv2, qc_hap2, hiconf_seq, pileup.seq2, pileup.i2p2);
+            if (qc_hap2.pass()) hap2_inferred = true;
         } else {
-            // inference hap1 vs. hap2
-            realn_to_perfonalized_genome(loc_ref, aligner, filter, aln, pv1, 
-                                         is_personalized_hap1, is_likely_simple_hap1, hiconf_seq, pileup.seq1, pileup.i2p1);
-            realn_to_perfonalized_genome(loc_ref, aligner, filter, aln, pv2, 
-                                         is_personalized_hap2, is_likely_simple_hap2, hiconf_seq, pileup.seq2, pileup.i2p2);
-
-            double ll_hap1 = is_personalized_hap1 ? HapLL::evaluate_variant(pv1, ri1) : -std::numeric_limits<double>::infinity();
-            double ll_hap2 = is_personalized_hap2 ? HapLL::evaluate_variant(pv2, ri2) : -std::numeric_limits<double>::infinity();
-
-            if (ll_hap1 >= ll_hap2) {
-                is_personalized_hap2 = false; // discard hap2, favor hap1 on exact ties
+            // Evaluate hap1 vs. hap2 by likelihood 
+            realn_to_perfonalized_genome(aligner, filter, aln, pv1, qc_hap1, hiconf_seq, pileup.seq1, pileup.i2p1);
+            realn_to_perfonalized_genome(aligner, filter, aln, pv2, qc_hap2, hiconf_seq, pileup.seq2, pileup.i2p2);
+            
+            if (qc_hap1.pass() && qc_hap2.pass()) {
+                 if (!qc_hap1.alignable_as_snvs && !qc_hap2.alignable_as_snvs) {
+                    double ll_hap1 = HapLL::evaluate_variant(pv1, ri1);
+                    double ll_hap2 = HapLL::evaluate_variant(pv2, ri2);
+                    if (ll_hap1 >= ll_hap2){ hap1_inferred = true; } else { hap2_inferred = true; } 
+                 } else {
+                    hap1_inferred = qc_hap1.alignable_as_snvs; hap2_inferred = qc_hap2.alignable_as_snvs;
+                 }  
             } else {
-                is_personalized_hap1 = false; // discard hap1
+                hap1_inferred = qc_hap1.pass(); hap2_inferred = qc_hap2.pass();     
             }
         }
     } else {
-        realn_to_perfonalized_genome(loc_ref, aligner, filter, aln, pv1, 
-                                     is_personalized_hap1, is_likely_simple_hap1, hiconf_seq, pileup.seq1, pileup.i2p1);
+        // Test if the target hap would share variants if it is on hap 1
+        bool would_share = expect_to_share_hets(pileup.start, pileup.end, pileup.hap1_vars, loc_ref, target);
         
-        std::cout << pv1.ref << " " << pv1.alt << " snv? " << std::endl; 
-        // inference hap1 vs. hap_ref
-        if (!with_hap1) {
+        std::cout << " this is compareison against hap1 vs ref. something shared with hap1?? " << with_hap1 << std::endl;
+        std::cout << " it would share, it target is on hap1? " << would_share << std::endl;
+        
+        // No sharing while it should -> ref hap
+        if (would_share && with_hap1 == 0) return; 
+        
+        realn_to_perfonalized_genome(aligner, filter, aln, pv1, qc_hap1, hiconf_seq, pileup.seq1, pileup.i2p1);
+        std::cout << qc_hap1.pass() << " <- qc passed for hap1?? " << std::endl;
+        if (!qc_hap1.pass()) return;
+
+        if (with_hap1 || qc_hap1.alignable_as_snvs) {
+            hap1_inferred = true;
+        } else {           
+            // Evaluate hap1 vs. ref hap by likelihood
             Variant pv_ref = target;
-            std::cout << target.lt_seq << " <- tar lt, tar rt -> " << target.rt_seq << std::endl; 
-            pv_ref.sample_lt_seq = std::string{target.lt_seq};
-            pv_ref.sample_rt_seq = std::string{target.rt_seq};
-            std::cout << pv_ref.sample_lt_seq << " " << pv_ref.sample_rt_seq << std::endl; 
+            pv_ref.sample_lt_seq = std::string{target.lt_seq}; pv_ref.sample_rt_seq = std::string{target.rt_seq};
             double ll_hap1 = HapLL::evaluate_variant(pv1, ri1);
             double ll_ref  = HapLL::evaluate_variant(pv_ref, rir);
-            
-            std::cout << ll_hap1 << " " << ll_ref << std::endl;
-             
-            if (ll_hap1 < ll_ref) {
-                is_personalized_hap1 = false;
-            } 
-        }   
+            if (ll_hap1 >= ll_ref) hap1_inferred = true;
+        }
+
+        std::cout << pv1.ref << " " << pv1.alt << " realn " << std::endl; 
     }
     
-    if (is_personalized_hap1) {
-        fill_result(pv1, rslt);
-        rslt.likely_simple_on_personalized_genome = is_likely_simple_hap1;
-    } else if (is_personalized_hap2) {
-        fill_result(pv2, rslt);
-        rslt.likely_simple_on_personalized_genome = is_likely_simple_hap2;
-    } 
+    if (hap1_inferred) {
+        fill_result(pv1, qc_hap1, rslt);
+    } else if (hap2_inferred) {
+        fill_result(pv2, qc_hap2, rslt);
+    } else {
+        // inferred as reference haplotype 
+    }
     
     std::cout << rslt.ppos << " " <<  rslt.pref<< " " << rslt.palt << " " << rslt.pltseq << " " << rslt.prtseq << std::endl;
 }

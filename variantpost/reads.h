@@ -24,10 +24,11 @@ struct Read {
     std::string non_ref_sig;
 
     Ints idx2pos;
-    Coord aligned_segments;
-    Coord mapped_segments;
+    Coord aligned_segments;  // excl N
+    Coord mapped_segments;  // excl N + D
     Coord skipped_segments;
     Ints var_idx;
+    Ints var_pos;
     CigarVec cigar_vector;
     Vars variants;
 
@@ -72,7 +73,6 @@ struct Read {
     char covering_ptrn = 'C';
     char rank = '\0';
     
-
 
 
     //--------------------------------------------------------------------------
@@ -127,6 +127,8 @@ struct Read {
     void hasTargetComplexIndel(LocalReference& loc_ref, const Variant& target);
     
 
+    bool IsRefAt(const int pos) const;
+    
     /*
     //--------------------------------------------------------------------------
     // read identifier

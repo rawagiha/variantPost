@@ -268,6 +268,10 @@ def crop_contig(
         for v_str in trans_vars:
             v_ = v_str.split("_")
             pos_ = int(v_[0])
+           
+            if pos_ == target_pos:
+                continue
+
             res = contig_dict.get(pos_)
             if res and v_[2] == res[1]:
                 if pos_ < target_pos:

@@ -33,7 +33,7 @@ void SearchResult::setReadInfo(const Read& read, const char qual_thresh) {
         for (const auto& v : read.variants) {
             if (v.mean_qual < qual_thresh) continue;
             
-            hq_negative_cnts[VariantKey{v.pos, v.ref, v.alt}]++;
+            hq_negative_cnts[VariantKey{v.pos, v.end_pos, v.ref, v.alt}]++;
         }    
     } else if (rank == 'u') {
         target_statuses.push_back(-1);
@@ -120,7 +120,7 @@ void _search_target(SearchResult& rslt,
                   params, loc_ref, target);
     
     if (pileup.has_second_bam) {
-        pileup.inferGermlineHaplotype(params); 
+        pileup.inferGermlineHaplotype(params, target.pos); 
         make_sequence(
             loc_ref, pileup.homo_vars, pileup.start, pileup.end, pileup.rseq, &pileup.i2pr);
     } else {
@@ -154,7 +154,7 @@ void _search_target(SearchResult& rslt,
 
     
     // Realn against personalized genome
-    if (pileup.has_second_bam)
+    if (pileup.has_second_bam && !target.is_substitute)
         personalize(pileup, loc_ref, params, target, rslt);    
     
     Consensus con;

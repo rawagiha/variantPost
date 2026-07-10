@@ -80,7 +80,7 @@ class VariantAlignment(object):
         "has_second", "contig_dict", "target_status", "are_reverse",
         "are_first_bam", "tags", "ppos", "pref", "palt", "pltseq",
         "prtseq", "ref", "alt", "skips", "trans_vars", "read_names", "is_with_target",
-        "likely_simple_on_personalized_genome"
+        "personalized", "likely_simple_on_personalized_genome", "possible_snv"
     )
 
     
@@ -95,7 +95,7 @@ class VariantAlignment(object):
         base_quality_threshold=20,
         low_quality_base_rate_threshold=0.3,
         downsample_threshold=-1,
-        match_score=3,
+        match_score=2,
         mismatch_penalty=2,
         gap_open_penalty=3,
         gap_extension_penalty=1,
@@ -145,7 +145,9 @@ class VariantAlignment(object):
             self.ref,
             self.alt,
             self.trans_vars,
-            self.likely_simple_on_personalized_genome
+            self.personalized,
+            self.likely_simple_on_personalized_genome,
+            self.possible_snv
         ) = search_target(
             bam,
             second_bam,
@@ -189,6 +191,22 @@ class VariantAlignment(object):
     
     def tax(self):
         rtxn = IndelTaxon(self.variant.ref, self.variant.alt, self.variant.left_flank(), self.variant.right_flank())
+        if not self.personalized:
+            return rtxn.class_83, rtxn.class_89, rtxn.class_83, rtxn.class_89
+        
+        if self.possible_snv:
+            snv_txn = "PossibleSNV"
+            return rtxn.class_83, rtxn.class_89, snv_txn, snv_txn
+
+        v = self.phase2complex()
+        if not v:
+            return rtxn.class_83, rtxn.class_89, rtxn.class_83, rtxn.class_89
+
+        print(v.pos, v.ref, v.alt, "this is a pen")
+        if not v.is_simple_indel:
+            cplx_tnx = "Complex"
+            return rtxn.class_83, rtxn.class_89, cplx_tnx, cplx_tnx
+
         print(self.pref, self.palt, self.pltseq, self.prtseq, "DDDDD")
         if self.pref:
             ptxn = IndelTaxon(self.pref, self.palt, self.pltseq, self.prtseq)
@@ -393,22 +411,17 @@ class VariantAlignment(object):
         #    self.target_pos = self.retarget_pos
         
         ###################
-        if not self.is_with_target:
-            return
-        
         v = self.variant
-        v.cpos, v.cref, v.calt = v.pos, v.ref, v.alt
+        if not self.is_with_target:
+            return v
+    
         
         v.phased_as_complex = False
         
         if cis and self.likely_simple_on_personalized_genome:
-            if not v.is_simple_indel:
-                v.cpos = v.spos
-                v.cref = v.sref
-                v.calt = v.salt
-            
-            return
-        
+            #if not v.is_simple_indel:
+            return v
+                 
         base_quality_threshold = 20
         match_penalty_for_phasing = 3 
         max_common_substr_len = 15
@@ -432,19 +445,21 @@ class VariantAlignment(object):
             )
             
             if phased and self.is_with_target:
-                v.cpos = phased[0]
-                v.cref = phased[1]
-                v.calt = phased[2]
+                v.pos = phased[0]
+                v.ref = phased[1]
+                v.alt = phased[2]
                 
-                if len(v.cref) < len(v.calt):
-                    v.phased_as_complex = (v.cref != v.calt[:len(v.cref)])
-                elif len(v.cref) > len(v.calt):
-                     v.phased_as_complex = (v.calt != v.cref[:len(v.calt)])
-                else:
-                    if len(v.cref) > 1:
-                        v.phased_as_complex = (v.calt != v.cref)
+                #if len(v.cref) < len(v.calt):
+                #    v.phased_as_complex = (v.cref != v.calt[:len(v.cref)])
+                #elif len(v.cref) > len(v.calt):
+                #     v.phased_as_complex = (v.calt != v.cref[:len(v.calt)])
+                #else:
+                #    if len(v.cref) > 1:
+                #        v.phased_as_complex = (v.calt != v.cref)
 
+                print(v.pos, v.ref, v.alt, "before normalization")
                 v.normalize(inplace=True)
+                return v
             else:
                 pass     
             #elif self.is_with_target:

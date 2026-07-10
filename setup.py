@@ -33,7 +33,6 @@ pysam_includes = pysam.get_include()
 if isinstance(pysam_includes, str):
     pysam_includes = [pysam_includes]
 
-# htslib のパスもリスト内の各要素に対して作成
 htslib_includes = [os.path.join(p, "htslib") for p in pysam_includes]
 
 extensions = [
@@ -53,14 +52,11 @@ extensions = [
             "variantpost/fasta/split.cpp",
         ],
         language="c++",
-        # pysam のヘッダーパスを追加（これが重要）
         include_dirs=pysam_includes + htslib_includes,
-        # 最適化フラグを有効化
         extra_compile_args=["-std=c++17"],
         extra_link_args=["-std=c++17"],
     ),
 ]
-
 
 version = {}
 with open("variantpost/version.py") as ver:
@@ -73,4 +69,10 @@ setup(
     cmdclass={"build_ext": BuildExt},
     ext_modules=cythonize(extensions, annotate=False, language_level="3"),
     install_requires=["pysam>=0.23.3"],
+
+    entry_points={
+         'console_scripts': [
+             'indelinside=variantpost.__main__:main',
+         ],
+     },
 )
