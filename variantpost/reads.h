@@ -5,24 +5,23 @@
 #include <bitset>
 #include "util.h"
 
+
+enum class CoveringPattern {
+    // Target's left-aligned (lpos) and right-aligned pos (rpos) 
+    // is within mapped segments + SOFTCLIP extension (read-start/end)
+    Full,
+
+    // One of target's lpos/rpos is  within mapped segment + SOFTCLIP extension 
+    // with non-reference pattern (variants or softclipping)
+    Partial,
+
+    // Otherwise (including spliced reads completely skipping the region) 
+    NoCover
+};
+
 //------------------------------------------------------------------------------
 // features at read level
 struct Read {   
-    
-    enum class CoveringPattern {
-        // Target's left-aligned (lpos) and right-aligned pos (rpos) 
-        // is within mapped segments + SOFTCLIP extension (read-start/end)
-        Full,
-
-        // One of target's lpos/rpos is  within mapped segment + SOFTCLIP extension 
-        // with non-reference pattern (variants or softclipping)
-        Partial,
-
-        // Otherwise (including spliced reads completely skipping the region) 
-        NoCover
-    };
-
-    //--------------------------------------------------------------------------
     // constructor from inputs passed by Cython wrapper
     Read(std::string_view name, bool is_reverse, const std::string& cigar_str,
          int aln_start, int aln_end, std::string_view seq,
