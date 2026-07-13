@@ -151,22 +151,13 @@ void _search_target(SearchResult& rslt,
     for (const auto& read : pileup.reads) {
         if (read.rank == 's') std::cout << read.name << " " << read.cigar_str <<  "  " << read.aln_start << std::endl;
     }
-
     
     // Realn against personalized genome
     if (pileup.has_second_bam && !target.is_substitute)
         personalize(pileup, loc_ref, params, target, rslt);    
     
-    Consensus con;
-    if (pileup.hiconf_read_idx > -1) {
-        con._from_variants(pileup.start, pileup.end,  pileup.reads[pileup.hiconf_read_idx].variants, params, loc_ref);
-        size_t kk = con.ref.size();
-        rslt.positions = con.pos;
-        rslt.ref_bases = con.ref;
-        rslt.alt_bases = con.alt;
-
-        //for (size_t i = 0; i < rslt.positions.size(); ++i)
-        //    std::cout << rslt.positions[i] << " " << rslt.ref_bases[i] << " " << rslt.alt_bases[i] << std::endl;
+    if (pileup.has_hiconf_support) {
+        from_consensus_variant_list(rslt, loc_ref, pileup.start, pileup.end, pileup.hap0_vars);
     }
     
     rslt.finalize(); 

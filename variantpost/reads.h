@@ -4,76 +4,23 @@
 #include <climits>
 #include <bitset>
 #include "util.h"
-#include "variant_types.h"
 
 //------------------------------------------------------------------------------
 // features at read level
 struct Read {   
     
-    // 1. 8-byte members (Pointers, string_view, std::string, std::vector)
-    std::string_view name;
-    std::string_view base_quals;
-    std::string_view seq;
-    std::string_view ref_seq;
-    std::string_view cigar_str;
+    enum class CoveringPattern {
+        // Target's left-aligned (lpos) and right-aligned pos (rpos) 
+        // is within mapped segments + SOFTCLIP extension (read-start/end)
+        Full,
 
-    std::string spliced_ref_seq;
-    std::string target_ref = "N";
-    std::string target_alt = "N";
-    std::string splice_sig;
-    std::string non_ref_sig;
+        // One of target's lpos/rpos is  within mapped segment + SOFTCLIP extension 
+        // with non-reference pattern (variants or softclipping)
+        Partial,
 
-    Ints idx2pos;
-    Coord aligned_segments;  // excl N
-    Coord mapped_segments;  // excl N + D
-    Coord skipped_segments;
-    Ints var_idx;
-    Ints var_pos;
-    CigarVec cigar_vector;
-    Vars variants;
-
-    // 2. 4-byte members (int)
-    int aln_start = 0;
-    int aln_end = 0;
-    int start_offset = 0;
-    int end_offset = 0;
-    int read_start = 0;
-    int read_end = 0;
-    int qs = -1, qe = -1;
-    int covering_start = 0;
-    int covering_end = 0;
-    int target_idx = -1;
-    int target_pos = -1;
-    int flnk_v_cnt = 0;
-    int dist_to_non_target = INT_MAX;
-    int smer = 0, nmer = 0;
-    Phase phase = Phase::Unphased;
-
-    // 3. 1-byte members (bool, char)
-    // boolをまとめて並べることで、コンパイラが1バイト単位で詰め込みます
-    bool is_reverse = false;
-    bool is_control = false;
-    bool is_na_ref = false;
-    bool covered_in_clip = false;
-    bool is_ref = false;
-    bool has_target = false;
-    bool has_local_events = false;
-    bool has_local_clip = false;
-    bool has_smaller_change = false;
-    bool has_anti_pattern = false;
-    bool has_positional_overlap = false;
-    bool qc_passed = false;
-    bool fail_to_cover_flankings = false;
-    bool is_stable_non_ref = false;
-    bool is_central_mapped = false;
-    bool is_quality_map = false;
-    bool ineffective_kmer = false;
-    bool high_ambiguity = false;
-
-    char covering_ptrn = 'C';
-    char rank = '\0';
-    
-
+        // Otherwise (including spliced reads completely skipping the region) 
+        NoCover
+    };
 
     //--------------------------------------------------------------------------
     // constructor from inputs passed by Cython wrapper
@@ -126,93 +73,70 @@ struct Read {
     void hasTargetComplexSubstitute(const Variant& target);
     void hasTargetComplexIndel(LocalReference& loc_ref, const Variant& target);
     
-
+    //-------------------------------------------------------------------------
     bool IsRefAt(const int pos) const;
     
-    /*
-    //--------------------------------------------------------------------------
-    // read identifier
+    // 8-byte members (Pointers, string_view, std::string, std::vector)
     std::string_view name;
+    std::string_view base_quals;
+    std::string_view seq;
+    std::string_view ref_seq;
+    std::string_view cigar_str;
 
-    //--------------------------------------------------------------------------
-    // quality scores 
-    std::string_view base_quals; // base quality string 
-    int qs = -1; int qe = -1; // read seq start/end index after trimming low qual bases
-    
-    //--------------------------------------------------------------------------
-    // genome coordinates (1-based) 
-    int aln_start = 0; int aln_end = 0; // alignment start/end 
-    int start_offset = 0; int end_offset = 0; // softclip len 
-    int read_start = 0; int read_end = 0; // alignmet start/end extented by softclip len
-    //Coord idx2pos; // maps read idx to aligned genomic position
+    std::string spliced_ref_seq;
+    std::string target_ref = "N";
+    std::string target_alt = "N";
+    std::string splice_sig;
+    std::string non_ref_sig;
+
     Ints idx2pos;
-    Coord aligned_segments; // vector<pair<int, int>> start/end of aligned segments 
-    Coord skipped_segments; // vector<pair<int, int>> start/end of skipped segments
-    Ints var_idx; // index at variant pos (excl. clipping)
-    int covering_start = 0; // start of unspliced segment covering the target locus
-    int covering_end = 0; // end of above segment inclusive
-                                        
-    //--------------------------------------------------------------------------
-    // sequences 
-    std::string_view seq; // reference to read seq data (std::string) from input
-    std::string_view ref_seq; // reference to refseq data
-    std::string spliced_ref_seq; // store refseq data if spliced as string (not view)
-                                    
-    //--------------------------------------------------------------------------
-    // cigar 
-    std::string_view cigar_str; // reference to cigar string from input
-    CigarVec cigar_vector; // CigarVec vector<pair<char, int>>
-    
-    //-------------------------------------------------------------------------- 
-    // boolean flags
-    bool is_reverse = false; // true if aligned to the complementary stran
-    bool is_control = false; // true for second BAM reads. always true for single BAM
-    bool is_na_ref = false; // true if no ref_seq is available for this read
-    bool covered_in_clip = false; // true if target pos is clipped
-    bool is_ref = false; // true if seq is identical to ref_seq
-    bool has_target = false; // true if supporitng the target
-    bool has_local_events = false; // true if non_ref events within event radius (see Variant)
-    bool has_local_clip = false; // true if clip within event radius
-    bool has_smaller_change = false; // tru if n of base changes are smaller than target in flnk-start/end 
-    bool has_anti_pattern = false; // true if a single non-target variant btw flnk-start/end
-    bool has_positional_overlap = false; // true with variatns overlapping the target
-    bool qc_passed = false; // true if local freq of dirty bases < thresh
-    bool fail_to_cover_flankings = false; // if true, classify as ambigous read
-    bool is_stable_non_ref = false; // true if bounded by enough 2-mer diversity
-    bool is_central_mapped = false; // true if mapped in 2nd/3rd of read len quartile
-    bool is_quality_map = false; // true if is_stable_non_ref && is_central_mapped
-    bool ineffective_kmer = false; // true if target is between variants < kmer_size
-    bool high_ambiguity = false; // true if read end in low complex region
-    
-    //--------------------------------------------------------------------------
-    // pattern keys
-    char covering_ptrn = 'C'; // 'A':complete coverage, 'B":partial, 'C':none (default)   
-
-    //--------------------------------------------------------------------------
-    // variant info
+    Coord aligned_segments;  // excl N
+    Coord mapped_segments;  // excl N + D
+    Coord skipped_segments;
+    Ints var_idx;
+    Ints var_pos;
+    CigarVec cigar_vector;
     Vars variants;
-    int target_idx = -1; // target variant idx in variants (vector<Variants>)
-    int target_pos = -1;  // genomic pos in the input (possibly non-normalized)
-    int flnk_v_cnt = 0; // count of variants in flanking start/end
-    std::string target_ref = "N"; // ref allele (possibly non-normalized)
-    std::string target_alt = "N"; // alt allele (possibly non-normalized)
 
-    //--------------------------------------------------------------------------
-    // signtures to compare variations    
-    //std::string flanking_sig; // for variants in flanking regions
-    //std::string variant_sig; // for all variants in read
-    //std::string clip_sig; // for clipping pattern
-    std::string splice_sig; // for splicing pattern
-    std::string non_ref_sig; // for variants and clippings
-    
-    //--------------------------------------------------------------------------
-    // metrics
-    int dist_to_non_target = INT_MAX; // distance to nearest variant or clip
-    int smer = 0, nmer = 0; // supporting and non-supporting kmer count 
-      
-    //--------------------------------------------------------------------------
-    // rank: 's' supporting target, 'y': likely, 'n': non_supprting 'u': undetermined
-    char rank = '\0';*/ 
+    // 4-byte members (int)
+    int aln_start = 0;
+    int aln_end = 0;
+    int start_offset = 0;
+    int end_offset = 0;
+    int read_start = 0;
+    int read_end = 0;
+    int qs = -1, qe = -1;
+    int covering_start = 0;
+    int covering_end = 0;
+    int target_idx = -1;
+    int target_pos = -1;
+    int flnk_v_cnt = 0;
+    int dist_to_non_target = INT_MAX;
+    int smer = 0, nmer = 0;
+   
+    CoveringPattern covering_pattern = CoveringPattern::NoCover;
+
+    // 1-byte members (bool, char)
+    bool is_reverse = false;
+    bool is_control = false;
+    bool is_na_ref = false;
+    bool covered_in_clip = false;
+    bool is_ref = false;
+    bool has_target = false;
+    bool has_local_events = false;
+    bool has_local_clip = false;
+    bool has_smaller_change = false;
+    bool has_anti_pattern = false;
+    bool has_positional_overlap = false;
+    bool qc_passed = false;
+    bool fail_to_cover_flankings = false;
+    bool is_stable_non_ref = false;
+    bool is_central_mapped = false;
+    bool is_quality_map = false;
+    bool ineffective_kmer = false;
+    bool high_ambiguity = false;
+
+    char rank = '\0';
 };
 
 #endif

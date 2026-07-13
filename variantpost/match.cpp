@@ -2,7 +2,6 @@
 #include "search.h"
 #include "hap_likelihood.h"
 
-
 void aln2variants(Alignment& aln, Vars& vars, const int start,
                   const std::string& ref, const std::string& query) {
     if (!aln.cigar_string.size()) return;
@@ -362,7 +361,7 @@ inline void fill_result(const Variant& v, const ReAlnQc& qc, SearchResult& rslt)
 
 void personalize(Pileup& pileup, LocalReference& loc_ref, const UserParams& params, const Variant& target, SearchResult& rslt) {
         
-    if (pileup.hiconf_read_idx < 0 || pileup.seq0.empty()) return;
+    if (!pileup.has_hiconf_support || pileup.seq0.empty()) return;
     
     // REF/REF case -> no personalization
     if (pileup.is_ref_hom) return;

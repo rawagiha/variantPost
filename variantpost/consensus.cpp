@@ -1,65 +1,83 @@
+#include "search.h"
 #include "consensus.h"
 
-const std::string REF = ".";
-const std::string D = ">";
+void from_consensus_variant_list(SearchResult& rslt, LocalReference& loc_ref,
+                                 const int start, const int end, const Vars& consensus) {
+    int curr = start;
+    auto it = consensus.begin();
+    while (it != consensus.end()) {
+        while (curr < it->pos) {
+            rslt.positions.push_back(curr);
+            std::string ref_base = std::string(1, loc_ref.base_at(curr));
+            rslt.ref_bases.push_back(ref_base);
+            rslt.alt_bases.push_back(ref_base);
+            ++curr;
+        }
 
-void fill_ref_alt(const std::string& refalt, Strs& ref, Strs& alt, 
-                  const int pos, int& del_ref_end) {
-    std::string ref_allele = refalt.substr(0, refalt.find(D));
-    std::string alt_allele = refalt.substr(refalt.find(D) + 1);
-    ref.push_back(refalt.substr(0, refalt.find(D)));
-    alt.push_back(refalt.substr(refalt.find(D) + 1));
-    del_ref_end = pos + static_cast<int>(ref_allele.size());
-}
-
-std::string find_commenest_change(const Strs& refalts) {
-    std::unordered_map<std::string, int> cnts;
-    for (const auto& elem : refalts) cnts[elem]++;
-   
-    auto max_iter = std::max_element(cnts.begin(), cnts.end(),
-         [](const auto& a, const auto& b) { return a.second < b.second; });
-    
-    return max_iter->first;  
-}
-
-void Consensus::_from_variants(const int start_, const int end_, const Vars& vars, 
-                               UserParams& params, LocalReference& loc_ref) {
-    if (start_ < start) { start = start_; } if (end < end_) { end = end_; }
-    
-    //fill reference segments
-    int curr = start_;
-    for (const auto& var : vars) {
-        while (curr < var.pos) {
-            aln[curr++].push_back(REF);
+        if (curr > it->pos) {
+            ++it;
+            continue;
         }
         
-        if (var.mean_qual < params.base_q_thresh) aln[curr].push_back(REF);
-        else aln[curr].push_back(var.ref + ">" + var.alt);
-        curr = var._end_pos;
+        //Hereafter, curr == it->pos cases
+        rslt.positions.push_back(it->pos);
+        rslt.ref_bases.push_back(it->ref);
+        rslt.alt_bases.push_back(it->alt);
+        
+        auto next_it = std::next(it);
+        
+        // This is the last variant
+        if (next_it == consensus.end()) {
+            curr = it->_end_pos;
+            it = next_it; //exit loop as next_it is the ender
+            continue;
+        }
+        
+        // Current variant do not pass the next
+        // Note: _end_pos points to curr + ref length
+        //   atCGAtcg
+        //   atGAGtcg
+        //
+        //   Or,complex indels followed by substitutes
+        //
+        //   atCGAtgc
+        //   at--Gtgc
+        if (it->_end_pos <= next_it->pos) {
+            curr = it->_end_pos;
+            it = next_it; // proceed to next (not the ender) 
+            continue;
+        } 
+
+        // Tricky case where current variant passes the next (i,e,. pos(next) < _end_pos (curr))
+        //  Complex indels with preceding mutations
+        //    atCGAtcg   atC  GAtcg    atCGA  tcg
+        //    atG--tcg   atCAT--tcg    atC--ATtcg
+        
+        int max_end_pos = it->_end_pos;
+                
+        while (next_it != consensus.end() && next_it->pos < max_end_pos) {
+            rslt.positions.push_back(next_it->pos);
+            rslt.ref_bases.push_back(next_it->ref);
+            rslt.alt_bases.push_back(next_it->alt);
+                    
+            if (next_it->_end_pos > max_end_pos) {
+                max_end_pos = next_it->_end_pos;
+            }
+            ++next_it;
+        }
+                
+        curr = max_end_pos;
+        it = next_it;
     }
-    while (curr <= end_) { aln[curr++].push_back(REF); }
-   
-   int _cov = 0, ref_cnt = 0, del_ref_end = INT_MIN;
-   for (const auto& pair : aln) {
-       if (pair.first < loc_ref.start || loc_ref.end < pair.first) continue;    
-       
-       if (pair.first < del_ref_end) continue;
-
-       pos.push_back(pair.first);
-       cov.push_back(static_cast<int>(pair.second.size())); //cov is no-empty
-       
-       //ref.push_back(loc_ref.dict[pair.first]);
-       ref_cnt = std::count(pair.second.begin(), pair.second.end(), REF);
-       if (ref_cnt * 2 >= cov.back()) {
-           std::string s = std::string(1, loc_ref.base_at(pair.first));
-           ref.push_back(s); alt.push_back(ref.back());
-       } else {
-           std::string refaln = find_commenest_change(pair.second);
-           fill_ref_alt(refaln, ref, alt, pair.first, del_ref_end);
-       } 
-
-   }
+    
+    for (/**/; curr <= end; ++curr) {
+        rslt.positions.push_back(curr);
+        std::string ref_base = std::string(1, loc_ref.base_at(curr));
+        rslt.ref_bases.push_back(ref_base);
+        rslt.alt_bases.push_back(ref_base);
+    }
 }
+
 
 void variant_consensus(const std::vector<Read>& reads, const Ints& idx, Vars& consensus) {
     

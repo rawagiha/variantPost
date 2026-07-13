@@ -47,10 +47,6 @@ Pileup::Pileup(const Strs& names, const Bools& is_rv, const Strs& cigar_strs,
                const Strs& quals, const Bools& is_first_bam, bool has_scnd,
                const UserParams& params, LocalReference& loc_ref, Variant& target) 
     : has_second_bam(has_scnd) {
-    
-    //TODO do we use control_bam_cov?? 
-    if (has_second_bam) control_bam_cov = 0;
-    
     sz = static_cast<int>(names.size());
     kmer_sz = std::max(loc_ref.low_cplx_len, params.kmer_size);
 
@@ -65,7 +61,7 @@ Pileup::Pileup(const Strs& names, const Bools& is_rv, const Strs& cigar_strs,
     //  1. is completely covered the locus ('A') 
     //  2. has multiple variants within flanking region (flnk_v_cnt > 1)
     auto search_complex_target = [&](Read& read) {
-        if (target.is_complex && read.covering_ptrn == 'A' && read.qc_passed && read.flnk_v_cnt > 1) {
+        if (target.is_complex && read.covering_pattern == CoveringPattern::Full && read.qc_passed && read.flnk_v_cnt > 1) {
             target.is_substitute ? read.hasTargetComplexSubstitute(target)
                                  : read.hasTargetComplexIndel(loc_ref, target);
         }
@@ -117,7 +113,7 @@ Pileup::Pileup(const Strs& names, const Bools& is_rv, const Strs& cigar_strs,
         
         read.setVariants(loc_ref); 
         read.parseCoveringPattern(loc_ref, target);
-        if (read.covering_ptrn == 'C') continue;
+        if (read.covering_pattern == CoveringPattern::NoCover) continue;
 
         read.parseLocalPattern(loc_ref, target, params);
 
@@ -125,30 +121,15 @@ Pileup::Pileup(const Strs& names, const Bools& is_rv, const Strs& cigar_strs,
         read.trimLowQualBases(params.base_q_thresh);    
         read.isStableNonReferenceAlignment(loc_ref); 
 
-        if (read.covering_ptrn == 'A') read.isCenterMapped(target);
-        
-        /* this part may be no use    
-        if (has_second_bam && read.is_control 
-                &&!read.fail_to_cover_flankings) ++control_bam_cov; 
-        }*/
+        if (read.covering_pattern == CoveringPattern::Full) read.isCenterMapped(target);
         
         read.is_quality_map = (read.is_stable_non_ref && read.is_central_mapped);
         search_complex_target(read);
                 
         //--- Read classification
         if (read.has_target) {
-            read.rank = 's'; ++s_cnt;
-
-            s_read_idx.push_back(i);
-
-            read.setSignatureStrings(params); sig_s[read.non_ref_sig].push_back(i);
-            if (read.is_quality_map) { 
-                sig_s_hiconf[read.non_ref_sig].push_back(i); has_hiconf_support = true; 
-
-                hiconf_s_read_idx.push_back(i);
-
-
-            }
+            ++s_cnt; read.rank = 's'; s_read_idx.push_back(i);
+            if (read.is_quality_map) hiconf_s_read_idx.push_back(i);
         } else if (read.has_local_events) {
             read.rank = 'u'; ++u_cnt;
             read.setSignatureStrings(params);             
@@ -174,17 +155,8 @@ Pileup::Pileup(const Strs& names, const Bools& is_rv, const Strs& cigar_strs,
     start = set_start(starts, loc_ref, kmer_sz); 
     end = set_end(ends, loc_ref, kmer_sz);
     
-    //--- Focus on high confidence case (supporting reads with no mapping ambiguity)
-    //    --> pick up most frequent pattern 
-    if (!has_hiconf_support) return;
-    else {
-        PatternCnt s_sig_cnt; count_patterns(sig_s_hiconf, s_sig_cnt); 
-        hap0 = s_sig_cnt[0].first; hiconf_read_idx = sig_s_hiconf[hap0][0];
-    }
-     
-    //--- Focus on a single BAM file && high-confidence already found case (exit earlier)
-    //    Undetermined singatures are also well-mapped and are unlikely to be supporting.
-    //    (target is unique.). With second BAM, this may not be the case (DNA vs. RNA)
+    has_hiconf_support = (hiconf_s_read_idx.size());
+    
     if (!has_second_bam) return; 
     else { 
         for (const auto& [_, read_indexes] : sig_u) {
@@ -212,7 +184,7 @@ void Pileup::inferGermlineHaplotype(const UserParams& params, const int target_p
         const auto& read = reads[i];   
         
         if (!read.is_control || read.rank == 's') continue;
-        if (read.covering_ptrn != 'A' || !read.qc_passed || !read.is_central_mapped) continue;
+        if (read.covering_pattern != CoveringPattern::Full || !read.qc_passed || !read.is_central_mapped) continue;
         
         // Fix demoninator reads
         evaluated.push_back(i);
@@ -234,7 +206,6 @@ void Pileup::inferGermlineHaplotype(const UserParams& params, const int target_p
             // Relative location within read
             int idx_len = static_cast<int>(read.idx2pos.size());
             double rel_loc = static_cast<double>(read_i + 1) / idx_len;
-            std::cout  << v.pos << " " << v.ref << " " << v.alt << " " << read_i << " " << " " << idx_len << " " << rel_loc << std::endl;
             if (0.25 <= rel_loc && rel_loc <= 0.75) variant_counts[vk].quality_occurrence++;
         }
     }
@@ -540,8 +511,10 @@ void Pileup::gridSearch(const UserParams& params,
             for (int _i : read_idxes) {
                 if ( reads[_i].rank == 'n') continue;
                 reads[_i].rank = 's'; ++s_cnt; --u_cnt;
-                sig_s[sig].push_back(_i);
-                sig_s_hiconf[sig].push_back(_i);
+                hiconf_s_read_idx.push_back(_i);
+                //sig_s[sig].push_back(_i);
+                //sig_s_hiconf[sig].push_back(_i);
+
             }
             sig_u.erase(sig);
        } 
@@ -574,7 +547,6 @@ void Pileup::gridSearch(const UserParams& params,
     return std::find(anti_sigs.cbegin(), anti_sigs.cend(), hap) != anti_sigs.cend();
 }
 
-
 inline void collect_target_hap_variants(const Reads& reads, Vars& vars) {
     size_t total_size = 0;
     for (const auto& read : reads) total_size += read.variants.size();
@@ -596,56 +568,24 @@ inline void prep_vars(Vars& dest, const Vars& source) {
     std::sort(dest.begin(), dest.end());
 }
 
-
 //------------------------------------------------------------------------------
 void Pileup::setHaploTypes(LocalReference& loc_ref, const Variant& target) {
-    PatternCnt s_sig_cnt; 
-    
-    
-    Vars target_hap{target};
+    hap0_vars.push_back(target);
     if (hiconf_s_read_idx.size() > 1) {
-        variant_consensus(reads, hiconf_s_read_idx, target_hap);
+        variant_consensus(reads, hiconf_s_read_idx, hap0_vars);
     } else if (hiconf_s_read_idx.size() <= 1 && s_read_idx.size() > 0) {
-        variant_consensus(reads, s_read_idx, target_hap);
+        variant_consensus(reads, s_read_idx, hap0_vars);
     }  
-    for (const auto& v : target_hap) {
+    for (const auto& v : hap0_vars) {
         if (loc_ref.flanking_start <= v.pos && v.pos <= loc_ref.flanking_end) ++v_cnt;
     }
      
-    make_sequence(loc_ref, target_hap, start, end, seq0, &i2p0); 
-    
-    /*
-    if (hiconf_read_idx > -1) {
-        std::cout << " hi gonf " << hiconf_read_idx << " " << reads[hiconf_read_idx].cigar_str << std::endl;
-        make_sequence(
-            loc_ref, reads[hiconf_read_idx].variants, start, end, seq0, &i2p0);
-        std::cout << " hap zero " << seq0 << std::endl;
-    } else if (!sig_s.empty()) {
-        PatternCnt s_sig_cnt;
-        count_patterns(sig_s, s_sig_cnt); 
-        hap0 = s_sig_cnt[0].first;
-        make_sequence(
-            loc_ref, reads[sig_s[hap0][0]].variants, start, end, seq0, &i2p0);
-    } else {
-        if (homo_vars.empty()) // NOTE: homo_vars empty if has_second_bam is false
-            make_sequence(loc_ref, {target}, start, end, seq0, &i2p0);
-    }*/
+    make_sequence(loc_ref, hap0_vars, start, end, seq0, &i2p0); 
      
     if (has_second_bam) {
-        // keep variants on target haplotype
-        if (hiconf_read_idx > -1)  
-            collect_target_hap_variants(reads, hap0_vars); 
-
-        // personalize target with homozygous if unset
-        if (seq0.empty()) {
-            Vars hap0_full = {target};
-            prep_vars(hap0_full, homo_vars); 
-            make_sequence(loc_ref, hap0_full, start, end, seq0, &i2p0);
-        }
         for (const auto& v : homo_vars) {
             std::cout << v.pos << " " << v.ref << " " << v.alt << " homo var " << std::endl;
         }
-
 
         Vars hap1_full = homo_vars;
         prep_vars(hap1_full, hap1_vars); 
@@ -719,7 +659,6 @@ void Pileup::setHaploTypes(LocalReference& loc_ref, const Variant& target) {
     if (seq1.empty() && seq2.empty()) no_non_target_haps = true;
 }
 
-
 [[nodiscard]] inline bool is_target_covering_fast(
     const int rad_start, const int rad_end,
     const Read& read, const std::string_view kmer, const int kmer_sz)  noexcept
@@ -743,15 +682,13 @@ void Pileup::setHaploTypes(LocalReference& loc_ref, const Variant& target) {
     return !(genome_end < rad_start || genome_start > rad_end);
 }
 
-
 [[nodiscard]] inline bool has_the_sig(const std::string_view sig, const Strs& anti_sig) noexcept {
     return std::find(anti_sig.cbegin(), anti_sig.cend(), sig) != anti_sig.cend();
 }
 
 //------------------------------------------------------------------------------
 void Pileup::differentialKmerAnalysis(const UserParams& params, 
-                                      LocalReference& loc_ref, const Variant& target) {
-    
+                                      LocalReference& loc_ref, const Variant& target) {    
     // Target connecting homopolymers -> skip
     if (target.denovo_rep == 4) return;
     
@@ -863,7 +800,6 @@ void Pileup::searchByRealignment(const UserParams& params,
     
     int fss = -1, fse = -1, fes = -1, fee = -1, ts = -1, te = -1;  
     
-    
     for (int i = 0; i < static_cast<int>(i2p0.size()); ++i) {
         if (i2p0[i] == loc_ref.flanking_start) fss = i;
         if (ts < 0 && i2p0[i] == target.pos) ts = i;
@@ -907,4 +843,3 @@ void Pileup::searchByRealignment(const UserParams& params,
         }
     }
 }
-

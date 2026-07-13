@@ -144,9 +144,6 @@ bool Read::IsRefAt(const int pos) const {
 }
 
 //------------------------------------------------------------------------------
-// 'A': target locus + shiftable region is completely covered
-// 'B': partially
-// 'C': not covered or skipped by splicing
 void Read::parseCoveringPattern(LocalReference& loc_ref, const Variant& target) {
     // skipped
     for (const auto& [seg_start, seg_end] : skipped_segments)
@@ -161,7 +158,7 @@ void Read::parseCoveringPattern(LocalReference& loc_ref, const Variant& target) 
     for (const auto& [seg_start, seg_end] : aligned_segments) {
         if (seg_start <= target.lpos && target.rpos < seg_end) {
             covering_start = seg_start; covering_end = seg_end; 
-            covering_ptrn = 'A'; 
+            covering_pattern = CoveringPattern::Full;
             return;
         }
     }
@@ -181,7 +178,7 @@ void Read::parseCoveringPattern(LocalReference& loc_ref, const Variant& target) 
         // ends with softclip or has variants in shiftable region
         if (end_offset || (!variants.empty() && target.lpos <= variants.back().pos)) is_partial = true;
     }
-    if (is_partial) covering_ptrn = 'B';
+    if (is_partial) covering_pattern = CoveringPattern::Partial;
 }
 
 //------------------------------------------------------------------------------

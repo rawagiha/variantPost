@@ -5,9 +5,13 @@
 #include "reads.h"
 #include "variant_types.h"
 
-typedef std::vector<Read> Reads;
-typedef std::unordered_map<std::string_view, std::vector<int>> Idx;
+// Fw declaration for doc purposes (they are in util.h)
+struct UserParams;
+struct LocalReference;
+struct Variant;
 
+using Reads = std::vector<Read>;
+using Idx   = std::unordered_map<std::string_view, std::vector<int>>;
 
 //------------------------------------------------------------------------------
 struct Pileup {   
@@ -18,16 +22,10 @@ struct Pileup {
            const UserParams& params, LocalReference& loc_ref, Variant& target);
     
     void inferGermlineHaplotype(const UserParams& param, const int target_pos);    
-    
     void gridSearch(const UserParams& params, LocalReference& loc_ref, const Variant& target); 
-    
     void setHaploTypes(LocalReference& loc_ref, const Variant& target);  
-    
-    void differentialKmerAnalysis(const UserParams& params,
-                                  LocalReference& loc_ref, const Variant& target); 
-    
-    void searchByRealignment(const UserParams& params,
-                             LocalReference& loc_ref, const Variant& target);
+    void differentialKmerAnalysis(const UserParams& params, LocalReference& loc_ref, const Variant& target); 
+    void searchByRealignment(const UserParams& params, LocalReference& loc_ref, const Variant& target);
     
     //--------------------------------------------------------------------------    
     Reads reads; 
@@ -40,23 +38,20 @@ struct Pileup {
 
     //--------------------------------------------------------------------------
     // variants between flank start/end in non-supporting reads
-    std::unordered_map<Variant, int>  ns_vars; 
+    std::unordered_map<Variant, int> ns_vars; 
     
     Ints hiconf_s_read_idx;
     Ints s_read_idx;
     
     //--------------------------------------------------------------------------
     // signature related 
-    Idx sig_s_hiconf, sig_s, sig_u; // {sig : read idx with the sig} 
-    Idx u_sig_annot; // {u_sig : anno flags} 
+    Idx sig_u, u_sig_annot; // {u_sig : anno flags} 
     std::vector<std::string_view> anti_sigs; // sigs unlikely supporting target
-    int hiconf_read_idx = -1; // for index-case read in Pileup.reads
       
     //--------------------------------------------------------------------------
     // metrics
     int sz = -1;
     int s_cnt = 0, n_cnt = 0, u_cnt = 0, y_cnt = 0, z_cnt = 0; //cnt for supporting, non, undetermined
-    int control_bam_cov = -1;
     int v_cnt = 0; // variants in flanking regions
      
     //--------------------------------------------------------------------------
@@ -80,8 +75,6 @@ struct Pileup {
     std::string rseq; // reference hap. this will be set if necessary
 
     //--------------------------------------------------------------------------
-    //Coord i2p_0, i2p_1, i2p_2; // index/pos pair for hap0
-    //Coord i2p_r; // index/pos pair for reference hap
     Ints i2p0, i2p1, i2p2, i2pr;
     int es = -1, ee = -1, fs = -1, fe = -1;
 
@@ -98,9 +91,7 @@ struct Pileup {
     bool has_likely_support = false; // reads likely supporting the target
     bool has_ref_hap = false; // reference haplotype likely exists in background
     bool has_excess_ins_hap = false; // haplotype with ins-repeat > expected
-    bool vs_ref_hap = false; // true to perform kmer analysis vs ref hap
     bool no_non_target_haps = false; // non-target haplotypes not inferred
-    bool has_valid_boundary = false; // valid flanking start/end event start/end   
     bool is_ref_hom = false; 
     bool is_ref_het = false;
     bool is_alt_hom = false;

@@ -199,8 +199,8 @@ class VariantAlignment(object):
             return rtxn.class_83, rtxn.class_89, snv_txn, snv_txn
 
         v = self.phase2complex()
-        if not v:
-            return rtxn.class_83, rtxn.class_89, rtxn.class_83, rtxn.class_89
+        #if not v:
+        #    return rtxn.class_83, rtxn.class_89, rtxn.class_83, rtxn.class_89
 
         print(v.pos, v.ref, v.alt, "this is a pen")
         if not v.is_simple_indel:
@@ -432,6 +432,7 @@ class VariantAlignment(object):
             else:
                 trans_vars = []
 
+            print(self.contig_dict)
             phased = _phase(
                 self.contig_dict,
                 self.skips,
