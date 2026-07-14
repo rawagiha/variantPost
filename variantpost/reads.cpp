@@ -1,6 +1,19 @@
 #include "util.h"
 #include "reads.h"
 
+
+std::ostream& operator<<(std::ostream& os, Rank rank) {
+    switch (rank) {
+        case Rank::Supporting:        return os << "Supporting";
+        case Rank::LikelySupporting:  return os << "LikelySupporting";
+        case Rank::UnlikelySupporting: return os <<"UnlikelySupporting";
+        case Rank::NotSupporting:     return os << "NotSupporting";
+        case Rank::Undetermined:      return os << "Undetermined";
+        case Rank::NotAnalyzed:  return os << "NotAnalyzed";  
+    }   
+    return os << "NotAnalyzed";
+}
+
 inline int find_first_read_idx(const Ints& idx2pos, int target_pos, int start_offset, int end_offset) {
     if (idx2pos.empty()) return -1;
     

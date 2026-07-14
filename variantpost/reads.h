@@ -1,10 +1,10 @@
 #ifndef READ_H
 #define READ_H
 
+#include <iostream>
 #include <climits>
 #include <bitset>
 #include "util.h"
-
 
 enum class CoveringPattern {
     // Target's left-aligned (lpos) and right-aligned pos (rpos) 
@@ -18,6 +18,17 @@ enum class CoveringPattern {
     // Otherwise (including spliced reads completely skipping the region) 
     NoCover
 };
+
+enum class Rank {
+    Supporting,
+    LikelySupporting,
+    UnlikelySupporting,
+    NotSupporting,
+    Undetermined,
+    NotAnalyzed
+}; 
+
+std::ostream& operator<<(std::ostream& os, Rank rank);
 
 //------------------------------------------------------------------------------
 // features at read level
@@ -114,6 +125,7 @@ struct Read {
     int smer = 0, nmer = 0;
    
     CoveringPattern covering_pattern = CoveringPattern::NoCover;
+    Rank rank = Rank::NotAnalyzed;
 
     // 1-byte members (bool, char)
     bool is_reverse = false;
@@ -135,7 +147,7 @@ struct Read {
     bool ineffective_kmer = false;
     bool high_ambiguity = false;
 
-    char rank = '\0';
+    //char rank = '\0';
 };
 
 #endif

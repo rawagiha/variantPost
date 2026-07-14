@@ -21,6 +21,7 @@ inline void count_patterns(const Idx& ptrn_read_idx, PatternCnt& ptrn_cnts) noex
 //------------------------------------------------------------------------------
 // Set Pileup start. Long spliced reads (e.g., Iso-Seq) can have covering start < loc_ref.start
 // -> Set pileup start to be >= loc_ref.start
+// [[nodiscard]] --->>> DON'T IGNORE the returned value
 [[nodiscard]] inline int set_start(Ints& starts, const LocalReference& loc_ref, const int kmer_sz) {
     const int s = (loc_ref.flanking_start - kmer_sz > loc_ref.start)
                 ? loc_ref.flanking_start - kmer_sz : loc_ref.start;
@@ -85,7 +86,7 @@ Pileup::Pileup(const Strs& names, const Bools& is_rv, const Strs& cigar_strs,
 
             if (read.ineffective_kmer)       { ++ineff_kmer;  annot[0] = 1; }
             if (read.has_positional_overlap) { ++overlapping; annot[1] = 1; }
-            if (read.rank == 'n')            {                annot[2] = 1; }
+            if (read.rank == Rank::NotSupporting) { annot[2] = 1; }
         }
     };
     
@@ -93,7 +94,7 @@ Pileup::Pileup(const Strs& names, const Bools& is_rv, const Strs& cigar_strs,
     //    
     auto process_anti_patterns = [&](Read& read) {
         if (read.is_stable_non_ref && (read.has_anti_pattern || read.has_smaller_change)) { 
-            read.rank = 'n'; ++n_cnt; --u_cnt;
+            read.rank = Rank::NotSupporting; ++n_cnt; --u_cnt;
             
             if (read.has_anti_pattern) anti_sigs.push_back(read.non_ref_sig);
             for (auto& v : read.variants) { 
@@ -128,22 +129,22 @@ Pileup::Pileup(const Strs& names, const Bools& is_rv, const Strs& cigar_strs,
                 
         //--- Read classification
         if (read.has_target) {
-            ++s_cnt; read.rank = 's'; s_read_idx.push_back(i);
+            ++s_cnt; read.rank = Rank::Supporting; s_read_idx.push_back(i);
             if (read.is_quality_map) hiconf_s_read_idx.push_back(i);
         } else if (read.has_local_events) {
-            read.rank = 'u'; ++u_cnt;
+            read.rank = Rank::Undetermined; ++u_cnt;
             read.setSignatureStrings(params);             
             read.checkByRepeatCount(target, has_excess_ins_hap);
             
             process_anti_patterns(read);
             annotate_undetermined_signatures(read, i);
              
-            if (read.rank != 'n') {
+            if (read.rank != Rank::NotSupporting) {
                 starts.push_back(read.covering_start); ends.push_back(read.covering_end);
             }   
         } else { 
-            if (read.has_local_clip || read.covered_in_clip) { read.rank = 'u'; ++u_cnt; }
-            else { read.rank = 'n'; ++n_cnt; } 
+            if (read.has_local_clip || read.covered_in_clip) { read.rank = Rank::Undetermined; ++u_cnt; }
+            else { read.rank = Rank::NotSupporting; ++n_cnt; } 
             
             // Catch reference haplotype in control BAM here
             if (read.is_control && read.is_quality_map && read.is_ref) { ++ref_hap_n; has_ref_hap = true; }              
@@ -161,8 +162,8 @@ Pileup::Pileup(const Strs& names, const Bools& is_rv, const Strs& cigar_strs,
     else { 
         for (const auto& [_, read_indexes] : sig_u) {
             for (const auto i : read_indexes) {
-                if (reads[i].rank == 'n') continue;
-                reads[i].rank = 'n'; ++n_cnt; --u_cnt;
+                if (reads[i].rank == Rank::NotSupporting) continue;
+                reads[i].rank = Rank::NotSupporting; ++n_cnt; --u_cnt;
                 u_sig_annot[reads[i].non_ref_sig][2] = 1; // Don't use for grid-search
             }
         }
@@ -183,7 +184,7 @@ void Pileup::inferGermlineHaplotype(const UserParams& params, const int target_p
     for (int i = 0; i < sz; ++i) {
         const auto& read = reads[i];   
         
-        if (!read.is_control || read.rank == 's') continue;
+        if (!read.is_control || read.rank == Rank::Supporting) continue;
         if (read.covering_pattern != CoveringPattern::Full || !read.qc_passed || !read.is_central_mapped) continue;
         
         // Fix demoninator reads
@@ -509,8 +510,8 @@ void Pileup::gridSearch(const UserParams& params,
         if (res) {
             const auto& read_idxes = sig_u[sig];
             for (int _i : read_idxes) {
-                if ( reads[_i].rank == 'n') continue;
-                reads[_i].rank = 's'; ++s_cnt; --u_cnt;
+                if ( reads[_i].rank == Rank::NotSupporting) continue;
+                reads[_i].rank = Rank::Supporting; ++s_cnt; --u_cnt;
                 hiconf_s_read_idx.push_back(_i);
                 //sig_s[sig].push_back(_i);
                 //sig_s_hiconf[sig].push_back(_i);
@@ -529,7 +530,7 @@ void Pileup::gridSearch(const UserParams& params,
     //LOGIC: if target is aligned in a sigature, the remaining ones
     //are likely non-supproting
     for (const auto& [_, indexes] : sig_u) {
-        for (int i : indexes) { reads[i].rank = 'n'; ++n_cnt; --u_cnt; }
+        for (int i : indexes) { reads[i].rank = Rank::NotSupporting; ++n_cnt; --u_cnt; }
     }
     // keep sig_u contents to set up non-supporting haplotypes
 }
@@ -553,7 +554,7 @@ inline void collect_target_hap_variants(const Reads& reads, Vars& vars) {
         vars.reserve(total_size);
     
     for (const auto& read : reads) {
-        if (read.rank == 's') 
+        if (read.rank == Rank::Supporting) 
             vars.insert(vars.end(), read.variants.begin(), read.variants.end());
     }
 
@@ -723,7 +724,7 @@ void Pileup::differentialKmerAnalysis(const UserParams& params,
     const int rad_end = target.pos + target.event_radius;
     Strs anti_sig;
     for (auto& read : reads) {
-        if (!read.qc_passed || read.rank != 'u') continue;
+        if (!read.qc_passed || read.rank != Rank::Undetermined) continue;
          
         std::unordered_map<size_t, int> dict;
         //for (auto& elem : read.idx2pos) 
@@ -753,35 +754,34 @@ void Pileup::differentialKmerAnalysis(const UserParams& params,
 
         std::cout << read.smer << " " << read.nmer << " " << read.cigar_str << " " << read.rank << std::endl; 
         if (non_target_kmer_sz && read.smer > read.nmer) { 
-            read.rank = 'y'; --u_cnt; ++y_cnt; //Likely supporting
+            read.rank = Rank::LikelySupporting; --u_cnt; ++y_cnt; //Likely supporting
             std::cout << read.name <<  " y nct " << std::endl;
             if (!read.nmer && read.smer > 1) {
                 if (has_hiconf_support 
                     || no_non_target_haps 
                     || read.is_quality_map
                     || target.indel_len > 19) {
-                   read.rank = 's'; --y_cnt; ++s_cnt;
+                   read.rank = Rank::Supporting; --y_cnt; ++s_cnt;
                 }
             }
         } else if (target_kmer_sz && read.smer <= read.nmer) { 
             if (!read.smer && read.nmer) {
-                read.rank = 'n'; --u_cnt; ++n_cnt; 
+                read.rank = Rank::NotSupporting; --u_cnt; ++n_cnt; 
                 anti_sig.push_back(read.non_ref_sig);
             } else if (read.smer && read.nmer) {
-                read.rank = 'z'; --u_cnt; ++z_cnt; //Unlikely supporting
+                read.rank = Rank::UnlikelySupporting; --u_cnt; ++z_cnt; //Unlikely supporting
             }
         } 
     }
     
     // reclassify
     for (auto& read : reads) {
-        const char rank_ = read.rank;
-        if (rank_ == 's' || rank_ == 'y' || rank_ == 'n') continue; 
+        const Rank rank_ = read.rank;
+        if (rank_ == Rank::Supporting || rank_ == Rank::LikelySupporting || rank_ == Rank::NotSupporting) continue; 
         const bool has_it = has_the_sig(read.non_ref_sig, anti_sig);
         if (has_it){
-            read.rank = 'n'; ++n_cnt;
-            if (rank_ == 'u') --u_cnt;
-            //else if (rank_ == 'y') --y_cnt;
+            read.rank = Rank::NotSupporting; ++n_cnt;
+            if (rank_ == Rank::Undetermined) --u_cnt;
             else --z_cnt;
         }
     }
@@ -818,8 +818,8 @@ void Pileup::searchByRealignment(const UserParams& params,
     
     std::bitset<3> check_points;
     for (auto& read : reads) {
-        if (read.rank == 's' || read.rank == 'n' || !read.qc_passed) continue;
-        if (read.rank != 'y' && !read.covered_in_clip && !read.has_local_clip) continue;
+        if (read.rank == Rank::Supporting || read.rank == Rank::NotSupporting || !read.qc_passed) continue;
+        if (read.rank != Rank::LikelySupporting && !read.covered_in_clip && !read.has_local_clip) continue;
         //if (read.rank != 'y' && !read.covered_in_clip) continue;
         
         std::string ss{read.seq}; // may be improved 
@@ -831,7 +831,7 @@ void Pileup::searchByRealignment(const UserParams& params,
         std::cout << read.cigar_str << " " << read.smer << " " << read.nmer << " " << check_points.count() << std::endl;
         // perferct match
         if (check_points.count() == 3) {
-            read.rank = 's'; --y_cnt; ++s_cnt;
+            read.rank = Rank::Supporting; --y_cnt; ++s_cnt;
         }
         
         check_points.reset();
@@ -839,7 +839,7 @@ void Pileup::searchByRealignment(const UserParams& params,
     
     if (s_cnt) {
         for (auto& read : reads) { 
-            if (read.rank == 'y') { read.rank = 's'; --y_cnt; ++s_cnt; }
+            if (read.rank == Rank::LikelySupporting) { read.rank = Rank::Supporting; --y_cnt; ++s_cnt; }
         }
     }
 }

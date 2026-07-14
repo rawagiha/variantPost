@@ -21,11 +21,10 @@ SearchResult::SearchResult() {}
 void SearchResult::setReadInfo(const Read& read, const char qual_thresh) {
     
     are_from_first_bam.push_back(!read.is_control);
-    const char rank = read.rank;
     
-    if (rank == 's') {
+    if (read.rank == Rank::Supporting) {
         target_statuses.push_back(1);
-    } else if (rank == 'n' && !read.covered_in_clip) {
+    } else if (read.rank == Rank::NotSupporting && !read.covered_in_clip) {
         target_statuses.push_back(0);
         //if (!read.is_quality_map || !read.qc_passed || !read.has_local_clip) return;
         
@@ -35,7 +34,7 @@ void SearchResult::setReadInfo(const Read& read, const char qual_thresh) {
             
             hq_negative_cnts[VariantKey{v.pos, v.end_pos, v.ref, v.alt}]++;
         }    
-    } else if (rank == 'u') {
+    } else if (read.rank == Rank::Undetermined) {
         target_statuses.push_back(-1);
     } else {
         target_statuses.push_back(-2);
@@ -149,7 +148,7 @@ void _search_target(SearchResult& rslt,
     }
 
     for (const auto& read : pileup.reads) {
-        if (read.rank == 's') std::cout << read.name << " " << read.cigar_str <<  "  " << read.aln_start << std::endl;
+        if (read.rank == Rank::Supporting) std::cout << read.name << " " << read.cigar_str <<  "  " << read.aln_start << std::endl;
     }
     
     // Realn against personalized genome

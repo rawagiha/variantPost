@@ -127,7 +127,7 @@ void match2haplotypes(Pileup& pileup, const Strs& read_seqs, const UserParams& p
                     params.gap_open_penal, params.gap_ext_penal);
      
     for (int i = 0; i < pileup.sz; ++i) {
-        if (!pileup.reads[i].qc_passed || pileup.reads[i].rank != 'u' || pileup.reads[i].smer == 0) continue; 
+        if (!pileup.reads[i].qc_passed || pileup.reads[i].rank != Rank::Undetermined || pileup.reads[i].smer == 0) continue; 
         
         const auto& query = read_seqs[i].c_str();
         int32_t mask_len = strlen(query) < 30 ? 15 : strlen(query) / 2;  
@@ -153,11 +153,11 @@ void match2haplotypes(Pileup& pileup, const Strs& read_seqs, const UserParams& p
          
         // aln against target hap is solely highest
         if (scores[0] > scores[1] && scores[0] > scores[2] && scores[0] > scores[3]) {
-            pileup.reads[i].rank = 's'; ++pileup.s_cnt; --pileup.u_cnt; 
+            pileup.reads[i].rank = Rank::Supporting; ++pileup.s_cnt; --pileup.u_cnt; 
         } else if (scores[0] == scores[1] || scores[0] == scores[2] || scores[0] == scores[3]) {
             // tie score to one of non-target haplotypes -> remain as 'u'
         } else {
-            pileup.reads[i].rank = 'n'; ++pileup.n_cnt; --pileup.u_cnt;
+            pileup.reads[i].rank = Rank::NotSupporting; ++pileup.n_cnt; --pileup.u_cnt;
         }
         std::cout <<  pileup.reads[i].rank << std::endl;
     }
@@ -395,7 +395,7 @@ void personalize(Pileup& pileup, LocalReference& loc_ref, const UserParams& para
     if (pileup.is_alt_het) {    
         size_t with_hap2 = count_overlap(pileup.hap0_vars, pileup.hap2_vars);
         
-        std::cout << "over lap this hap1 " << with_hap1 << " " <<  " over lap this hap1 " << with_hap2 << std::endl;
+        std::cout << "over lap this hap1 " << with_hap1 << " " <<  " over lap this hap2 " << with_hap2 << std::endl;
         if (with_hap1 > with_hap2) {
             realn_to_perfonalized_genome(aligner, filter, aln, pv1, qc_hap1, hiconf_seq, pileup.seq1, pileup.i2p1);
             if (qc_hap1.pass()) hap1_inferred = true;
