@@ -77,8 +77,8 @@ class VariantAlignment(object):
     __slots__ = (
         "variant", "chrom", "bam_chrom", "target_pos", "target_is_indel",
         "window", "reference", "base_quality_thresh", "local_thresh",
-        "has_second", "contig_dict", "target_status", "are_reverse",
-        "are_first_bam", "tags", "ppos", "pref", "palt", "pltseq",
+        "has_second", "contig_dict", "target_status", "read_names", "is_reverse",
+        "is_control", "tags", "ppos", "pref", "palt", "pltseq",
         "prtseq", "ref", "alt", "skips", "trans_vars", "read_names", "is_with_target",
         "personalized", "likely_simple_on_personalized_genome", "possible_snv"
     )
@@ -117,25 +117,12 @@ class VariantAlignment(object):
         self.local_thresh = local_threshold
         self.has_second = second_bam
 
-        #retarget_thresh = _retarget_thresh(local_threshold, self.window)
-
-        # interact with c++ code
-        # (
-        #    self.contig_dict,
-        #    self.skips,
-        #    self.read_names,
-        #    self.are_reverse,
-        #    self.target_status,
-        #    self.are_first_bam,
-        #    self.is_retargeted,
-        #    self.retarget_pos,
-        #    self.trans_vars,
-        # )
         (
             self.contig_dict,
             self.target_status, 
-            self.are_reverse, 
-            self.are_first_bam, 
+            self.read_names,
+            self.is_reverse, 
+            self.is_control, 
             self.tags,
             self.ppos,
             self.pref,
@@ -230,19 +217,19 @@ class VariantAlignment(object):
         #print(len(self.target_status), len(self.are_reverse), len(self.are_first_bam))
         
         s1, n1, u1, s2, n2, u2 = 0, 0, 0, 0, 0, 0
-        for i, j in zip(self.target_status, self.are_first_bam):
+        for i, j in zip(self.target_status, self.is_control):
             if i == 1:
-                if j:
+                if j == 0:
                     s1 += 1
                 else:
                     s2 += 1
             elif i == 0:
-                if j:
+                if j == 0:
                     n1 += 1
                 else:
                     n2 += 1
             elif i == -1:
-                if j:
+                if j == 0:
                     u1 += 1
                 else:
                     u2 += 1    
@@ -316,7 +303,7 @@ class VariantAlignment(object):
         sf, sr, nf, nr, uf, ur = ([] for i in range(6))
 
         for read_name, status, is_rv in zip(
-            self.read_names, self.target_status, self.are_reverse
+            self.read_names, self.target_status, self.is_reverse
         ):
 
             flags = (status, is_rv)
@@ -342,34 +329,34 @@ class VariantAlignment(object):
             [] for i in range(12)
         )
         for read_name, status, is_rv, is_first in zip(
-            self.read_names, self.target_status, self.are_reverse, self.are_first_bam
+            self.read_names, self.target_status, self.is_reverse, self.is_control
         ):
 
             flags = (status, is_rv, is_first)
 
-            if flags == (1, True, True):
+            if flags == (1, True, False):
                 sr1.append(read_name)
-            elif flags == (1, True, False):
+            elif flags == (1, True, True):
                 sr2.append(read_name)
-            elif flags == (1, False, True):
-                sf1.append(read_name)
             elif flags == (1, False, False):
+                sf1.append(read_name)
+            elif flags == (1, False, True):
                 sf2.append(read_name)
-            elif flags == (0, True, True):
-                nr1.append(read_name)
             elif flags == (0, True, False):
+                nr1.append(read_name)
+            elif flags == (0, True, True):
                 nr2.append(read_name)
-            elif flags == (0, False, True):
-                nf1.append(read_name)
             elif flags == (0, False, False):
+                nf1.append(read_name)
+            elif flags == (0, False, True):
                 nf2.append(read_name)
-            elif flags == (-1, True, True):
-                ur1.append(read_name)
             elif flags == (-1, True, False):
+                ur1.append(read_name)
+            elif flags == (-1, True, True):
                 ur2.append(read_name)
-            elif flags == (-1, False, True):
-                uf1.append(read_name)
             elif flags == (-1, False, False):
+                uf1.append(read_name)
+            elif flags == (-1, False, True):
                 uf2.append(read_name)
 
         PairedAlleleCount = namedtuple("PairedAlleleCount", ["first", "second"])
