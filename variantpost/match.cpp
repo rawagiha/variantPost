@@ -364,8 +364,11 @@ void personalize(Pileup& pileup, LocalReference& loc_ref, const UserParams& para
     if (!pileup.has_hiconf_support || pileup.seq0.empty()) return;
     
     // REF/REF case -> no personalization
-    if (pileup.is_ref_hom) return;
-    
+    if (pileup.is_ref_hom){ 
+        rslt.personalized = true;  // background haplotype successfully identified as REF/REF
+        return;                    // -> safe to phase to a complex event 
+    }
+
     std::string hiconf_seq = pileup.seq0;
     
     // Heuristic for longer (>20bp) indels to align it as a signle gap
@@ -452,7 +455,7 @@ void personalize(Pileup& pileup, LocalReference& loc_ref, const UserParams& para
     } else if (hap2_inferred) {
         fill_result(pv2, qc_hap2, rslt);
     } else {
-        // inferred as reference haplotype 
+        // inferrence failed  
     }
     
     std::cout << rslt.ppos << " " <<  rslt.pref<< " " << rslt.palt << " " << rslt.pltseq << " " << rslt.prtseq << std::endl;

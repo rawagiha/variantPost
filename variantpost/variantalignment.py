@@ -178,6 +178,9 @@ class VariantAlignment(object):
     
     def tax(self):
         rtxn = IndelTaxon(self.variant.ref, self.variant.alt, self.variant.left_flank(), self.variant.right_flank())
+        
+        # personalization failed or not performed 
+        # NOTE: REF/REF region is considered "personalized" as it will test for true complex event
         if not self.personalized:
             return rtxn.class_83, rtxn.class_89, rtxn.class_83, rtxn.class_89
         
@@ -186,8 +189,6 @@ class VariantAlignment(object):
             return rtxn.class_83, rtxn.class_89, snv_txn, snv_txn
 
         v = self.phase2complex()
-        #if not v:
-        #    return rtxn.class_83, rtxn.class_89, rtxn.class_83, rtxn.class_89
 
         print(v.pos, v.ref, v.alt, "this is a pen")
         if not v.is_simple_indel:
