@@ -174,86 +174,33 @@ class VariantAlignment(object):
         #implement later
         self.skips = []
 
-
-    
-    def tax(self):
-        rtxn = IndelTaxon(self.variant.ref, self.variant.alt, self.variant.left_flank(), self.variant.right_flank())
+    def taxonomize(self):
+        ref_txn = IndelTaxon(self.variant.ref, self.variant.alt, self.variant.left_flank(), self.variant.right_flank())
         
         # personalization failed or not performed 
-        # NOTE: REF/REF region is considered "personalized" as it will test for true complex event
+        # note: REF/REF region is considered "personalized" as it will test for true complex event
         if not self.personalized:
-            return rtxn.class_83, rtxn.class_89, rtxn.class_83, rtxn.class_89
+            return ref_txn.class_83, ref_txn.class_89, ref_txn.class_83, ref_txn.class_89
         
+        # target indel can be aligned as SNV on the personalized genome 
         if self.possible_snv:
             snv_txn = "PossibleSNV"
-            return rtxn.class_83, rtxn.class_89, snv_txn, snv_txn
-
+            return ref_txn.class_83, ref_txn.class_89, snv_txn, snv_txn
+        
+        # false complex indels (somatic + nearby germine SNP) evalauated on personalized genome 
         v = self.phase2complex()
-
-        print(v.pos, v.ref, v.alt, "this is a pen")
         if not v.is_simple_indel:
             cplx_tnx = "Complex"
-            return rtxn.class_83, rtxn.class_89, cplx_tnx, cplx_tnx
-
-        print(self.pref, self.palt, self.pltseq, self.prtseq, "DDDDD")
+            return ref_txn.class_83, ref_txn.class_89, cplx_tnx, cplx_tnx
+        
+        # target indel is simple on the personalized genome
         if self.pref:
-            ptxn = IndelTaxon(self.pref, self.palt, self.pltseq, self.prtseq)
+            personal_txn = IndelTaxon(self.pref, self.palt, self.pltseq, self.prtseq)
         else:
-            ptxn = rtxn
+            personal_txn = ref_txn
 
-        return rtxn.class_83, rtxn.class_89, ptxn.class_83, ptxn.class_89
-        #print(rtxn.rep, rtxn.flank_5p, rtxn.mlen, rtxn.unit, rtxn.seq, rtxn.flank_3p, rtxn.class_83, rtxn.class_89)
-        #print(ptxn.rep, ptxn.flank_5p, ptxn.mlen, ptxn.unit, ptxn.seq, ptxn.flank_3p, ptxn.class_83, ptxn.class_89)
+        return ref_txn.class_83, ref_txn.class_89, personal_txn.class_83, personal_txn.class_89
 
-
-    def perso(self):
-        if len(self.pref) >  len(self.palt):
-            unit = to_minimal_repeat_unit(self.pref[1:])
-        else:
-            unit = to_minimal_repeat_unit(self.palt[1:])
-        rep_n = repeat_counter(unit, self.prtseq)
-        return self.ppos, self.pref, self.palt, self.pltseq, self.prtseq, unit, rep_n, self.variant.count_repeats()
-
-    def cnt(self):
-        #print(len(self.target_status), len(self.are_reverse), len(self.are_first_bam))
-        
-        s1, n1, u1, s2, n2, u2 = 0, 0, 0, 0, 0, 0
-        for i, j in zip(self.target_status, self.is_control):
-            if i == 1:
-                if j == 0:
-                    s1 += 1
-                else:
-                    s2 += 1
-            elif i == 0:
-                if j == 0:
-                    n1 += 1
-                else:
-                    n2 += 1
-            elif i == -1:
-                if j == 0:
-                    u1 += 1
-                else:
-                    u2 += 1    
-        
-        return ((s1, s2), (n1, n2), (u1, u2))
-        #return (s1+s2, n1+n2, u1+u2)
-        
-        #s_cb, n_cb = [], []
-        #s_cnt, n_cnt, u_cnt = 0, 0, 0
-       # print(len(self.target_status), len(self.cb))
-       # for _, c in zip(self.target_status, self.cb):
-       #     if _ == 1:
-       #         s_cnt += 1
-       #         s_cb.append(c.decode("utf-8"))
-       #     elif _ == 0:
-       #         n_cnt += 1
-       #         n_cb.append(c.decode("utf-8"))
-       #     elif _ == -1:
-       #         u_cnt += 1
-        
-       # return s_cnt, n_cnt, u_cnt, ":".join(s_cb), ":".join(n_cb)
-    
-         
     def get_tag(self, tag):
         s_tags, n_tags, u_tags = [], [], []
         for taglst, status in zip(self.tags, self.target_status):

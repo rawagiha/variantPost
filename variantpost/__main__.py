@@ -4,6 +4,8 @@ import sys
 import pysam
 import argparse
 import pandas as pd
+import multiprocessing as mp
+from collections import namedtuple
 
 from .variant import Variant
 from .variantalignment import VariantAlignment
@@ -12,6 +14,25 @@ ALLOWED_BASES = set("ATCG")
 _worker_tumor_bam = None
 _worker_normal_bam = None
 _worker_fasta = None
+
+
+Result = namedtuple(
+    "Result",
+    [
+        "TumorSuppotingCountFw",
+        "TumorSuppotingCountRv",
+        "TumorNonSuppotingCountFw",
+        "TumorNonSuppotingCountRv",
+        "NormalSuppotingCountFw",
+        "NormalSuppotingCountRv",
+        "NormalNonSuppotingCountFw",
+        "NormalNonSuppotingCountRv",
+        "RefIndelChannelCOSMIC83",
+        "RefIndelChannel89",
+        "PersonalIndelChannelCOSMIC83",
+        "PersonalIndelChannel89",
+    ],
+)
 
 
 def validate_file(path, label):
@@ -28,16 +49,27 @@ def parse_arguments():
     parser.add_argument("-t", "--tumor_bam", help="path to tumor BAM")
     parser.add_argument("-n", "--normal_bam", help="path to normal BAM")
     parser.add_argument("-r", "--reference", help="path to reference Fasta file")
-    parser.add_argument(
+    parser.add_argument("-o", "--output", type=str, help="path to output TSV file")
+
+    vcf_group = parser.add_mutually_exclusive_group(required=True)
+    vcf_group.add_argument(
         "-v", "--vcf", nargs="+", help="path(s) to VCF(s) (space-separated)"
     )
-    parser.add_argument("--vcf_list", help="text file containing paths to VCF")
+    vcf_group.add_argument("--vcf_list", help="text file containing paths to VCF")
 
     parser.add_argument(
         "--filters",
         type=str,
         default="PASS",
         help="Semicolon-separated list of accepted FILTER values (default: PASS). Use 'all' or '.' to allow any.",
+    )
+
+    parser.add_argument(
+        "-p",
+        "--processes",
+        type=int,
+        default=4,
+        help="Number of parallel worker processes (default: 4)",
     )
 
     if len(sys.argv) == 1:
@@ -71,19 +103,13 @@ def parse_arguments():
         sys.exit(1)
 
     vcf_path = None
-    vcf_path = None
     if args.vcf:
         vcf_path = args.vcf
-    elif args.vcf_list:
-        paths = load_paths_from_file(args.vcf_list)
-        if not paths:
+    else:
+        vcf_paths = load_paths_from_file(args.vcf_list)
+        if not vcf_paths:
             sys.stderr.write(f"Error: No paths found in {args.vcf_list}\n")
             sys.exit(1)
-        vcf_path = paths
-    else:
-        sys.stderr.write("Error: Either -v/--vcf or --vcf_list is required.\n\n")
-        parser.print_help()
-        sys.exit(1)
 
     validate_file(t_bam, "Tumor BAM")
     validate_file(n_bam, "Normal BAM")
@@ -96,7 +122,15 @@ def parse_arguments():
 
     allowed_filters = {f.strip() for f in args.filters.split(";") if f.strip()}
 
-    return t_bam, n_bam, reference, vcf_path, allowed_filters
+    return (
+        t_bam,
+        n_bam,
+        reference,
+        args.output,
+        vcf_path,
+        allowed_filters,
+        args.processes,
+    )
 
 
 def is_valid_indel(ref, alt):
@@ -116,7 +150,7 @@ def extract_indels_to_dataframe(vcf_list, filter_sets):
     # key: (CHROM, POS, REF, ALT) -> value: set of source VCF paths
     variant_dict = {}
 
-    allow_all = "all" in filter_set or "." in filter_set
+    allow_all = "all" in filter_sets or "." in filter_sets
 
     for vcf_path in vcf_list:
         vcf_name = os.path.basename(vcf_path)
@@ -127,7 +161,7 @@ def extract_indels_to_dataframe(vcf_list, filter_sets):
                 if not rec_filters:
                     rec_filters = ["PASS"]
 
-                if not allow_all and not filter_set.intersection(rec_filters):
+                if not allow_all and not filter_sets.intersection(rec_filters):
                     continue
 
                 for alt in record.alts:
@@ -186,20 +220,33 @@ def process_single_row(row):
 
     valn = VariantAlignment(v, _worker_tumor_bam, _worker_normal_bam)
 
-    # ----------------------------------------------------
-    # TODO: dd dddd
-    result1 = "something1"
-    result2 = "something2"
-    # ----------------------------------------------------
+    cnt = valn.count_alleles()
+    tumor_cnt, normal_cnt = cnt.first, cnt.second
 
-    return result1, result2
+    taxon = valn.taxonomize()
+    ref_txn_cosmic, ref_txn_89, personal_txn_cosmic, personal_txn_89 = taxon
+
+    return Result(
+        TumorSuppotingCountFw=tumor_cnt.s_fw,
+        TumorSuppotingCountRv=tumor_cnt.s_rv,
+        TumorNonSuppotingCountFw=tumor_cnt.n_fw,
+        TumorNonSuppotingCountRv=tumor_cnt.n_rv,
+        NormalSuppotingCountFw=normal_cnt.s_fw,
+        NormalSuppotingCountRv=normal_cnt.s_rv,
+        NormalNonSuppotingCountFw=normal_cnt.n_fw,
+        NormalNonSuppotingCountRv=normal_cnt.n_rv,
+        RefIndelChannelCOSMIC83=ref_txn_cosmic,
+        RefIndelChannel89=ref_txn_89,
+        PersonalIndelChannelCOSMIC83=personal_txn_cosmic,
+        PersonalIndelChannel89=personal_txn_89,
+    )
 
 
 def process_chunk(df_chunk):
     results = []
     for _, row in df_chunk.iterrows():
-        r1, r2 = process_single_row(row)
-        results.append((r1, r2))
+        result_obj = process_single_row(row)
+        results.append(result_obj)
     return results
 
 
@@ -208,7 +255,7 @@ def parallel_process_dataframe(df, tumor_bam, normal_bam, fasta, num_workers=Non
         return [], []
 
     if num_workers is None:
-        num_workers = max(1, mp.cpu_count() - 1)
+        num_workers = min(8, max(1, mp.cpu_count() - 1))
 
     chunks = [df[i::num_workers] for i in range(num_workers)]
 
@@ -224,23 +271,69 @@ def parallel_process_dataframe(df, tumor_bam, normal_bam, fasta, num_workers=Non
         for idx_row_in_chunk, orig_idx in enumerate(chunk.index):
             all_results[orig_idx] = chunk_results[idx_chunk][idx_row_in_chunk]
 
-    result1_list, result2_list = zip(*all_results)
-    return list(result1_list), list(result2_list)
+    decomposed_results = zip(*all_results)
+    return [list(r) for r in decomposed_results]
+
+
+def process_chunk_stream(df_chunk):
+    chunk_results = []
+
+    for _, row in df_chunk.iterrows():
+        result_obj = process_single_row(row)
+
+        chunk_results.append((row.to_dict(), result_obj._asdict()))
+
+    return chunk_results
 
 
 def main():
-    tumor_bam, normal_bam, vcf_list, filter_sets = parse_arguments()
-    df = extract_indels_to_dataframe(vcf_list, filter_sets)
+    (
+        tumor_bam,
+        normal_bam,
+        reference,
+        output,
+        vcf_list,
+        filter_sets,
+        processes,
+    ) = parse_arguments()
 
-    if not df.empty:
-        r1, r2 = parallel_process_dataframe(
-            df=df, tumor_bam=tumor_bam, normal_bam=normal_bam, fasta=reference
-        )
-        df["result1"] = r1
-        df["result2"] = r2
-    else:
-        df["result1"] = []
-        df["result2"] = []
+    df = extract_indels_to_dataframe(vcf_list, filter_sets)
+    if df.empty:
+        print("No variants to process.", file=sys.stderr)
+        return
+
+    num_workers = processes
+    chunks = [df[i::num_workers] for i in range(num_workers)]
+
+    out_f = open(output, "w", encoding="utf-8")
+
+    header_written = False
+
+    try:
+        with mp.Pool(
+            processes=num_workers,
+            initializer=init_worker,
+            initargs=(tumor_bam, normal_bam, reference),
+        ) as pool:
+            results_generator = pool.imap_unordered(
+                process_chunk_stream, chunks, chunksize=1
+            )
+
+            for chunk_list in results_generator:
+                for orig_row_dict, metrics_dict in chunk_list:
+                    output_line_dict = {**orig_row_dict, **metrics_dict}
+
+                    if not header_written:
+                        headers = list(output_line_dict.keys())
+                        out_f.write("\t".join(headers) + "\n")
+                        header_written = True
+
+                    values = [str(output_line_dict[h]) for h in headers]
+                    out_f.write("\t".join(values) + "\n")
+
+    finally:
+        if output and out_f is not sys.stdout:
+            out_f.close()
 
 
 if __name__ == "__main__":
