@@ -3,6 +3,7 @@ import os
 import sys
 import pysam
 import argparse
+import tempfile
 import pandas as pd
 import multiprocessing as mp
 from collections import namedtuple
@@ -19,6 +20,9 @@ _worker_fasta = None
 Result = namedtuple(
     "Result",
     [
+        "ComplexPos",
+        "ComplexRef",
+        "ComplexAlt",
         "TumorSuppotingCountFw",
         "TumorSuppotingCountRv",
         "TumorNonSuppotingCountFw",
@@ -34,103 +38,27 @@ Result = namedtuple(
     ],
 )
 
-
 def validate_file(path, label):
     if not os.path.exists(path):
         sys.stderr.write(f"Error: {label} file not found: {path}\n")
         sys.exit(1)
 
+def get_chrom_order(fasta_path, df_chroms):
+    try:
+        with pysam.FastaFile(fasta_path) as fa:
+            ref_chroms = list(fa.references)
+    except Exception:
+        ref_chroms = []
 
-def parse_arguments():
-    parser = argparse.ArgumentParser(
-        prog="indelinside",
-    )
+    present_chroms = df_chroms.unique().tolist()
 
-    parser.add_argument("-t", "--tumor_bam", help="path to tumor BAM")
-    parser.add_argument("-n", "--normal_bam", help="path to normal BAM")
-    parser.add_argument("-r", "--reference", help="path to reference Fasta file")
-    parser.add_argument("-o", "--output", type=str, help="path to output TSV file")
+    ordered_chroms = [c for c in ref_chroms if c in present_chroms]
 
-    vcf_group = parser.add_mutually_exclusive_group(required=True)
-    vcf_group.add_argument(
-        "-v", "--vcf", nargs="+", help="path(s) to VCF(s) (space-separated)"
-    )
-    vcf_group.add_argument("--vcf_list", help="text file containing paths to VCF")
+    for c in present_chroms:
+        if c not in ordered_chroms:
+            ordered_chroms.append(c)
 
-    parser.add_argument(
-        "--filters",
-        type=str,
-        default="PASS",
-        help="Semicolon-separated list of accepted FILTER values (default: PASS). Use 'all' or '.' to allow any.",
-    )
-
-    parser.add_argument(
-        "-p",
-        "--processes",
-        type=int,
-        default=4,
-        help="Number of parallel worker processes (default: 4)",
-    )
-
-    if len(sys.argv) == 1:
-        parser.print_help()
-        sys.exit(1)
-
-    args = parser.parse_args()
-
-    t_bam = None
-    if args.tumor_bam:
-        t_bam = args.tumor_bam
-    else:
-        sys.stderr.write("Error: -t/--tumor_bam is required.\n\n")
-        parser.print_help()
-        sys.exit(1)
-
-    n_bam = None
-    if args.normal_bam:
-        n_bam = args.normal_bam
-    else:
-        sys.stderr.write("Error: -n/--normal_bam is required.\n\n")
-        parser.print_help()
-        sys.exit(1)
-
-    reference = None
-    if args.reference:
-        reference = args.reference
-    else:
-        sys.stderr.write("Error: -r/--reference is required.\n\n")
-        parser.print_help()
-        sys.exit(1)
-
-    vcf_path = None
-    if args.vcf:
-        vcf_path = args.vcf
-    else:
-        vcf_paths = load_paths_from_file(args.vcf_list)
-        if not vcf_paths:
-            sys.stderr.write(f"Error: No paths found in {args.vcf_list}\n")
-            sys.exit(1)
-
-    validate_file(t_bam, "Tumor BAM")
-    validate_file(n_bam, "Normal BAM")
-
-    if isinstance(vcf_path, list):
-        for path in vcf_path:
-            validate_file(path, "VCF")
-    else:
-        validate_file(vcf_path, "VCF")
-
-    allowed_filters = {f.strip() for f in args.filters.split(";") if f.strip()}
-
-    return (
-        t_bam,
-        n_bam,
-        reference,
-        args.output,
-        vcf_path,
-        allowed_filters,
-        args.processes,
-    )
+    return ordered_chroms
 
 
 def is_valid_indel(ref, alt):
@@ -146,7 +74,7 @@ def is_valid_indel(ref, alt):
     return True
 
 
-def extract_indels_to_dataframe(vcf_list, filter_sets):
+def extract_indels_to_dataframe(vcf_list, filter_sets, reference):
     # key: (CHROM, POS, REF, ALT) -> value: set of source VCF paths
     variant_dict = {}
 
@@ -191,11 +119,15 @@ def extract_indels_to_dataframe(vcf_list, filter_sets):
         )
 
     df = pd.DataFrame(rows)
-
+    chrom_order = []
     if not df.empty:
-        df = df.sort_values(by=["CHROM", "POS"]).reset_index(drop=True)
+        chrom_order = get_chrom_order(reference, df["CHROM"])
+        chrom_category = pd.CategoricalDtype(categories=chrom_order, ordered=True)
+        df["CHROM"] = df["CHROM"].astype(chrom_category)
+        df.sort_values(by=["CHROM", "POS"], inplace=True)
+        df.reset_index(drop=True, inplace=True)
 
-    return df
+    return df, chrom_order
 
 
 def init_worker(tumor_path, normal_path, fasta_path):
@@ -227,6 +159,9 @@ def process_single_row(row):
     ref_txn_cosmic, ref_txn_89, personal_txn_cosmic, personal_txn_89 = taxon
 
     return Result(
+        ComplexPos=valn.variant.cpos,
+        ComplexRef=valn.variant.cref,
+        ComplexAlt=valn.variant.calt,
         TumorSuppotingCountFw=tumor_cnt.s_fw,
         TumorSuppotingCountRv=tumor_cnt.s_rv,
         TumorNonSuppotingCountFw=tumor_cnt.n_fw,
@@ -253,6 +188,8 @@ def process_chunk(df_chunk):
 def parallel_process_dataframe(df, tumor_bam, normal_bam, fasta, num_workers=None):
     if df.empty:
         return [], []
+    
+    # df is re-indexed with drop 
 
     if num_workers is None:
         num_workers = min(8, max(1, mp.cpu_count() - 1))
@@ -285,56 +222,123 @@ def process_chunk_stream(df_chunk):
 
     return chunk_results
 
+def get_chrom_order(fasta_path, df_chroms):
+    try:
+        with pysam.FastaFile(fasta_path) as fa:
+            ref_chroms = list(fa.references)
+    except Exception:
+        ref_chroms = []
 
-def main():
-    (
-        tumor_bam,
-        normal_bam,
-        reference,
-        output,
-        vcf_list,
-        filter_sets,
-        processes,
-    ) = parse_arguments()
+    present_chroms = df_chroms.unique().tolist()
 
-    df = extract_indels_to_dataframe(vcf_list, filter_sets)
+    ordered_chroms = [c for c in ref_chroms if c in present_chroms]
+
+    for c in present_chroms:
+        if c not in ordered_chroms:
+            ordered_chroms.append(c)
+
+    return ordered_chroms
+
+def personalizer(args):
+    tumor_bam = args.tumor_bam
+    normal_bam = args.normal_bam
+    reference = args.reference
+    output = args.output
+    vcf_list = args.vcf
+    processes = args.processes
+    
+    filter_sets = {f.strip() for f in args.filters.split(";") if f.strip()}
+    
+    df, chrom_order = extract_indels_to_dataframe(vcf_list, filter_sets, reference)
     if df.empty:
         print("No variants to process.", file=sys.stderr)
         return
 
     num_workers = processes
     chunks = [df[i::num_workers] for i in range(num_workers)]
-
-    out_f = open(output, "w", encoding="utf-8")
-
+    
     header_written = False
+    
+    with tempfile.TemporaryDirectory(prefix="indelinside_") as tmp_dir:
+        tmp_output = os.path.join(tmp_dir, "raw_metrics.tsv")
+        out_f = open(tmp_output, "w", encoding="utf-8")
+        
+        try:
+            with mp.Pool(
+                processes=num_workers,
+                initializer=init_worker,
+                initargs=(tumor_bam, normal_bam, reference),
+            ) as pool:
+                results_generator = pool.imap_unordered(
+                    process_chunk_stream, chunks, chunksize=1
+                )
 
-    try:
-        with mp.Pool(
-            processes=num_workers,
-            initializer=init_worker,
-            initargs=(tumor_bam, normal_bam, reference),
-        ) as pool:
-            results_generator = pool.imap_unordered(
-                process_chunk_stream, chunks, chunksize=1
-            )
+                for chunk_list in results_generator:
+                    for orig_row_dict, metrics_dict in chunk_list:
+                        output_line_dict = {**orig_row_dict, **metrics_dict}
 
-            for chunk_list in results_generator:
-                for orig_row_dict, metrics_dict in chunk_list:
-                    output_line_dict = {**orig_row_dict, **metrics_dict}
+                        if not header_written:
+                            headers = list(output_line_dict.keys())
+                            out_f.write("\t".join(headers) + "\n")
+                            header_written = True
 
-                    if not header_written:
-                        headers = list(output_line_dict.keys())
-                        out_f.write("\t".join(headers) + "\n")
-                        header_written = True
+                        values = [str(output_line_dict[h]) for h in headers]
+                        out_f.write("\t".join(values) + "\n")
 
-                    values = [str(output_line_dict[h]) for h in headers]
-                    out_f.write("\t".join(values) + "\n")
-
-    finally:
-        if output and out_f is not sys.stdout:
+        finally:
             out_f.close()
+    
+        dfo = pd.read_csv(tmp_output, sep="\t")
 
+        chrom_category = pd.CategoricalDtype(categories=chrom_order, ordered=True)
+        dfo["CHROM"] = dfo["CHROM"].astype(chrom_category)
+        dfo.sort_values(by=["CHROM", "POS"], inplace=True)
+        dfo.to_csv(output, sep="\t", index=False)
+
+def parse_arguments():
+    parser = argparse.ArgumentParser(
+        prog="indelinside",
+    )
+
+    subparsers = parser.add_subparsers(dest="subcommand", required=True, help="sub-command help")
+
+    parser_personal = subparsers.add_parser("personalize", help="reanalyze somatic indels on locally personalized reference genome")
+    
+    parser_personal.add_argument("-t", "--tumor_bam", help="path to tumor BAM")
+    parser_personal.add_argument("-n", "--normal_bam", help="path to normal BAM")
+    parser_personal.add_argument("-r", "--reference", help="path to reference Fasta file")
+    parser_personal.add_argument("-o", "--output", type=str, help="path to output TSV file")
+
+    #vcf_group = parser_personal.add_mutually_exclusive_group(required=True)
+    parser_personal.add_argument(
+        "-v", "--vcf", nargs="+", help="path(s) to VCF(s) (space-separated)"
+    )
+    #vcf_group.add_argument("--vcf_list", help="text file containing paths to VCF")
+
+    parser_personal.add_argument(
+        "--filters",
+        type=str,
+        default="PASS",
+        help="Semicolon-separated list of accepted FILTER values (default: PASS). Use 'all' or '.' to allow any.",
+    )
+
+    parser_personal.add_argument(
+        "-p",
+        "--processes",
+        type=int,
+        default=4,
+        help="Number of parallel worker processes (default: 4)",
+    )
+
+    parser_personal.set_defaults(handler=personalizer)
+
+    
+    return parser.parse_args()
+ 
+def main():
+    args = parse_arguments()
+
+    args.handler(args)
 
 if __name__ == "__main__":
     main()

@@ -166,9 +166,6 @@ class VariantAlignment(object):
         
         self.is_with_target = (1 in self.target_status)
 
-        self.variant.spos = self.ppos
-        self.variant.sref = self.pref
-        self.variant.salt = self.palt
         
         #############TODO#################
         #implement later
@@ -317,17 +314,17 @@ class VariantAlignment(object):
         return pac
     
 
-    def realn2sample_hap(self):
-        if len(self.pref) >  len(self.palt):
-            unit = to_minimal_repeat_unit(self.pref[1:])
-        else:
-            unit = to_minimal_repeat_unit(self.palt[1:])
-        rep_n = repeat_counter(unit, self.prtseq)
-        return self.ppos, self.pref, self.palt, self.pltseq, self.prtseq, unit, rep_n, self.variant.count_repeats()
+    #def realn2sample_hap(self):
+    #    if len(self.pref) >  len(self.palt):
+    #        unit = to_minimal_repeat_unit(self.pref[1:])
+    #    else:
+    #        unit = to_minimal_repeat_unit(self.palt[1:])
+    #    rep_n = repeat_counter(unit, self.prtseq)
+    #    return self.ppos, self.pref, self.palt, self.pltseq, self.prtseq, unit, rep_n, self.variant.count_repeats()
 
     
     
-    def phase2complex(self, cis: bool = True, **kwargs):
+    def phase2complex(self, cis=True, inplace=False, base_quality_threshold=20, match_penalty_for_phasing=3, max_common_substr_len=15):
         """returns :class:`~variantpost.Variant` representing a phased target variant.
 
         Parameters
@@ -341,85 +338,51 @@ class VariantAlignment(object):
         match_penalty_for_phasing : float
 
         """
-        #if self.is_retargeted:
-        #    self.target_is_indel = True
-        #    self.target_pos = self.retarget_pos
-        
-        ###################
         v = self.variant
         if not self.is_with_target:
-            return v
+            if not inplace:
+                return v
     
-        
         v.phased_as_complex = False
         
         if cis and self.likely_simple_on_personalized_genome:
-            #if not v.is_simple_indel:
-            return v
-                 
-        base_quality_threshold = 20
-        match_penalty_for_phasing = 3 
-        max_common_substr_len = 15
-        if True:
-            if cis:
-                trans_vars = self.trans_vars
-                print(trans_vars)
-            else:
-                trans_vars = []
-
-            print(self.contig_dict)
-            phased = _phase(
-                self.contig_dict,
-                self.skips,
-                self.target_pos,
-                self.target_is_indel,
-                self.local_thresh,
-                base_quality_threshold,
-                trans_vars,
-                match_penalty_for_phasing,
-                max_common_substr_len,
-            )
-            
-            if phased and self.is_with_target:
-                v.pos = phased[0]
-                v.ref = phased[1]
-                v.alt = phased[2]
-                
-                #if len(v.cref) < len(v.calt):
-                #    v.phased_as_complex = (v.cref != v.calt[:len(v.cref)])
-                #elif len(v.cref) > len(v.calt):
-                #     v.phased_as_complex = (v.calt != v.cref[:len(v.calt)])
-                #else:
-                #    if len(v.cref) > 1:
-                #        v.phased_as_complex = (v.calt != v.cref)
-
-                print(v.pos, v.ref, v.alt, "before normalization")
-                v.normalize(inplace=True)
+            if not inplace:
                 return v
-            else:
-                pass     
-            #elif self.is_with_target:
-            #    v.cpos = v.pos
-            #    v.cref = v.ref
-            #    v.calt = v.alt
-            #else:
-            #    ref_base = self.reference.fetch(
-            #        self.chrom, self.target_pos - 1, self.target_pos
-            #    )
-            #    return Variant(
-            #        self.chrom, self.target_pos, ref_base, ref_base, self.reference
-            #    )
-        #except:
-        #    pass
-            #if self.is_with_target:
-            #    return self.variant
-            #else:
-            #    ref_base = self.reference.fetch(
-            #        self.chrom, self.target_pos - 1, self.target_pos
-            #    )
-            #    return Variant(
-            #        self.chrom, self.target_pos, ref_base, ref_base, self.reference
-            #    )
+                 
+        if cis:
+            trans_vars = self.trans_vars
+        else:
+            trans_vars = []
+
+        phased = _phase(
+            self.contig_dict,
+            self.skips,
+            self.target_pos,
+            self.target_is_indel,
+            self.local_thresh,
+            base_quality_threshold,
+            trans_vars,
+            match_penalty_for_phasing,
+            max_common_substr_len,
+        )
+            
+        if phased and self.is_with_target:
+            v.pos = phased[0]    
+            v.ref = phased[1]
+            v.alt = phased[2]
+            
+            # normalizetion is supported for pos/ref/alt
+            # not with cpos/cref/calt
+            v.normalize(inplace=True)
+            
+            self.variant.cpos = v.pos
+            self.variant.cref = v.ref
+            self.variant.calt = v.alt
+            if not inplace:
+                return v
+        else:
+            if not inplace:
+                return v
 
 def _find_value(lst, tag):
         for elem in lst:
