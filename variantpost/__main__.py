@@ -1,20 +1,30 @@
 #!/usr/bin/env python3
+
 import os
 import sys
 import math
-import pysam
-import argparse
+import logging
 import tempfile
-import pandas as pd
+import argparse
 import multiprocessing as mp
-from scipy.stats import fisher_exact
-from collections import namedtuple, OrderedDict
+from collections import namedtuple
+from typing import Dict, List, Set, Tuple
 
+import pysam
+import pandas as pd
+from scipy.stats import fisher_exact
 
 from .variant import Variant
 from .variantalignment import VariantAlignment
 
-KEYS_83 = (
+# Logging Configuration
+logging.basicConfig(
+    level=logging.INFO,
+    format="[%(asctime)s - %(levelname)s] %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+
+KEYS_83: Tuple[str, ...] = (
     "1:Del:C:0",
     "1:Del:C:1",
     "1:Del:C:2",
@@ -100,7 +110,7 @@ KEYS_83 = (
     "5:Ins:R:5",
 )
 
-KEYS_89 = (
+KEYS_89: Tuple[str, ...] = (
     "A[Ins(C):R0]A",
     "A[Ins(C):R0]T",
     "Ins(C):R(0,3)",
@@ -192,7 +202,9 @@ KEYS_89 = (
     "Complex",
 )
 
-ALLOWED_BASES = set("ATCG")
+ALLOWED_BASES: Set[str] = set("ATCG")
+
+# Global multiprocessing state
 _worker_tumor_bam = None
 _worker_normal_bam = None
 _worker_fasta = None
@@ -224,86 +236,75 @@ Result = namedtuple(
 )
 
 
-def validate_file(path, label):
+def validate_file(path: str, label: str) -> None:
+    """Validate existence of input files."""
     if not os.path.exists(path):
-        sys.stderr.write(f"Error: {label} file not found: {path}\n")
+        logging.error("%s file not found: %s", label, path)
         sys.exit(1)
 
 
-def get_chrom_order(fasta_path, df_chroms):
+def get_chrom_order(fasta_path: str, df_chroms: pd.Series) -> List[str]:
+    """Retrieve ordered chromosome list prioritized by FASTA header."""
     try:
         with pysam.FastaFile(fasta_path) as fa:
             ref_chroms = list(fa.references)
-    except Exception:
+    except Exception as e:
+        logging.warning(
+            "Could not read references from FASTA (%s). Falling back to observed chromosomes.",
+            e,
+        )
         ref_chroms = []
 
     present_chroms = df_chroms.unique().tolist()
-
     ordered_chroms = [c for c in ref_chroms if c in present_chroms]
-
-    for c in present_chroms:
-        if c not in ordered_chroms:
-            ordered_chroms.append(c)
+    ordered_chroms.extend([c for c in present_chroms if c not in ordered_chroms])
 
     return ordered_chroms
 
 
-def is_valid_indel(ref, alt):
-    if len(ref) == len(alt):
+def is_valid_indel(ref: str, alt: str) -> bool:
+    """Check if the given REF/ALT pair represents a valid indel."""
+    len_diff = abs(len(ref) - len(alt))
+    if len_diff == 0 or len_diff >= 100:
         return False
-
-    if abs(len(ref) - len(alt)) >= 100:
-        return False
-
-    if not set(ref).issubset(ALLOWED_BASES) or not set(alt).issubset(ALLOWED_BASES):
-        return False
-
-    return True
+    return set(ref).issubset(ALLOWED_BASES) and set(alt).issubset(ALLOWED_BASES)
 
 
-def extract_indels_to_dataframe(vcf_list, filter_sets, reference):
-    # key: (CHROM, POS, REF, ALT) -> value: set of source VCF paths
-    variant_dict = {}
-
+def extract_indels_to_dataframe(
+    vcf_list: List[str], filter_sets: Set[str], reference: str
+) -> Tuple[pd.DataFrame, List[str]]:
+    """Extract and aggregate unique indel variants from multiple VCF files."""
+    variant_dict: Dict[Tuple[str, int, str, str], Set[str]] = {}
     allow_all = "all" in filter_sets or "." in filter_sets
 
     for vcf_path in vcf_list:
+        validate_file(vcf_path, "VCF")
         vcf_name = os.path.basename(vcf_path)
 
         with pysam.VariantFile(vcf_path) as vcf:
             for record in vcf:
-                rec_filters = list(record.filter.keys())
-                if not rec_filters:
-                    rec_filters = ["PASS"]
+                rec_filters = list(record.filter.keys()) or ["PASS"]
 
                 if not allow_all and not filter_sets.intersection(rec_filters):
                     continue
 
-                for alt in record.alts:
-                    if alt is None:
-                        continue
-
-                    ref = record.ref
-
-                    if is_valid_indel(ref, alt):
+                ref = record.ref
+                for alt in record.alts or []:
+                    if alt and is_valid_indel(ref, alt):
                         key = (record.chrom, record.pos, ref, alt)
+                        variant_dict.setdefault(key, set()).add(vcf_name)
 
-                        if key not in variant_dict:
-                            variant_dict[key] = set()
-                        variant_dict[key].add(vcf_name)
-
-    rows = []
-    for (chrom, pos, ref, alt), sources in variant_dict.items():
-        rows.append(
-            {
-                "CHROM": chrom,
-                "POS": pos,
-                "REF": ref,
-                "ALT": alt,
-                "SOURCES": ",".join(sorted(sources)),
-                "SUPPORT_COUNT": len(sources),
-            }
-        )
+    rows = [
+        {
+            "CHROM": chrom,
+            "POS": pos,
+            "REF": ref,
+            "ALT": alt,
+            "SOURCES": ",".join(sorted(sources)),
+            "SUPPORT_COUNT": len(sources),
+        }
+        for (chrom, pos, ref, alt), sources in variant_dict.items()
+    ]
 
     df = pd.DataFrame(rows)
     chrom_order = []
@@ -317,33 +318,27 @@ def extract_indels_to_dataframe(vcf_list, filter_sets, reference):
     return df, chrom_order
 
 
-def init_worker(tumor_path, normal_path, fasta_path):
+def init_worker(tumor_path: str, normal_path: str, fasta_path: str) -> None:
+    """Initialize worker process resources for multiprocessing."""
     global _worker_tumor_bam, _worker_normal_bam, _worker_fasta
     _worker_tumor_bam = pysam.AlignmentFile(tumor_path, "rb")
     _worker_normal_bam = pysam.AlignmentFile(normal_path, "rb")
     _worker_fasta = pysam.FastaFile(fasta_path)
 
 
-def process_single_row(row):
+def process_single_row(row: pd.Series) -> Result:
+    """Process a single variant record across BAM and FASTA contexts."""
     global _worker_tumor_bam, _worker_normal_bam, _worker_fasta
 
     if _worker_tumor_bam is None:
-        raise RuntimeError("Worker is not initialized with BAM/Fasta files.")
+        raise RuntimeError("Worker process is uninitialized.")
 
-    chrom = row["CHROM"]
-    pos = row["POS"]
-    ref = row["REF"]
-    alt = row["ALT"]
-
-    v = Variant(chrom, pos, ref, alt, _worker_fasta)
-
+    v = Variant(row["CHROM"], row["POS"], row["REF"], row["ALT"], _worker_fasta)
     valn = VariantAlignment(v, _worker_tumor_bam, _worker_normal_bam)
 
     cnt = valn.count_alleles()
     tumor_cnt, normal_cnt = cnt.first, cnt.second
-
-    taxon = valn.taxonomize()
-    ref_txn_cosmic, ref_txn_89, personal_txn_cosmic, personal_txn_89 = taxon
+    ref_txn_cosmic, ref_txn_89, personal_txn_cosmic, personal_txn_89 = valn.taxonomize()
 
     return Result(
         ComplexPos=valn.variant.cpos,
@@ -368,90 +363,38 @@ def process_single_row(row):
     )
 
 
-def process_chunk(df_chunk):
-    results = []
-    for _, row in df_chunk.iterrows():
-        result_obj = process_single_row(row)
-        results.append(result_obj)
-    return results
-
-
-def parallel_process_dataframe(df, tumor_bam, normal_bam, fasta, num_workers=None):
-    if df.empty:
-        return [], []
-
-    # df is re-indexed with drop
-
-    if num_workers is None:
-        num_workers = min(8, max(1, mp.cpu_count() - 1))
-
-    chunks = [df[i::num_workers] for i in range(num_workers)]
-
-    with mp.Pool(
-        processes=num_workers,
-        initializer=init_worker,
-        initargs=(tumor_bam, normal_bam, fasta),
-    ) as pool:
-        chunk_results = pool.map(process_chunk, chunks)
-
-    all_results = [None] * len(df)
-    for idx_chunk, chunk in enumerate(chunks):
-        for idx_row_in_chunk, orig_idx in enumerate(chunk.index):
-            all_results[orig_idx] = chunk_results[idx_chunk][idx_row_in_chunk]
-
-    decomposed_results = zip(*all_results)
-    return [list(r) for r in decomposed_results]
-
-
-def process_chunk_stream(df_chunk):
-    chunk_results = []
-
-    for _, row in df_chunk.iterrows():
-        result_obj = process_single_row(row)
-
-        chunk_results.append((row.to_dict(), result_obj._asdict()))
-
-    return chunk_results
-
-
-def get_chrom_order(fasta_path, df_chroms):
-    try:
-        with pysam.FastaFile(fasta_path) as fa:
-            ref_chroms = list(fa.references)
-    except Exception:
-        ref_chroms = []
-
-    present_chroms = df_chroms.unique().tolist()
-
-    ordered_chroms = [c for c in ref_chroms if c in present_chroms]
-
-    for c in present_chroms:
-        if c not in ordered_chroms:
-            ordered_chroms.append(c)
-
-    return ordered_chroms
+def process_chunk_stream(df_chunk: pd.DataFrame) -> List[Tuple[dict, dict]]:
+    """Worker task to process a DataFrame chunk and yield dictionaries."""
+    return [
+        (row.to_dict(), process_single_row(row)._asdict())
+        for _, row in df_chunk.iterrows()
+    ]
 
 
 def filter_row(
-    row,
-    min_strand_bias_read_count,
-    strand_bias_thresh,
-    max_normal_vaf,
-    min_enrichment_thresh,
-    pval_thresh,
-):
-    ref_fw = row["TumorNonSupportingCountFw"]
-    ref_rv = row["TumorNonSupportingCountRv"]
-    alt_fw = row["TumorSupportingCountFw"]
-    alt_rv = row["TumorSupportingCountRv"]
+    row: pd.Series,
+    min_strand_bias_read_count: int,
+    strand_bias_thresh: float,
+    max_normal_vaf: float,
+    min_enrichment_thresh: float,
+    pval_thresh: float,
+) -> Tuple[float, float, float, str]:
+    """Calculate VAF, Strand Bias (SOR), and filter flags for a processed variant."""
+    ref_fw, ref_rv = row["TumorNonSupportingCountFw"], row["TumorNonSupportingCountRv"]
+    alt_fw, alt_rv = row["TumorSupportingCountFw"], row["TumorSupportingCountRv"]
 
-    t_ref = row["TumorUniqueNonSupportingCount"]
-    t_alt = row["TumorUniqueSupportingCount"]
-    n_ref = row["NormalUniqueNonSupportingCount"]
-    n_alt = row["NormalUniqueSupportingCount"]
+    t_ref, t_alt = (
+        row["TumorUniqueNonSupportingCount"],
+        row["TumorUniqueSupportingCount"],
+    )
+    n_ref, n_alt = (
+        row["NormalUniqueNonSupportingCount"],
+        row["NormalUniqueSupportingCount"],
+    )
 
     filters = []
-    # Strand bias odds ratio filter
+
+    # Strand bias calculation
     sor = 0.0
     if t_alt > min_strand_bias_read_count:
         rf, rr = ref_fw + 1, ref_rv + 1
@@ -459,30 +402,25 @@ def filter_row(
 
         r_ref = max(rf / rr, rr / rf)
         r_alt = max(af / ar, ar / af)
-
         ref_alt_ratio = (af * rr) / (ar * rf)
 
         if ref_alt_ratio < 1.0:
             ref_alt_ratio = 1.0 / ref_alt_ratio
 
         try:
-            sor = math.log(r_ref * r_alt) + math.log(ref_alt_ratio)
+            sor = round(math.log(r_ref * r_alt) + math.log(ref_alt_ratio), 4)
         except ValueError:
             sor = 0.0
-
-        sor = round(sor, 4)
 
     if sor >= strand_bias_thresh:
         filters.append("StrandBias")
 
-    t_vaf = t_alt / (t_ref + t_alt) if (t_ref + t_alt) > 0 else 0
-    n_vaf = n_alt / (n_ref + n_alt) if (n_ref + n_alt) > 0 else 0
+    t_vaf = t_alt / (t_ref + t_alt) if (t_ref + t_alt) > 0 else 0.0
+    n_vaf = n_alt / (n_ref + n_alt) if (n_ref + n_alt) > 0 else 0.0
 
-    # Not detected
     if t_vaf == 0:
         filters.append("FailedToDetect")
 
-    # Normal VAF > 0
     if n_vaf > 0:
         if n_vaf >= max_normal_vaf:
             filters.append("PossibleGermline")
@@ -499,35 +437,35 @@ def filter_row(
     return t_vaf, n_vaf, sor, filter_str
 
 
-def personalizer(args):
-    tumor_bam = args.tumor_bam
-    normal_bam = args.normal_bam
-    reference = args.reference
-    output = args.output
-    vcf_list = args.vcf
-    processes = args.processes
+def personalizer(args: argparse.Namespace) -> None:
+    """Subcommand handler: Personalize and reanalyze somatic indels."""
+    validate_file(args.tumor_bam, "Tumor BAM")
+    validate_file(args.normal_bam, "Normal BAM")
+    validate_file(args.reference, "Reference FASTA")
 
     filter_sets = {f.strip() for f in args.filters.split(";") if f.strip()}
 
-    df, chrom_order = extract_indels_to_dataframe(vcf_list, filter_sets, reference)
+    logging.info("Extracting indels from VCF files...")
+    df, chrom_order = extract_indels_to_dataframe(args.vcf, filter_sets, args.reference)
+
     if df.empty:
-        print("No variants to process.", file=sys.stderr)
+        logging.warning("No variants to process.")
         return
 
-    num_workers = processes
+    num_workers = min(args.processes, mp.cpu_count())
     chunks = [df[i::num_workers] for i in range(num_workers)]
 
     header_written = False
 
+    logging.info("Processing variants with %d worker(s)...", num_workers)
     with tempfile.TemporaryDirectory(prefix="indelinside_") as tmp_dir:
         tmp_output = os.path.join(tmp_dir, "raw_metrics.tsv")
-        out_f = open(tmp_output, "w", encoding="utf-8")
 
-        try:
+        with open(tmp_output, "w", encoding="utf-8") as out_f:
             with mp.Pool(
                 processes=num_workers,
                 initializer=init_worker,
-                initargs=(tumor_bam, normal_bam, reference),
+                initargs=(args.tumor_bam, args.normal_bam, args.reference),
             ) as pool:
                 results_generator = pool.imap_unordered(
                     process_chunk_stream, chunks, chunksize=1
@@ -545,36 +483,56 @@ def personalizer(args):
                         values = [str(output_line_dict[h]) for h in headers]
                         out_f.write("\t".join(values) + "\n")
 
-        finally:
-            out_f.close()
-
+        logging.info("Applying post-processing filters...")
         dfo = pd.read_csv(tmp_output, sep="\t")
 
         chrom_category = pd.CategoricalDtype(categories=chrom_order, ordered=True)
         dfo["CHROM"] = dfo["CHROM"].astype(chrom_category)
         dfo.sort_values(by=["CHROM", "POS"], inplace=True)
 
-        (
-            dfo["TumorVAF"],
-            dfo["NormalVAF"],
-            dfo["StrandBias"],
-            dfo["FILTER"],
-        ) = zip(
-            *dfo.apply(
-                filter_row,
-                min_strand_bias_read_count=args.min_strand_bias_read_count,
-                strand_bias_thresh=args.strand_bias_thresh,
-                max_normal_vaf=args.max_normal_vaf,
-                min_enrichment_thresh=args.tumor_normal_vaf_ratio_thresh,
-                pval_thresh=args.fisher_exact_pval_thresh,
-                axis=1,
-            )
+        res = dfo.apply(
+            filter_row,
+            min_strand_bias_read_count=args.min_strand_bias_read_count,
+            strand_bias_thresh=args.strand_bias_thresh,
+            max_normal_vaf=args.max_normal_vaf,
+            min_enrichment_thresh=args.tumor_normal_vaf_ratio_thresh,
+            pval_thresh=args.fisher_exact_pval_thresh,
+            axis=1,
         )
 
-        dfo.to_csv(output, sep="\t", index=False)
+        dfo["TumorVAF"], dfo["NormalVAF"], dfo["StrandBias"], dfo["FILTER"] = zip(*res)
+        dfo.to_csv(args.output, sep="\t", index=False)
+        logging.info("Successfully wrote results to %s", args.output)
 
 
-def mut_tbl(args):
+def _generate_matrix(
+    df: pd.DataFrame,
+    keys_tuple: Tuple[str, ...],
+    ref_col: str,
+    personal_col: str,
+    sample_name: str,
+    out_filename: str,
+) -> None:
+    """Helper method to construct and output mutation spectrum matrices."""
+    ref_counts = df[ref_col].value_counts().reindex(keys_tuple, fill_value=0)
+    personal_counts = df[personal_col].value_counts().reindex(keys_tuple, fill_value=0)
+
+    matrix_df = pd.DataFrame(
+        {
+            "MutationType": keys_tuple,
+            f"{sample_name}": ref_counts.values,
+            f"{sample_name}_personalized": personal_counts.values,
+        }
+    )
+
+    matrix_df.to_csv(out_filename, sep="\t", index=False)
+    logging.info("Generated matrix file: %s", out_filename)
+
+
+def mut_tbl(args: argparse.Namespace) -> None:
+    """Subcommand handler: Build matrix for Indel Signature Analysis."""
+    validate_file(args.input, "Input TSV")
+
     df = pd.read_csv(args.input, sep="\t")
 
     consensus_level = args.consensus_level
@@ -583,95 +541,66 @@ def mut_tbl(args):
     elif consensus_level == -1:
         df = df[df["SUPPORT_COUNT"] == consensus_level]
     else:
-        raise ValueError(f"Invalide consensus level: {consensus_level}")
+        raise ValueError(f"Invalid consensus level: {consensus_level}")
 
-    df.reset_index(drop=True, inplace=True)
-
-    ref_83 = OrderedDict((key, 0) for key in KEYS_83)
-    ref_83_cnt = df["RefIndelChannelCOSMIC83"].value_counts()
-    for key, cnt in ref_83_cnt.items():
-        if key in KEYS_83:
-            ref_83[key] = cnt
-
-    personal_83 = OrderedDict((key, 0) for key in KEYS_83)
-    personal_83_cnt = df["PersonalIndelChannelCOSMIC83"].value_counts()
-    for key, cnt in personal_83_cnt.items():
-        if key in KEYS_83:
-            personal_83[key] = cnt
-
-    data_83 = []
-    for key in KEYS_83:
-        d = {
-            "MutationType": key,
-            f"{args.sample}": ref_83[key],
-            f"{args.sample}_personalized": personal_83[key],
-        }
-        data_83.append(d)
-
-    df_83 = pd.DataFrame(data_83)
-    df_83.to_csv(f"{args.sample}_indel_83_matrix.txt", sep="\t", index=False)
-
-    ref_89 = OrderedDict((key, 0) for key in KEYS_89)
-    ref_89_cnt = df["RefIndelChannel89"].value_counts()
-    for key, cnt in ref_89_cnt.items():
-        if key in KEYS_89:
-            ref_89[key] = cnt
-
-    personal_89 = OrderedDict((key, 0) for key in KEYS_89)
-    personal_89_cnt = df["PersonalIndelChannel89"].value_counts()
-    for key, cnt in personal_89_cnt.items():
-        if key in KEYS_89:
-            personal_89[key] = cnt
-
-    data_89 = []
-    for key in KEYS_89:
-        d = {
-            "MutationType": key,
-            f"{args.sample}": ref_89[key],
-            f"{args.sample}_personalized": personal_89[key],
-        }
-        data_89.append(d)
-
-    df_89 = pd.DataFrame(data_89)
-    df_89.to_csv(f"{args.sample}_indel_89_matrix.txt", sep="\t", index=False)
-
-
-def parse_arguments():
-    parser = argparse.ArgumentParser(
-        prog="indelinside",
+    # Generate COSMIC 83 Matrix
+    _generate_matrix(
+        df=df,
+        keys_tuple=KEYS_83,
+        ref_col="RefIndelChannelCOSMIC83",
+        personal_col="PersonalIndelChannelCOSMIC83",
+        sample_name=args.sample,
+        out_filename=f"{args.sample}_indel_83_matrix.txt",
     )
 
+    # Generate 89 Channel Matrix
+    _generate_matrix(
+        df=df,
+        keys_tuple=KEYS_89,
+        ref_col="RefIndelChannel89",
+        personal_col="PersonalIndelChannel89",
+        sample_name=args.sample,
+        out_filename=f"{args.sample}_indel_89_matrix.txt",
+    )
+
+
+def parse_arguments() -> argparse.Namespace:
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(prog="indelinside")
     subparsers = parser.add_subparsers(
         dest="subcommand", required=True, help="sub-command help"
     )
 
+    # Subcommand: personalize
     parser_personal = subparsers.add_parser(
         "personalize",
-        help="reanalyze somatic indels on locally personalized reference genome",
-    )
-
-    parser_personal.add_argument("-t", "--tumor_bam", help="path to tumor BAM")
-    parser_personal.add_argument("-n", "--normal_bam", help="path to normal BAM")
-    parser_personal.add_argument(
-        "-r", "--reference", help="path to reference Fasta file"
+        help="Reanalyze somatic indels on locally personalized reference genome",
     )
     parser_personal.add_argument(
-        "-o", "--output", type=str, help="path to output TSV file"
+        "-t", "--tumor_bam", required=True, help="Path to tumor BAM file"
     )
-
-    # vcf_group = parser_personal.add_mutually_exclusive_group(required=True)
     parser_personal.add_argument(
-        "-v", "--vcf", nargs="+", help="path(s) to VCF(s) (space-separated)"
+        "-n", "--normal_bam", required=True, help="Path to normal BAM file"
     )
-    # vcf_group.add_argument("--vcf_list", help="text file containing paths to VCF")
-
+    parser_personal.add_argument(
+        "-r", "--reference", required=True, help="Path to reference FASTA file"
+    )
+    parser_personal.add_argument(
+        "-o", "--output", required=True, type=str, help="Path to output TSV file"
+    )
+    parser_personal.add_argument(
+        "-v",
+        "--vcf",
+        nargs="+",
+        required=True,
+        help="Path(s) to VCF(s) (space-separated)",
+    )
     parser_personal.add_argument(
         "--filters",
         type=str,
         default="PASS",
         help="Semicolon-separated list of accepted FILTER values (default: PASS). Use 'all' or '.' to allow any.",
     )
-
     parser_personal.add_argument(
         "-p",
         "--processes",
@@ -679,59 +608,73 @@ def parse_arguments():
         default=4,
         help="Number of parallel worker processes (default: 4)",
     )
-
-    parser_personal.add_argument("--max_normal_vaf", type=float, default=0.1, help="aa")
     parser_personal.add_argument(
-        "--tumor_normal_vaf_ratio_thresh", type=float, default=5.0, help="aa"
+        "--max_normal_vaf", type=float, default=0.1, help="Maximum allowed Normal VAF"
     )
     parser_personal.add_argument(
-        "--strand_bias_thresh", type=float, default=7.0, help="applied to count > 1"
+        "--tumor_normal_vaf_ratio_thresh",
+        type=float,
+        default=5.0,
+        help="Minimum Tumor/Normal VAF enrichment ratio",
     )
     parser_personal.add_argument(
-        "--min_strand_bias_read_count", type=int, default=3, help="aa"
+        "--strand_bias_thresh",
+        type=float,
+        default=7.0,
+        help="Strand bias threshold (SOR)",
     )
     parser_personal.add_argument(
-        "--fisher_exact_pval_thresh", type=float, default=0.05, help="aa"
+        "--min_strand_bias_read_count",
+        type=int,
+        default=3,
+        help="Minimum supporting reads required to calculate SOR",
+    )
+    parser_personal.add_argument(
+        "--fisher_exact_pval_thresh",
+        type=float,
+        default=0.05,
+        help="Fisher's exact test p-value threshold",
     )
     parser_personal.set_defaults(handler=personalizer)
 
+    # Subcommand: matrix
     parser_table = subparsers.add_parser(
-        "matrix", help="prepare mutation matrix for indel signature analysis"
+        "matrix", help="Prepare mutation matrix for indel signature analysis"
     )
     parser_table.add_argument(
         "-i",
         "--input",
+        required=True,
         type=str,
-        help="path to the output TSV file from personalize subcommand",
+        help="Path to output TSV file from personalize subcommand",
     )
-    parser_table.add_argument("-s", "--sample", type=str, help="aa")
-    parser_table.add_argument("-c", "--consensus_level", type=int, help="aa")
+    parser_table.add_argument(
+        "-s", "--sample", required=True, type=str, help="Sample identifier string"
+    )
+    parser_table.add_argument(
+        "-c",
+        "--consensus_level",
+        required=True,
+        type=int,
+        help="The number of variant callers (consensus level) detected the indel. For example, indels detected by 2 or more callers will be included for analysis if 2 is specified.",
+    )
     parser_table.add_argument(
         "--filters",
         type=str,
         default="PASS",
         help="Semicolon-separated list of accepted FILTER values (default: PASS). Use 'all' or '.' to allow any.",
     )
-
     parser_table.set_defaults(handler=mut_tbl)
 
     if len(sys.argv) == 1:
         parser.print_help()
         sys.exit(0)
 
-    if len(sys.argv) == 2 and sys.argv[1] in ["personalize", "matrix"]:
-        if sys.argv[1] == "personalize":
-            parser_personal.print_help()
-        elif sys.argv[1] == "matrix":
-            parser_table.print_help()
-        sys.exit(0)
-
     return parser.parse_args()
 
 
-def main():
+def main() -> None:
     args = parse_arguments()
-
     args.handler(args)
 
 
