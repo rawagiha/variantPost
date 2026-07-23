@@ -1,17 +1,16 @@
-#!/usr/bin/env python3
-
+import argparse
+import logging
+import math
+import multiprocessing as mp
 import os
 import sys
-import math
-import logging
 import tempfile
-import argparse
-import multiprocessing as mp
 from collections import namedtuple
-from typing import Dict, List, Set, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
-import pysam
+import numpy as np
 import pandas as pd
+import pysam
 from scipy.stats import fisher_exact
 
 from .variant import Variant
@@ -247,7 +246,7 @@ def get_chrom_order(fasta_path: str, df_chroms: pd.Series) -> List[str]:
     """Retrieve ordered chromosome list prioritized by FASTA header."""
     try:
         with pysam.FastaFile(fasta_path) as fa:
-            ref_chroms = list(fa.references)
+            ref_chroms = [str(c) for c in fa.references]
     except Exception as e:
         logging.warning(
             "Could not read references from FASTA (%s). Falling back to observed chromosomes.",
@@ -255,7 +254,7 @@ def get_chrom_order(fasta_path: str, df_chroms: pd.Series) -> List[str]:
         )
         ref_chroms = []
 
-    present_chroms = df_chroms.unique().tolist()
+    present_chroms = [str(c) for c in df_chroms.unique().tolist()]
     ordered_chroms = [c for c in ref_chroms if c in present_chroms]
     ordered_chroms.extend([c for c in present_chroms if c not in ordered_chroms])
 
@@ -270,12 +269,38 @@ def is_valid_indel(ref: str, alt: str) -> bool:
     return set(ref).issubset(ALLOWED_BASES) and set(alt).issubset(ALLOWED_BASES)
 
 
+def flag_soft_overlaps(df: pd.DataFrame, window: int) -> pd.DataFrame:
+    if df.empty:
+        df["is_soft_overlap"] = False
+        return df
+
+    df = df.copy()
+
+    df.sort_values(by=["CHROM", "POS"], inplace=True)
+    df.reset_index(drop=True, inplace=True)
+
+    same_chrom_prev = df["CHROM"] == df["CHROM"].shift(1)
+    same_chrom_next = df["CHROM"] == df["CHROM"].shift(-1)
+
+    dist_prev = np.where(same_chrom_prev, df["POS"] - df["POS"].shift(1), np.inf)
+    dist_next = np.where(same_chrom_next, df["POS"].shift(-1) - df["POS"], np.inf)
+
+    df["is_soft_overlap"] = (dist_prev <= window) | (dist_next <= window)
+
+    return df
+
+
 def extract_indels_to_dataframe(
-    vcf_list: List[str], filter_sets: Set[str], reference: str
+    vcf_list: List[str],
+    filter_sets: Set[str],
+    reference: str,
+    window: int,
+    exclude_filter_sets: Optional[Set[str]] = None,
 ) -> Tuple[pd.DataFrame, List[str]]:
     """Extract and aggregate unique indel variants from multiple VCF files."""
     variant_dict: Dict[Tuple[str, int, str, str], Set[str]] = {}
     allow_all = "all" in filter_sets or "." in filter_sets
+    exclude_filter_sets = exclude_filter_sets or set()
 
     for vcf_path in vcf_list:
         validate_file(vcf_path, "VCF")
@@ -283,15 +308,20 @@ def extract_indels_to_dataframe(
 
         with pysam.VariantFile(vcf_path) as vcf:
             for record in vcf:
-                rec_filters = list(record.filter.keys()) or ["PASS"]
+                rec_filters = set(record.filter.keys()) or {"PASS"}
 
-                if not allow_all and not filter_sets.intersection(rec_filters):
+                if exclude_filter_sets and not rec_filters.isdisjoint(
+                    exclude_filter_sets
+                ):
+                    continue
+
+                if not allow_all and rec_filters.isdisjoint(filter_sets):
                     continue
 
                 ref = record.ref
                 for alt in record.alts or []:
                     if alt and is_valid_indel(ref, alt):
-                        key = (record.chrom, record.pos, ref, alt)
+                        key = (str(record.chrom), record.pos, ref, alt)
                         variant_dict.setdefault(key, set()).add(vcf_name)
 
     rows = [
@@ -309,11 +339,17 @@ def extract_indels_to_dataframe(
     df = pd.DataFrame(rows)
     chrom_order = []
     if not df.empty:
+        df["CHROM"] = df["CHROM"].astype(str)
         chrom_order = get_chrom_order(reference, df["CHROM"])
         chrom_category = pd.CategoricalDtype(categories=chrom_order, ordered=True)
         df["CHROM"] = df["CHROM"].astype(chrom_category)
         df.sort_values(by=["CHROM", "POS"], inplace=True)
         df.reset_index(drop=True, inplace=True)
+
+        if window >= 0:
+            df = flag_soft_overlaps(df, window)
+            df = df[df["is_soft_overlap"]]
+            df.reset_index(drop=True, inplace=True)
 
     return df, chrom_order
 
@@ -333,7 +369,7 @@ def process_single_row(row: pd.Series) -> Result:
     if _worker_tumor_bam is None:
         raise RuntimeError("Worker process is uninitialized.")
 
-    v = Variant(row["CHROM"], row["POS"], row["REF"], row["ALT"], _worker_fasta)
+    v = Variant(str(row["CHROM"]), row["POS"], row["REF"], row["ALT"], _worker_fasta)
     valn = VariantAlignment(v, _worker_tumor_bam, _worker_normal_bam)
 
     cnt = valn.count_alleles()
@@ -437,16 +473,26 @@ def filter_row(
     return t_vaf, n_vaf, sor, filter_str
 
 
+def parse_filter_str(filter_str: Optional[str]) -> Set[str]:
+    if not filter_str:
+        return set()
+    normalized = filter_str.replace(";", ",")
+    return {f.strip() for f in normalized.split(",") if f.strip()}
+
+
 def personalizer(args: argparse.Namespace) -> None:
     """Subcommand handler: Personalize and reanalyze somatic indels."""
     validate_file(args.tumor_bam, "Tumor BAM")
     validate_file(args.normal_bam, "Normal BAM")
     validate_file(args.reference, "Reference FASTA")
 
-    filter_sets = {f.strip() for f in args.filters.split(";") if f.strip()}
+    filter_sets = parse_filter_str(args.filters)
+    exclude_filter_sets = parse_filter_str(args.exclude_filters)
 
     logging.info("Extracting indels from VCF files...")
-    df, chrom_order = extract_indels_to_dataframe(args.vcf, filter_sets, args.reference)
+    df, chrom_order = extract_indels_to_dataframe(
+        args.vcf, filter_sets, args.reference, args.overlap_window, exclude_filter_sets
+    )
 
     if df.empty:
         logging.warning("No variants to process.")
@@ -484,7 +530,13 @@ def personalizer(args: argparse.Namespace) -> None:
                         out_f.write("\t".join(values) + "\n")
 
         logging.info("Applying post-processing filters...")
-        dfo = pd.read_csv(tmp_output, sep="\t")
+
+        dfo = pd.read_csv(tmp_output, sep="\t", dtype={"CHROM": str})
+
+        chrom_order = [str(c) for c in chrom_order]
+        missing_chroms = [c for c in dfo["CHROM"].unique() if c not in chrom_order]
+        if missing_chroms:
+            chrom_order.extend(missing_chroms)
 
         chrom_category = pd.CategoricalDtype(categories=chrom_order, ordered=True)
         dfo["CHROM"] = dfo["CHROM"].astype(chrom_category)
@@ -533,7 +585,7 @@ def mut_tbl(args: argparse.Namespace) -> None:
     """Subcommand handler: Build matrix for Indel Signature Analysis."""
     validate_file(args.input, "Input TSV")
 
-    df = pd.read_csv(args.input, sep="\t")
+    df = pd.read_csv(args.input, sep="\t", dtype={"CHROM": str})
 
     consensus_level = args.consensus_level
     if consensus_level >= 1:
@@ -596,10 +648,26 @@ def parse_arguments() -> argparse.Namespace:
         help="Path(s) to VCF(s) (space-separated)",
     )
     parser_personal.add_argument(
+        "--overlap-window",
+        type=int,
+        default=-1,
+        help=(
+            "Window size in bp to detect soft-overlapping indels. "
+            "If set (>= 0), filters the output to ONLY include soft-overlapping indels "
+            "within POS +/- window. (default: -1, process all indels)"
+        ),
+    )
+    parser_personal.add_argument(
         "--filters",
         type=str,
         default="PASS",
-        help="Semicolon-separated list of accepted FILTER values (default: PASS). Use 'all' or '.' to allow any.",
+        help="Commna-separated(or semicolon-separated) list of accepted FILTER values (default: PASS). Use 'all' or '.' to allow any.",
+    )
+    parser_personal.add_argument(
+        "--exclude-filters",
+        type=str,
+        default=None,
+        help="Comma-separated (or semicolon-separated) list of FILTER values to exclude (e.g. 'LowQuality,Germline').",
     )
     parser_personal.add_argument(
         "-p",
