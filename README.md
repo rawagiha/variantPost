@@ -1,6 +1,9 @@
 # variantPost
 (under development)
 
+![indel inside](./indelinside_logo.svg)
+
+
 variantPost is a Python library for short variant processing via realignment and read-based phasing to resolve alignment ambiguities.
 By importing the library, users write their own scripts to solve alignment-sentive problems such as:
 * compare SNVs, MNVs, and indels that may differently be called by multiple variant callers (e.g., complex indels).
