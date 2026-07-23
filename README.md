@@ -1,7 +1,7 @@
 # indel inside
 
 <p align="left">
-  <img src="./indelinside_logo.svg" alt="indel inside" width="100">
+  <img src="./indelinside_logo.svg" alt="indel inside" width="150">
 </p>
 
 
