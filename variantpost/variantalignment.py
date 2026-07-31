@@ -91,6 +91,7 @@ class VariantAlignment(object):
         second_bam=None,
         chrom_name=None,
         exclude_duplicates=True,
+        extract_read_tags=False,
         mapping_quality_threshold=1,
         base_quality_threshold=20,
         low_quality_base_rate_threshold=0.3,
@@ -158,10 +159,10 @@ class VariantAlignment(object):
             kmer_size,
             dimer_window,
             local_threshold,
-            #retarget_thresh,
             variant.unspliced_local_reference_start,
             variant.unspliced_local_reference_end,
             variant.k,
+            extract_read_tags
         )
         
         self.is_with_target = (1 in self.target_status)
@@ -314,16 +315,6 @@ class VariantAlignment(object):
         return pac
     
 
-    #def realn2sample_hap(self):
-    #    if len(self.pref) >  len(self.palt):
-    #        unit = to_minimal_repeat_unit(self.pref[1:])
-    #    else:
-    #        unit = to_minimal_repeat_unit(self.palt[1:])
-    #    rep_n = repeat_counter(unit, self.prtseq)
-    #    return self.ppos, self.pref, self.palt, self.pltseq, self.prtseq, unit, rep_n, self.variant.count_repeats()
-
-    
-    
     def phase2complex(self, cis=True, inplace=False, base_quality_threshold=20, match_penalty_for_phasing=3, max_common_substr_len=15):
         """returns :class:`~variantpost.Variant` representing a phased target variant.
 
@@ -342,8 +333,6 @@ class VariantAlignment(object):
         if not self.is_with_target:
             if not inplace:
                 return v
-    
-        v.phased_as_complex = False
         
         if cis and self.likely_simple_on_personalized_genome:
             if not inplace:
@@ -439,11 +428,3 @@ def fill_cnt_data(sf, sr, nf, nr, uf, ur):
     )
 
     return ac
-
-
-def _retarget_thresh(local_thresh, window, match_penal=0.5):
-    score = 0
-    for i in range(window):
-        score += loss(i, match_penal, local_thresh)
-        if score < -1.0:
-            return i

@@ -28,5 +28,6 @@ cpdef object search_target(
     int unspliced_local_reference_start,
     int unspliced_local_reference_start, 
     int k,
+    bint extract_read_tags
 )
 

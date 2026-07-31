@@ -5,9 +5,6 @@
 void aln2variants(Alignment& aln, Vars& vars, const int start,
                   const std::string& ref, const std::string& query) {
     if (!aln.cigar_string.size()) return;
-    std::cout << aln.cigar_string << " " << aln.ref_begin << std::endl;
-    std::cout << ref << std::endl;
-    std::cout << query << std::endl;
     CigarVec cigar_vec; fill_cigar_vector(aln.cigar, cigar_vec);
     
     char op = '\0'; int pos = start;
@@ -103,12 +100,7 @@ bool search_over_grid(const int start, LocalReference& loc_ref,
         aligner.SetReferenceSequence(refseq.c_str(), refseq.size());
         aligner.Align(qseq, filter, &aln, mask_len);
         aln2variants(aln, vars, start, refseq, query);
-        std::cout << std::endl;
-        for(auto& v : vars) {
-            std::cout << v.pos << " " << v.ref << " " << v.alt << "- ";
-        }
         if (vars.size() > n_vars) return false;
-        std::cout << " total " << vars.size() << std::endl;
         if (find_target(loc_ref, params, target, vars) > -1) return true;
         vars.clear(); 
     }
@@ -136,16 +128,12 @@ void match2haplotypes(Pileup& pileup, const Strs& read_seqs, const UserParams& p
             if (valid_idx.test(j)) {
                 if (j == 0) {
                     aligner.SetReferenceSequence(pileup.seq0.c_str(), pileup.seq0.size());
-                    std::cout << j << " " << pileup.seq0 << std::endl;
                 } else if (j == 1) {
                     aligner.SetReferenceSequence(pileup.seq1.c_str(), pileup.seq1.size());
-                    std::cout << j << " " << pileup.seq1 << std::endl;
                 } else if (j == 2) {
                     aligner.SetReferenceSequence(pileup.seq2.c_str(), pileup.seq2.size());
-                    std::cout << j << " " << pileup.seq2 << std::endl;
                 } else {
                     aligner.SetReferenceSequence(pileup.rseq.c_str(), pileup.rseq.size());
-                    std::cout << j << " " << pileup.rseq << std::endl;
                 }
                 aligner.Align(query, filter, &aln, mask_len); scores[j] = aln.sw_score;
             } 
@@ -159,7 +147,6 @@ void match2haplotypes(Pileup& pileup, const Strs& read_seqs, const UserParams& p
         } else {
             pileup.reads[i].rank = Rank::NotSupporting; ++pileup.n_cnt; --pileup.u_cnt;
         }
-        std::cout <<  pileup.reads[i].rank << std::endl;
     }
 }
 
@@ -229,7 +216,6 @@ void realn_to_perfonalized_genome(
     alngr.SetReferenceSequence(hap_seq.c_str(), hap_seq.size());
     alngr.Align(query, fltr, &aln, mask_len);
     
-    std::cout << aln.cigar_string << " realn " << std::endl; 
     CigarVec cigar_vec;
     fill_cigar_vector(aln.cigar_string, cigar_vec);
     
@@ -322,7 +308,6 @@ void realn_to_perfonalized_genome(
     }
 
     pv = std::move(vars[closest]); 
-    std::cout << closest <<  " closet " << " " << pv.pos << " " << pv.ref << " " << pv.alt << " " << cnt << " v cnt on ref " << qc.expected_event_num  << std::endl; 
        
     // Complex indels on the personalized genome
     if (matched_sides[closest].first >= qc.local_thresh && matched_sides[closest].second >= qc.local_thresh) {
@@ -385,10 +370,6 @@ void personalize(Pileup& pileup, LocalReference& loc_ref, const UserParams& para
      
     Variant pv1(target.pos, target.ref, target.alt);
     Variant pv2(target.pos, target.ref, target.alt);
-    
-    std::cout << pv1.ref << " " << pv1.alt << " this is target " << std::endl;
-    if (pileup.is_alt_het)
-        std::cout << "This is Het/Het" << std::endl;
         
     HapLL::RepeatInfo ri1, ri2, rir;
     ReAlnQc qc_hap1(loc_ref.flanking_start, loc_ref.flanking_end, pileup.v_cnt, params.local_thresh);
@@ -398,7 +379,6 @@ void personalize(Pileup& pileup, LocalReference& loc_ref, const UserParams& para
     if (pileup.is_alt_het) {    
         size_t with_hap2 = count_overlap(pileup.hap0_vars, pileup.hap2_vars);
         
-        std::cout << "over lap this hap1 " << with_hap1 << " " <<  " over lap this hap2 " << with_hap2 << std::endl;
         if (with_hap1 > with_hap2) {
             realn_to_perfonalized_genome(aligner, filter, aln, pv1, qc_hap1, hiconf_seq, pileup.seq1, pileup.i2p1);
             if (qc_hap1.pass()) hap1_inferred = true;
@@ -426,14 +406,10 @@ void personalize(Pileup& pileup, LocalReference& loc_ref, const UserParams& para
         // Test if the target hap would share variants if it is on hap 1
         bool would_share = expect_to_share_hets(pileup.start, pileup.end, pileup.hap1_vars, loc_ref, target);
         
-        std::cout << " this is compareison against hap1 vs ref. something shared with hap1?? " << with_hap1 << std::endl;
-        std::cout << " it would share, it target is on hap1? " << would_share << std::endl;
-        
         // No sharing while it should -> ref hap
         if (would_share && with_hap1 == 0) return; 
         
         realn_to_perfonalized_genome(aligner, filter, aln, pv1, qc_hap1, hiconf_seq, pileup.seq1, pileup.i2p1);
-        std::cout << qc_hap1.pass() << " <- qc passed for hap1?? " << std::endl;
         if (!qc_hap1.pass()) return;
 
         if (with_hap1 || qc_hap1.alignable_as_snvs) {
@@ -446,8 +422,6 @@ void personalize(Pileup& pileup, LocalReference& loc_ref, const UserParams& para
             double ll_ref  = HapLL::evaluate_variant(pv_ref, rir);
             if (ll_hap1 >= ll_ref) hap1_inferred = true;
         }
-
-        std::cout << pv1.ref << " " << pv1.alt << " realn " << std::endl; 
     }
     
     if (hap1_inferred) {
@@ -457,6 +431,4 @@ void personalize(Pileup& pileup, LocalReference& loc_ref, const UserParams& para
     } else {
         // inferrence failed  
     }
-    
-    std::cout << rslt.ppos << " " <<  rslt.pref<< " " << rslt.palt << " " << rslt.pltseq << " " << rslt.prtseq << std::endl;
 }

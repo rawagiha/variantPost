@@ -43,14 +43,12 @@ void SearchResult::setReadInfo(const Read& read, const char qual_thresh) {
 
 void SearchResult::finalize() {
     for (const auto& [key, cnt] : hq_negative_cnts) {
-        std::cout << key.pos << " " << key.ref << " " << key.alt << " " << cnt << " " << std::endl;
         if (cnt < 2) continue;
         std::string v_str;
         v_str.reserve(256);
         append_num(v_str, key.pos);
         v_str.append("_").append(key.ref).append("_").append(key.alt);
         trans_vars.push_back(v_str);
-        std::cout << trans_vars.size() << std::endl;
     }
 
 }
@@ -93,21 +91,17 @@ void _search_target(SearchResult& rslt,
     // additional prep 
     loc_ref.setFlankingBoundary(target, params.dimer_window);
     // TODO how to return the result in this case??
-    if (!loc_ref.has_flankings) { std::cout << "no flanking! " << std::endl; return; }
+    if (!loc_ref.has_flankings) { return; }
     
     // Annotation for low complex tags
     loc_ref.findLowComplexRegion();
-    std::cout << loc_ref.flanking_start << " " << loc_ref.flanking_end << std::endl;
     target.setFlankingSequences(loc_ref); 
-    std::cout << target.lt_seq << " has it >> " << target.rt_seq << std::endl;
-    
     
     target.countRepeats(loc_ref);
     target.testForDeNovoRepeats(loc_ref);
     if (loc_ref.locplx_start <= target.pos
         && target.end_pos <= loc_ref.locplx_end)
     { target.in_homopolymer = true; }
-    
     
     // pileup setup
     // 1. reads are check for target based on the original alignment
@@ -147,10 +141,6 @@ void _search_target(SearchResult& rslt,
         }
     }
 
-    for (const auto& read : pileup.reads) {
-        if (read.rank == Rank::Supporting) std::cout << read.name << " " << read.cigar_str <<  "  " << read.aln_start << std::endl;
-    }
-    
     // Realn against personalized genome
     if (pileup.has_second_bam && !target.is_substitute)
         personalize(pileup, loc_ref, params, target, rslt);    

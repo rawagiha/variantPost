@@ -212,9 +212,9 @@ _worker_fasta = None
 Result = namedtuple(
     "Result",
     [
-        "ComplexPos",
-        "ComplexRef",
-        "ComplexAlt",
+        "ComplexPOS",
+        "ComplexREF",
+        "ComplexALT",
         "TumorSupportingCountFw",
         "TumorSupportingCountRv",
         "TumorNonSupportingCountFw",
@@ -377,9 +377,9 @@ def process_single_row(row: pd.Series) -> Result:
     ref_txn_cosmic, ref_txn_89, personal_txn_cosmic, personal_txn_89 = valn.taxonomize()
 
     return Result(
-        ComplexPos=valn.variant.cpos,
-        ComplexRef=valn.variant.cref,
-        ComplexAlt=valn.variant.calt,
+        ComplexPOS=valn.variant.cpos,
+        ComplexREF=valn.variant.cref,
+        ComplexALT=valn.variant.calt,
         TumorSupportingCountFw=tumor_cnt.s_fw,
         TumorSupportingCountRv=tumor_cnt.s_rv,
         TumorNonSupportingCountFw=tumor_cnt.n_fw,
@@ -480,6 +480,33 @@ def parse_filter_str(filter_str: Optional[str]) -> Set[str]:
     return {f.strip() for f in normalized.split(",") if f.strip()}
 
 
+def update_consensus(df: pd.DataFrame) -> pd.DataFrame:
+    if df.empty:
+        return df
+
+    df = df.copy()
+
+    group_cols = ["CHROM", "ComplexPOS", "ComplexREF", "ComplexALT"]
+
+    def merge_sources_group(series):
+        all_sources = set()
+        for item in series:
+            if pd.notna(item):
+                all_sources.update(str(item).split(","))
+        merged_str = ",".join(sorted(all_sources))
+        return [merged_str] * len(series)
+
+    df["SOURCES"] = df.groupby(group_cols, observed=True)["SOURCES"].transform(
+        merge_sources_group
+    )
+
+    df["SUPPORT_COUNT"] = df["SOURCES"].apply(
+        lambda x: len(x.split(",")) if x else 0
+    )
+
+    return df
+
+
 def personalizer(args: argparse.Namespace) -> None:
     """Subcommand handler: Personalize and reanalyze somatic indels."""
     validate_file(args.tumor_bam, "Tumor BAM")
@@ -532,7 +559,8 @@ def personalizer(args: argparse.Namespace) -> None:
         logging.info("Applying post-processing filters...")
 
         dfo = pd.read_csv(tmp_output, sep="\t", dtype={"CHROM": str})
-
+        dfo = update_consensus(dfo)
+        
         chrom_order = [str(c) for c in chrom_order]
         missing_chroms = [c for c in dfo["CHROM"].unique() if c not in chrom_order]
         if missing_chroms:

@@ -211,10 +211,6 @@ void Pileup::inferGermlineHaplotype(const UserParams& params, const int target_p
         }
     }
     
-    for (const auto& [k, v] : variant_counts) {
-        std::cout << k.pos << " " << " " << k.end_pos << " " << k.ref << " " << k.alt << " " << v.occurrence << " " << v.quality_occurrence  << std::endl;
-    }
-
     if (variant_counts.empty()) return;
     
     for (const auto i : evaluated) {
@@ -241,7 +237,6 @@ void Pileup::inferGermlineHaplotype(const UserParams& params, const int target_p
         
         // also require VAF >=0.2
         vs.vaf = static_cast<double>(vs.occurrence) / vs.read_depth;
-        std::cout << vk.pos << " " <<  vk.ref << " " <<  vk.alt << " " << vs.vaf << std::endl;
         if (vs.vaf < 0.2) {  
             if (vk.ref.size() == vk.alt.size()) continue;
             else if (vs.quality_occurrence < 2 || vs.vaf < 0.1) continue; // indels kept if quality occ >= 2
@@ -262,8 +257,6 @@ void Pileup::inferGermlineHaplotype(const UserParams& params, const int target_p
             int depth = variant_counts[vk].read_depth;
             double ref_vaf = static_cast<double>(ref_depth) / depth;
             
-            std::cout << vk.pos << " "<< vk.ref << " " << vk.alt << " " << ref_depth << " " << depth << " " << ref_vaf << " " << variant_counts[vk].vaf << std::endl;
-             
             if (prev_overlapping) {
                 // Previous variant affecting this -> Multi-allelism -> Het 
                 backbone_keys.push_back(vk);
@@ -584,19 +577,12 @@ void Pileup::setHaploTypes(LocalReference& loc_ref, const Variant& target) {
     make_sequence(loc_ref, hap0_vars, start, end, seq0, &i2p0); 
      
     if (has_second_bam) {
-        for (const auto& v : homo_vars) {
-            std::cout << v.pos << " " << v.ref << " " << v.alt << " homo var " << std::endl;
-        }
 
         Vars hap1_full = homo_vars;
         prep_vars(hap1_full, hap1_vars); 
-        for (const auto& v : hap1_vars)
-            std::cout << v.pos << " " << v.ref << " " << v.alt << " hap1 var " << std::endl;
          
         Vars hap2_full = homo_vars;
         prep_vars(hap2_full, hap2_vars);
-        for (const auto& v : hap2_vars)
-            std::cout << v.pos << " " << v.ref << " " << v.alt << " hap2 var " << std::endl;
         
         // REF/REF case (ref_homo)
         if (hap1_full.empty() && hap2_full.empty()) {
@@ -606,7 +592,6 @@ void Pileup::setHaploTypes(LocalReference& loc_ref, const Variant& target) {
         // NOTE: hap1_vars empty but hap2_vars Non-empty never occurs
         if (!hap1_full.empty()) {
             make_sequence(loc_ref, hap1_full, start, end, seq1, &i2p1);    
-            std::cout << seq1 << " hap 111 " << std::endl;
         }
         
         // REF/non_REF case (ref_het)
@@ -713,11 +698,6 @@ void Pileup::differentialKmerAnalysis(const UserParams& params,
     std::set_difference(km12r.begin(), km12r.end(), km0.begin(), km0.end(),
                         std::inserter(kmers_nt, kmers_nt.end()));
 
-    std::cout << "hap0 " << seq0 <<  " " << kmers_t.size() << " " << kmers_nt.size() << std::endl;
-    std::cout << "hap1 " << seq1 << std::endl;
-    std::cout << "hap2 " << seq2 << std::endl;
-    std::cout << "hapr " << rseq << std::endl; 
-    
     const size_t target_kmer_sz = kmers_t.size();
     const size_t non_target_kmer_sz = kmers_nt.size(); 
     const int rad_start = target.pos - target.event_radius;
@@ -752,10 +732,8 @@ void Pileup::differentialKmerAnalysis(const UserParams& params,
             if (read.qs <= _i && _i + kmer_sz <= read.qe) ++(read.smer);
         }
 
-        std::cout << read.smer << " " << read.nmer << " " << read.cigar_str << " " << read.rank << std::endl; 
         if (non_target_kmer_sz && read.smer > read.nmer) { 
             read.rank = Rank::LikelySupporting; --u_cnt; ++y_cnt; //Likely supporting
-            std::cout << read.name <<  " y nct " << std::endl;
             if (!read.nmer && read.smer > 1) {
                 if (has_hiconf_support 
                     || no_non_target_haps 
@@ -828,7 +806,6 @@ void Pileup::searchByRealignment(const UserParams& params,
         aligner.Align(ss.c_str(), filter, &aln, mask_len);
         check_match_pattern(aln, check_points, fss, fse, ts, te, fes, fee); 
         
-        std::cout << read.cigar_str << " " << read.smer << " " << read.nmer << " " << check_points.count() << std::endl;
         // perferct match
         if (check_points.count() == 3) {
             read.rank = Rank::Supporting; --y_cnt; ++s_cnt;

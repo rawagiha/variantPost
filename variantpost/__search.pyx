@@ -38,7 +38,7 @@ cdef extern from "search.h":
         vector[string]&, vector[bool_t]&, bool_t
     )
 
-# --- Utilities ---
+# utilities
 cdef inline int int_max(int a, int b) nogil: return a if a > b else b
 cdef inline int int_min(int a, int b) nogil: return a if a < b else b
 
@@ -49,7 +49,7 @@ cdef inline bint is_qualified_read_fast(int flag, int ref_start, bint exclude_du
     if ref_start == -1: return False
     return True
 
-# --- Main Function ---
+# main function
 cpdef object search_target(
      object bam,
      object second_bam,
@@ -76,7 +76,7 @@ cpdef object search_target(
      int unspliced_local_reference_start,
      int unspliced_local_reference_end,
      int k,
-     bint get_tags_flag=True
+     bint get_tags_flag
 ):
     cdef SearchResult rslt     
     cdef int start = int_max(0, pos - window)
@@ -182,7 +182,7 @@ cpdef object search_target(
             "F"
         )
     
-    # Decode with utf-8 as v_str contains characters other than ACGTN
+    # decode with utf-8 as v_str contains characters other than ACGTN
     trans_vars_str = [v_str.decode("utf-8") for v_str in rslt.trans_vars]
      
     return (
