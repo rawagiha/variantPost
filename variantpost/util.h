@@ -10,7 +10,7 @@
 #include <utility>
 #include <charconv>
 #include <iterator>
-#include <limits.h>
+#include <limits>
 #include <algorithm>
 #include <string_view>
 #include <unordered_map>
