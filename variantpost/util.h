@@ -3,6 +3,7 @@
 
 #include <set>
 #include <map>
+#include <array>
 #include <string>
 #include <vector>
 #include <optional>
@@ -15,6 +16,13 @@
 #include <algorithm>
 #include <string_view>
 #include <unordered_map>
+
+//gcc 14
+#include <memory>       
+#include <cstring>      
+#include <stdexcept>    
+#include <iostream>     
+#include <cmath>
 
 #include "fasta/Fasta.h"
 #include "ssw/ssw_cpp.h"
