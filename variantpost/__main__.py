@@ -500,9 +500,7 @@ def update_consensus(df: pd.DataFrame) -> pd.DataFrame:
         merge_sources_group
     )
 
-    df["SUPPORT_COUNT"] = df["SOURCES"].apply(
-        lambda x: len(x.split(",")) if x else 0
-    )
+    df["SUPPORT_COUNT"] = df["SOURCES"].apply(lambda x: len(x.split(",")) if x else 0)
 
     return df
 
@@ -526,7 +524,8 @@ def personalizer(args: argparse.Namespace) -> None:
         return
 
     num_workers = min(args.processes, mp.cpu_count())
-    chunks = [df[i::num_workers] for i in range(num_workers)]
+    #chunks = [df[i::num_workers] for i in range(num_workers)]
+    chunks = np.array_split(df, num_workers)
 
     header_written = False
 
@@ -560,7 +559,7 @@ def personalizer(args: argparse.Namespace) -> None:
 
         dfo = pd.read_csv(tmp_output, sep="\t", dtype={"CHROM": str})
         dfo = update_consensus(dfo)
-        
+
         chrom_order = [str(c) for c in chrom_order]
         missing_chroms = [c for c in dfo["CHROM"].unique() if c not in chrom_order]
         if missing_chroms:
@@ -592,10 +591,37 @@ def _generate_matrix(
     personal_col: str,
     sample_name: str,
     out_filename: str,
+    filter_sets: Optional[Set[str]] = None,
 ) -> None:
     """Helper method to construct and output mutation spectrum matrices."""
     ref_counts = df[ref_col].value_counts().reindex(keys_tuple, fill_value=0)
-    personal_counts = df[personal_col].value_counts().reindex(keys_tuple, fill_value=0)
+
+    df_personal = df.copy()
+
+    if filter_sets and "FILTER" in df_personal.columns:
+        allow_all = "all" in filter_sets or "." in filter_sets
+        if not allow_all:
+
+            def is_filter_passed(filter_val):
+                if pd.isna(filter_val) or not str(filter_val).strip():
+                    rec_filters = {"PASS"}
+                else:
+                    normalized = str(filter_val).replace(";", ",")
+                    rec_filters = {
+                        f.strip() for f in normalized.split(",") if f.strip()
+                    }
+
+                return not rec_filters.isdisjoint(filter_sets)
+
+            df_personal = df_personal[df_personal["FILTER"].apply(is_filter_passed)]
+
+    dedup_cols = ["CHROM", "ComplexPOS", "ComplexREF", "ComplexALT"]
+    if all(col in df_personal.columns for col in dedup_cols):
+        df_personal = df_personal.drop_duplicates(subset=dedup_cols)
+
+    personal_counts = (
+        df_personal[personal_col].value_counts().reindex(keys_tuple, fill_value=0)
+    )
 
     matrix_df = pd.DataFrame(
         {
@@ -623,6 +649,8 @@ def mut_tbl(args: argparse.Namespace) -> None:
     else:
         raise ValueError(f"Invalid consensus level: {consensus_level}")
 
+    filter_sets = parse_filter_str(args.filters)
+
     # Generate COSMIC 83 Matrix
     _generate_matrix(
         df=df,
@@ -631,6 +659,7 @@ def mut_tbl(args: argparse.Namespace) -> None:
         personal_col="PersonalIndelChannelCOSMIC83",
         sample_name=args.sample,
         out_filename=f"{args.sample}_indel_83_matrix.txt",
+        filter_sets=filter_sets,
     )
 
     # Generate 89 Channel Matrix
@@ -641,6 +670,7 @@ def mut_tbl(args: argparse.Namespace) -> None:
         personal_col="PersonalIndelChannel89",
         sample_name=args.sample,
         out_filename=f"{args.sample}_indel_89_matrix.txt",
+        filter_sets=filter_sets,
     )
 
 

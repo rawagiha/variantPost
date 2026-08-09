@@ -8,7 +8,6 @@
 #include "util.h"
 
 namespace HapLL {
-// --- Core Model Parameters ---
     constexpr double MU_INS = 1.0e-9;
     constexpr double MU_DEL = 2.5e-9;
     constexpr double BETA   = 1.15;
@@ -16,7 +15,6 @@ namespace HapLL {
     constexpr double ALPHA  = 0.9;
     constexpr double P_BG   = 0.25;
 
-    // --- Expanded Container for Indel Repeat Analysis ---
     struct RepeatInfo {
         std::string unit = "";
         int count_in_indel = 0;    // Number of units inside the deleted/inserted sequence
@@ -25,15 +23,6 @@ namespace HapLL {
         int total_length = 1;      // L parameter used for context scaling
     };
 
-    /**
-     * @brief Computes Levenshtein distance normalized similarity (0.0 to 1.0)
-     */
-    
-    /**
-     * @brief Computes anchored microhomology length strictly from the breakpoint.
-     * is_5_prime = true : matches suffixes (backwards from the left breakpoint)
-     * is_5_prime = false: matches prefixes (forwards from the right breakpoint)
-     */
     inline double calculate_anchored_homology(const std::string& target, const std::string& flank, bool is_5_prime) {
         if (target.empty() || flank.empty()) return 0.0;
 
@@ -41,26 +30,23 @@ namespace HapLL {
         int n = std::min(target.length(), flank.length());
 
         if (is_5_prime) {
-            // 5'側(左)フランク: ブレイクポイントから「後ろから前へ」遡って比較
             for (int i = 1; i <= n; ++i) {
                 if (target[target.length() - i] == flank[flank.length() - i]) {
                     match_len++;
                 } else {
-                    break; // 連続一致が途切れた瞬間に終了（ズレを許容しない）
+                    break;
                 }
             }
         } else {
-            // 3'側(右)フランク: ブレイクポイントから「前から後ろへ」順に比較
             for (int i = 0; i < n; ++i) {
                 if (target[i] == flank[i]) {
                     match_len++;
                 } else {
-                    break; // 連続一致が途切れた瞬間に終了
+                    break;
                 }
             }
         }
 
-        // ターゲット長に対する「連続完全一致」の割合 (0.0 ~ 1.0)
         return static_cast<double>(match_len) / target.length();
     }
 
@@ -85,10 +71,6 @@ namespace HapLL {
         return std::max(0.0, 1.0 - (static_cast<double>(dp[m][n]) / std::max(m, n)));
     }*/
 
-    /**
-     * @brief Finds the smallest sub-repeat unit within the indel sequence itself.
-     * Example: "ATAATA" -> returns "ATA"
-     */
     inline std::string find_indel_base_unit(const std::string& indel_seq) {
         int n = indel_seq.length();
         for (int m = 1; m <= n; ++m) {
@@ -107,9 +89,6 @@ namespace HapLL {
         return indel_seq;
     }
 
-    /**
-     * @brief Counts continuous backward repeats of the unit in the left flank
-     */
     inline int count_left_repeats(const std::string& lt_seq, const std::string& unit) {
         int m = unit.length();
         int idx = lt_seq.length();
@@ -125,9 +104,6 @@ namespace HapLL {
         return count;
     }
 
-    /**
-     * @brief Counts continuous forward repeats of the unit in the right flank
-     */
     inline int count_right_repeats(const std::string& rt_seq, const std::string& unit) {
         int m = unit.length();
         int n = rt_seq.length();
@@ -164,12 +140,11 @@ namespace HapLL {
      inline double calc_log_likelihood(bool is_insertion, int k, int L, 
                                       const std::string& target_seq, 
                                       const std::string& ref_prev,
-                                      const std::string& ref_next) { // 引数に ref_next を追加
+                                      const std::string& ref_next) {
         double log_mu = std::log(is_insertion ? MU_INS : MU_DEL);
         double log_phi = BETA * std::max(0, L - k); 
         double log_psi = std::log(1.0 - GAMMA) + (k - 1) * std::log(GAMMA) - (0.5 * k * k * 0.1);
         
-        // --- 5'側と3'側の両方でマイクロホモロジーを評価し、高い方を採用 ---
         double sim_prev = calculate_anchored_homology(target_seq, ref_prev, true);
         double sim_next = calculate_anchored_homology(target_seq, ref_next, false);
         double best_sim = std::max(sim_prev, sim_next);
@@ -187,9 +162,6 @@ namespace HapLL {
     }
 
 
-    /**
-     * @brief Main evaluation pipeline factoring in internal repeat structural breakdown
-     */
     inline double evaluate_variant(const Variant& v, RepeatInfo& out_repeat) {
         if (v.ref.length() == v.alt.length()) {
             return -1000.0; // Bypass SNVs
@@ -226,14 +198,12 @@ namespace HapLL {
         std::string ref_prev = "";
         std::string ref_next = "";
 
-        // 5' Flanking (左側: ref_prev) の抽出
         if (v.sample_lt_seq.length() >= static_cast<size_t>(k)) {
             ref_prev = v.sample_lt_seq.substr(v.sample_lt_seq.length() - k);
         } else {
             ref_prev = v.sample_lt_seq;
         }
 
-        // 3' Flanking (右側: ref_next) の抽出を追加
         if (v.sample_rt_seq.length() >= static_cast<size_t>(k)) {
             ref_next = v.sample_rt_seq.substr(0, k);
         } else {

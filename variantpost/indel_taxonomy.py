@@ -119,7 +119,7 @@ class IndelTaxon(object):
             if tuck_in:
                 self.class_89 = "Ins(C):R(7,9)"
             else:
-                self.class_89 = f"HomoplymerIns(C)Rep{self.rep}"
+                self.class_89 = f"HomopolymerIns(C)Rep{self.rep}"
 
     def single_T_insertion_classify(self, tuck_in=False):
         rep_83 = min(5, self.rep)
@@ -135,7 +135,7 @@ class IndelTaxon(object):
             if tuck_in:
                 rep_89 = "R(8,9)"
             else:
-                self.class_89 = f"HomoplymerIns(T)Rep{self.rep}"
+                self.class_89 = f"HomopolymerIns(T)Rep{self.rep}"
                 return
 
         self.class_89 = f"{self.flank_5p}[Ins(T):{rep_89}]{self.flank_3p}"
@@ -160,7 +160,7 @@ class IndelTaxon(object):
             if tuck_in:
                 self.class_89 = "Del(C):R(6,9)"
             else:
-                self.class_89 = f"HomoplymerDel(C)Rep{self.rep}"
+                self.class_89 = f"HomopolymerDel(C)Rep{self.rep}"
 
     def single_T_deletion_classify(self, tuck_in=False):
         rep_83 = min(5, self.rep - 1)
@@ -176,7 +176,7 @@ class IndelTaxon(object):
             if tuck_in:
                 self.class_89 = f"{self.flank_5p}[Del(T):R(8,9)]{self.flank_3p}"
             else:
-                self.class_89 = f"HomoplymerDel(T)Rep{self.rep}"
+                self.class_89 = f"HomopolymerDel(T)Rep{self.rep}"
 
     def longer_insertion_classify(self, tuck_in=False):
         rep_83 = min(5, self.rep)
