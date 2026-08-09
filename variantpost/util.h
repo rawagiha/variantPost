@@ -10,6 +10,7 @@
 #include <utility>
 #include <charconv>
 #include <iterator>
+#include <climits>
 #include <limits>
 #include <algorithm>
 #include <string_view>
