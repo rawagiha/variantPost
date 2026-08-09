@@ -10,9 +10,10 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-RUN pip install --no-cache-dir Cython pysam numpy pandas scipy
+RUN pip install --no-cache-dir setuptools wheel Cython pysam numpy pandas scipy
 
 COPY . /app
-RUN pip install --no-cache-dir .
+
+RUN pip install --no-cache-dir --no-build-isolation .
 
 ENTRYPOINT ["indelinside"]
