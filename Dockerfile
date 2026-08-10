@@ -1,6 +1,7 @@
-FROM mambaorg/micromamba:git-apt
+FROM condaforge/miniforge3:latest
 
-RUN micromamba install -y -n base -c conda-forge -c bioconda \
+RUN mamba install -y -c conda-forge -c bioconda \
+    git \
     python=3.10 \
     cython \
     numpy \
@@ -9,9 +10,7 @@ RUN micromamba install -y -n base -c conda-forge -c bioconda \
     pandas \
     c-compiler \
     cxx-compiler \
-    && micromamba clean --all --yes
-
-ARG MAMBA_DOCKERFILE_ACTIVATE=1
+    && mamba clean --all --yes
 
 WORKDIR /app
 COPY . /app
