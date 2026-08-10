@@ -1,24 +1,21 @@
-FROM python:3.10-slim
+FROM mambaorg/micromamba:1.5.8-git-apt
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    zlib1g-dev \
-    libbz2-dev \
-    liblzma-dev \
-    libcurl4-openssl-dev \
-    libssl-dev \
-    git \
-    && rm -rf /var/lib/apt/lists/*
+RUN micromamba install -y -n base -c conda-forge -c bioconda \
+    python=3.10 \
+    cython \
+    numpy \
+    scipy \
+    pysam \
+    pandas \
+    c-compiler \
+    cxx-compiler \
+    && micromamba clean --all --yes
+
+ARG MAMBA_DOCKERFILE_ACTIVATE=1
 
 WORKDIR /app
-
-RUN pip install --no-cache-dir --upgrade pip setuptools wheel
-RUN pip install --no-cache-dir Cython numpy scipy pysam pandas
-
 COPY . /app
-RUN pip install --no-cache-dir --no-build-isolation .
 
-ENV OPENSSL_FORCE_FIPS_ZERO=1
-ENV OPENSSL_CONF=/dev/null
+RUN pip install --no-cache-dir --no-build-isolation .
 
 ENTRYPOINT ["indelinside"]
