@@ -1,4 +1,4 @@
-FROM mambaorg/micromamba:1.5.8-git-apt
+FROM mambaorg/micromamba:git-apt
 
 RUN micromamba install -y -n base -c conda-forge -c bioconda \
     python=3.10 \
