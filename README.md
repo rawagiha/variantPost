@@ -14,7 +14,7 @@
 
 ---
 
-### 💡 Core Workflow
+### Core Workflow
 
 1. **Harmonization**
    Standardizes inconsistent indel representations across different variant callers into a unified canonical form.
@@ -36,43 +36,27 @@
 
 <br>
 
-# indelinside
-<p align="left">
-  <img src="./indelinside_logo.svg" alt="indel inside" width="150">
-</p>
-
-indelinside is a command-line tool to reanalyze somatic indels on locally personalized genome for indel signature analysis.
-The algorithm will:
-* harmonize indel representations that may be different across multiple variant callers.
-* construct local diploid haplotypes (hap1 & hap2) from normal BAM file along with a haplotype carrying the target somatic indel (hap0).  
-* infer from which germline haplotyes the target indel is derived.    
-* realign the target indel haplotype to the inferred germline haplotype for personalization.
-
-<p align="center">
-    <img src="./fig_repo.svg" alt="algorithm" width="700">
-</p>
-
-
-variantPost supports tumor/normal-paired analyis for cancer genomics applications.
-
-Visit [documentation](https://variantpost.readthedocs.io/en/latest/) for detail.
-
 ### Installation
-variantPost requires a Linux machine with a gcc compiler supporting for [c++17](https://en.cppreference.com/w/cpp/17).
-
-To install
+Available as a part of variantPost library:
 ```
 pip install git+https://github.com/rawagiha/variantPost
 ```
 
-Upon installation, [cython](https://cython.org/) and [pysam](https://github.com/pysam-developers)
-will also be installed if not pre-installed. 
+---
 
-### Usage
-[documentation](https://variantpost.readthedocs.io/en/latest/)
+### Basic Command
+
+Multiple VCF files from different variant callers can be passed directly to the `-v` / `--vcf` option:
+
+```bash
+indelinside personalize \
+  -t tumor.wgs.bam \
+  -n normal.wgs.bam \
+  -r reference.fa \
+  -v caller_a.vcf caller_b.vcf caller_c.vcf \
+  -o output.txt
 
 ### Acknowledgements
 variantPost internally uses the following packages. I thank the developers for making them freely available. 
 - [SSW Library](https://github.com/mengyao/Complete-Striped-Smith-Waterman-Library)
 - [fastahack](https://github.com/ekg/fastahack)
-- [Ratcliff-Obershelp algorithm](https://github.com/wernsey/miscsrc)
