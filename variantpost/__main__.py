@@ -24,6 +24,7 @@ logging.basicConfig(
 )
 
 KEYS_83: Tuple[str, ...] = (
+    # 1bp Deletions (C & T)
     "1:Del:C:0",
     "1:Del:C:1",
     "1:Del:C:2",
@@ -36,6 +37,7 @@ KEYS_83: Tuple[str, ...] = (
     "1:Del:T:3",
     "1:Del:T:4",
     "1:Del:T:5",
+    # 1bp Insertions (C & T)
     "1:Ins:C:0",
     "1:Ins:C:1",
     "1:Ins:C:2",
@@ -48,65 +50,68 @@ KEYS_83: Tuple[str, ...] = (
     "1:Ins:T:3",
     "1:Ins:T:4",
     "1:Ins:T:5",
-    "2:Del:M:1",
+    # >1bp Deletions at Repeats (2, 3, 4, 5+ bp)
     "2:Del:R:0",
     "2:Del:R:1",
     "2:Del:R:2",
     "2:Del:R:3",
     "2:Del:R:4",
     "2:Del:R:5",
-    "2:Ins:R:0",
-    "2:Ins:R:1",
-    "2:Ins:R:2",
-    "2:Ins:R:3",
-    "2:Ins:R:4",
-    "2:Ins:R:5",
-    "3:Del:M:1",
-    "3:Del:M:2",
     "3:Del:R:0",
     "3:Del:R:1",
     "3:Del:R:2",
     "3:Del:R:3",
     "3:Del:R:4",
     "3:Del:R:5",
-    "3:Ins:R:0",
-    "3:Ins:R:1",
-    "3:Ins:R:2",
-    "3:Ins:R:3",
-    "3:Ins:R:4",
-    "3:Ins:R:5",
-    "4:Del:M:1",
-    "4:Del:M:2",
-    "4:Del:M:3",
     "4:Del:R:0",
     "4:Del:R:1",
     "4:Del:R:2",
     "4:Del:R:3",
     "4:Del:R:4",
     "4:Del:R:5",
-    "4:Ins:R:0",
-    "4:Ins:R:1",
-    "4:Ins:R:2",
-    "4:Ins:R:3",
-    "4:Ins:R:4",
-    "4:Ins:R:5",
-    "5:Del:M:1",
-    "5:Del:M:2",
-    "5:Del:M:3",
-    "5:Del:M:4",
-    "5:Del:M:5",
     "5:Del:R:0",
     "5:Del:R:1",
     "5:Del:R:2",
     "5:Del:R:3",
     "5:Del:R:4",
     "5:Del:R:5",
+    # >1bp Insertions at Repeats (2, 3, 4, 5+ bp)
+    "2:Ins:R:0",
+    "2:Ins:R:1",
+    "2:Ins:R:2",
+    "2:Ins:R:3",
+    "2:Ins:R:4",
+    "2:Ins:R:5",
+    "3:Ins:R:0",
+    "3:Ins:R:1",
+    "3:Ins:R:2",
+    "3:Ins:R:3",
+    "3:Ins:R:4",
+    "3:Ins:R:5",
+    "4:Ins:R:0",
+    "4:Ins:R:1",
+    "4:Ins:R:2",
+    "4:Ins:R:3",
+    "4:Ins:R:4",
+    "4:Ins:R:5",
     "5:Ins:R:0",
     "5:Ins:R:1",
     "5:Ins:R:2",
     "5:Ins:R:3",
     "5:Ins:R:4",
     "5:Ins:R:5",
+    # Microhomology Deletions (2, 3, 4, 5+ bp)
+    "2:Del:M:1",
+    "3:Del:M:1",
+    "3:Del:M:2",
+    "4:Del:M:1",
+    "4:Del:M:2",
+    "4:Del:M:3",
+    "5:Del:M:1",
+    "5:Del:M:2",
+    "5:Del:M:3",
+    "5:Del:M:4",
+    "5:Del:M:5",
 )
 
 KEYS_89: Tuple[str, ...] = (
@@ -269,23 +274,76 @@ def is_valid_indel(ref: str, alt: str) -> bool:
     return set(ref).issubset(ALLOWED_BASES) and set(alt).issubset(ALLOWED_BASES)
 
 
-def flag_soft_overlaps(df: pd.DataFrame, window: int) -> pd.DataFrame:
+def flag_soft_overlaps(
+    df: pd.DataFrame,
+    window: int,
+    require_pass: bool = False,
+    accepted_filters: Optional[Set[str]] = None,
+) -> pd.DataFrame:
     if df.empty:
         df["is_soft_overlap"] = False
         return df
 
     df = df.copy()
 
-    df.sort_values(by=["CHROM", "POS"], inplace=True)
+    df.sort_values(by=["CHROM", "POS", "REF", "ALT"], inplace=True)
     df.reset_index(drop=True, inplace=True)
 
     same_chrom_prev = df["CHROM"] == df["CHROM"].shift(1)
-    same_chrom_next = df["CHROM"] == df["CHROM"].shift(-1)
-
     dist_prev = np.where(same_chrom_prev, df["POS"] - df["POS"].shift(1), np.inf)
-    dist_next = np.where(same_chrom_next, df["POS"].shift(-1) - df["POS"], np.inf)
 
-    df["is_soft_overlap"] = (dist_prev <= window) | (dist_next <= window)
+    is_new_cluster = (~same_chrom_prev) | (dist_prev > window)
+    df["_cluster_id"] = is_new_cluster.cumsum()
+
+    def check_cluster_sources(group):
+        all_sources = set()
+        for src in group["SOURCES"].dropna():
+            for s in str(src).split(","):
+                s_clean = s.strip()
+                if s_clean:
+                    all_sources.add(s_clean)
+        return len(all_sources) >= 2
+
+    multi_caller_map = (
+        df.groupby("_cluster_id")
+        .apply(check_cluster_sources, include_groups=False)
+        .to_dict()
+    )
+    has_multi_caller = (
+        df["_cluster_id"].map(multi_caller_map).fillna(False).astype(bool)
+    )
+
+    if require_pass and "VCF_FILTER" in df.columns:
+        if (
+            accepted_filters is None
+            or "all" in accepted_filters
+            or "." in accepted_filters
+        ):
+            target_filters = {"PASS", "."}
+        else:
+            target_filters = accepted_filters
+
+        def check_cluster_pass(group):
+            for x in group["VCF_FILTER"].dropna():
+                filters = [
+                    f.strip() for f in str(x).replace(";", ",").split(",") if f.strip()
+                ]
+                if any(f in target_filters for f in filters):
+                    return True
+            return False
+
+        pass_map = (
+            df.groupby("_cluster_id")
+            .apply(check_cluster_pass, include_groups=False)
+            .to_dict()
+        )
+        has_pass = df["_cluster_id"].map(pass_map).fillna(False).astype(bool)
+    else:
+        has_pass = True
+
+    df["is_soft_overlap"] = has_multi_caller & has_pass
+
+    df.drop(columns=["_cluster_id"], inplace=True)
 
     return df
 
@@ -296,9 +354,13 @@ def extract_indels_to_dataframe(
     reference: str,
     window: int,
     exclude_filter_sets: Optional[Set[str]] = None,
+    require_pass: bool = False,
 ) -> Tuple[pd.DataFrame, List[str]]:
     """Extract and aggregate unique indel variants from multiple VCF files."""
-    variant_dict: Dict[Tuple[str, int, str, str], Set[str]] = {}
+    variant_dict: Dict[
+        Tuple[str, int, str, str], Dict[str, Any]
+    ] = {}  # key: (chrom, pos, ref, alt) -> {"sources": set(), "filters": set()}
+
     allow_all = "all" in filter_sets or "." in filter_sets
     exclude_filter_sets = exclude_filter_sets or set()
 
@@ -322,7 +384,15 @@ def extract_indels_to_dataframe(
                 for alt in record.alts or []:
                     if alt and is_valid_indel(ref, alt):
                         key = (str(record.chrom), record.pos, ref, alt)
-                        variant_dict.setdefault(key, set()).add(vcf_name)
+
+                        if key not in variant_dict:
+                            variant_dict[key] = {
+                                "sources": set(),
+                                "filters": set(),
+                            }
+
+                        variant_dict[key]["sources"].add(vcf_name)
+                        variant_dict[key]["filters"].update(rec_filters)
 
     rows = [
         {
@@ -330,14 +400,16 @@ def extract_indels_to_dataframe(
             "POS": pos,
             "REF": ref,
             "ALT": alt,
-            "SOURCES": ",".join(sorted(sources)),
-            "SUPPORT_COUNT": len(sources),
+            "SOURCES": ",".join(sorted(data["sources"])),
+            "SUPPORT_COUNT": len(data["sources"]),
+            "VCF_FILTER": ";".join(sorted(data["filters"])),
         }
-        for (chrom, pos, ref, alt), sources in variant_dict.items()
+        for (chrom, pos, ref, alt), data in variant_dict.items()
     ]
 
     df = pd.DataFrame(rows)
     chrom_order = []
+
     if not df.empty:
         df["CHROM"] = df["CHROM"].astype(str)
         chrom_order = get_chrom_order(reference, df["CHROM"])
@@ -347,7 +419,21 @@ def extract_indels_to_dataframe(
         df.reset_index(drop=True, inplace=True)
 
         if window >= 0:
-            df = flag_soft_overlaps(df, window)
+            if require_pass:
+                pass_targets = (
+                    {"PASS", "."}
+                    if ("all" in filter_sets or "." in filter_sets)
+                    else filter_sets
+                )
+            else:
+                pass_targets = filter_sets
+
+            df = flag_soft_overlaps(
+                df,
+                window,
+                require_pass=require_pass,
+                accepted_filters=pass_targets,
+            )
             df = df[df["is_soft_overlap"]]
             df.reset_index(drop=True, inplace=True)
 
@@ -516,7 +602,12 @@ def personalizer(args: argparse.Namespace) -> None:
 
     logging.info("Extracting indels from VCF files...")
     df, chrom_order = extract_indels_to_dataframe(
-        args.vcf, filter_sets, args.reference, args.overlap_window, exclude_filter_sets
+        args.vcf,
+        filter_sets,
+        args.reference,
+        args.overlap_window,
+        exclude_filter_sets,
+        args.require_pass,
     )
 
     if df.empty:
@@ -524,8 +615,12 @@ def personalizer(args: argparse.Namespace) -> None:
         return
 
     num_workers = min(args.processes, mp.cpu_count())
-    #chunks = [df[i::num_workers] for i in range(num_workers)]
-    chunks = np.array_split(df, num_workers)
+
+    chunk_size = int(np.ceil(len(df) / num_workers))
+    chunks = [df.iloc[i : i + chunk_size].copy() for i in range(0, len(df), chunk_size)]
+
+    # chunks = [df[i::num_workers] for i in range(num_workers)]
+    # chunks = np.array_split(df, num_workers)
 
     header_written = False
 
@@ -579,7 +674,12 @@ def personalizer(args: argparse.Namespace) -> None:
             axis=1,
         )
 
-        dfo["TumorVAF"], dfo["NormalVAF"], dfo["StrandBias"], dfo["FILTER"] = zip(*res)
+        (
+            dfo["TumorVAF"],
+            dfo["NormalVAF"],
+            dfo["StrandBias"],
+            dfo["INDELINSIDE_FILTER"],
+        ) = zip(*res)
         dfo.to_csv(args.output, sep="\t", index=False)
         logging.info("Successfully wrote results to %s", args.output)
 
@@ -594,11 +694,28 @@ def _generate_matrix(
     filter_sets: Optional[Set[str]] = None,
 ) -> None:
     """Helper method to construct and output mutation spectrum matrices."""
+    if df.empty:
+        logging.warning(
+            "No indels passed for sample '%s'. Generating matrix with all zero counts.",
+            sample_name,
+        )
+        zero_counts = pd.Series(0, index=keys_tuple)
+        matrix_df = pd.DataFrame(
+            {
+                "MutationType": keys_tuple,
+                f"{sample_name}": zero_counts.values,
+                f"{sample_name}_personalized": zero_counts.values,
+            }
+        )
+        matrix_df.to_csv(out_filename, sep="\t", index=False)
+        logging.info("Generated empty matrix file: %s", out_filename)
+        return
+
     ref_counts = df[ref_col].value_counts().reindex(keys_tuple, fill_value=0)
 
     df_personal = df.copy()
 
-    if filter_sets and "FILTER" in df_personal.columns:
+    if filter_sets and "INDELINSIDE_FILTER" in df_personal.columns:
         allow_all = "all" in filter_sets or "." in filter_sets
         if not allow_all:
 
@@ -613,11 +730,20 @@ def _generate_matrix(
 
                 return not rec_filters.isdisjoint(filter_sets)
 
-            df_personal = df_personal[df_personal["FILTER"].apply(is_filter_passed)]
+            df_personal = df_personal[
+                df_personal["INDELINSIDE_FILTER"].apply(is_filter_passed)
+            ]
 
     dedup_cols = ["CHROM", "ComplexPOS", "ComplexREF", "ComplexALT"]
     if all(col in df_personal.columns for col in dedup_cols):
         df_personal = df_personal.drop_duplicates(subset=dedup_cols)
+
+    if df_personal.empty:
+        logging.warning(
+            "Personalized DataFrame became empty after filtering/deduplication for sample '%s'. "
+            "Personalized counts will be all zeros.",
+            sample_name,
+        )
 
     personal_counts = (
         df_personal[personal_col].value_counts().reindex(keys_tuple, fill_value=0)
@@ -713,6 +839,15 @@ def parse_arguments() -> argparse.Namespace:
             "Window size in bp to detect soft-overlapping indels. "
             "If set (>= 0), filters the output to ONLY include soft-overlapping indels "
             "within POS +/- window. (default: -1, process all indels)"
+        ),
+    )
+    parser_personal.add_argument(
+        "--require-pass",
+        action="store_true",
+        default=False,
+        help=(
+            "If set, soft-overlapping variant clusters must contain AT LEAST ONE "
+            "accepted FILTER (e.g. PASS) variant. Clusters without any PASS variants will be excluded."
         ),
     )
     parser_personal.add_argument(

@@ -181,7 +181,7 @@ class Variant(object):
 
         lt_flank = i.reference.fetch(i.chrom, max(0, pos - window), pos)
 
-        return lt_flank
+        return lt_flank.upper()
 
 
     def right_flank(self, window=50, normalize=False):
@@ -209,7 +209,7 @@ class Variant(object):
                 event_len = len(i.ref) - 1
             rt_flank = i.reference.fetch(i.chrom, i.pos + event_len, min(i.pos + event_len + window, ref_lim))
 
-        return rt_flank
+        return rt_flank.upper()
 
 
     def normalize(self, inplace: bool = False) -> Optional['Variant']:
