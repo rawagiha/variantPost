@@ -1,7 +1,8 @@
 FROM condaforge/miniforge3:latest
 
-RUN rm -rf /opt/conda/pkgs/* \
-    && mamba install -y -c conda-forge -c bioconda \
+ENV CONDA_MAX_THREADS=1
+
+RUN mamba install -y -c conda-forge -c bioconda \
         git \
         python=3.10 \
         cython \
