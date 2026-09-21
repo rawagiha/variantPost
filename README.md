@@ -35,13 +35,6 @@
 </p>
 
 <br>
-<br>
-
-<p align="center">
-  <img src="./fig_repo.svg" alt="indelinside algorithm workflow" width="720">
-</p>
-
-<br>
 
 ---
 
