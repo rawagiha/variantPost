@@ -26,8 +26,15 @@
    Determines precisely which germline haplotype (**`hap1`** or **`hap2`**) the somatic indel was derived from.
 
 4. **Personalized Realignment**
-   Realigns the somatic haplotype (**`hap0`**) to its inferred parent germline background, delivering ultra-clean inputs for downstream signature matrices.
+   Realigns the somatic haplotype (**`hap0`**) to its inferred parent germline background. Depending on the context, the variant may be resolved into an SNV, a different indel class, or a complex indel—delivering a polished input for downstream signature analysis.
 
+<br>
+
+<p align="center">
+  <img src="./fig_repo.svg" alt="indelinside algorithm workflow" width="720">
+</p>
+
+<br>
 <br>
 
 <p align="center">
