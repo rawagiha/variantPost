@@ -14,8 +14,6 @@ The algorithm will:
 </p>
 
 
-
-
 variantPost supports tumor/normal-paired analyis for cancer genomics applications.
 
 Visit [documentation](https://variantpost.readthedocs.io/en/latest/) for detail.
