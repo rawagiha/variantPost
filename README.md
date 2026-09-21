@@ -1,14 +1,15 @@
-# variantPost
-variantPost is a Python library for short variant processing via realignment and read-based phasing to resolve alignment ambiguities.
-By importing the library, users write their own scripts to solve alignment-sentive problems such as:
-* compare SNVs, MNVs, and indels that may differently be called by multiple variant callers (e.g., complex indels).
-* compare short variant alignments in multiple mappings (e.g., match DNA variants to RNA-Seq to check expression, where the DNA/RNA alignments may be different).  
-* construct a complex indel or MNV from a simple short variant by read-based phasing.    
-* count reads supporting the target variant from BAM file by realignment.
-
+# indelinside
 <p align="left">
   <img src="./indelinside_logo.svg" alt="indel inside" width="150">
 </p>
+
+indelinside is a command-line tool to reanalyze somatic indels on locally personalized genome for indel signature analysis.
+The algorithm will:
+* harmonize indel representations that may be different across multiple variant callers.
+* construct local diploid haplotypes from normal BAM file along with a haplotype carrying the target somatic indel.  
+* infer from which germline haplotyes the target indel is derived.    
+* realign the target indel haplotype to the inferred germline haplotype for personalization.
+
 
 
 

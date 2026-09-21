@@ -1,8 +1,8 @@
 FROM condaforge/miniforge3:latest
 
-ENV CONDA_MAX_THREADS=1
+ENV CONDA_PKGS_DIRS=/tmp/pkgs
 
-RUN mamba install -y -c conda-forge -c bioconda \
+RUN mamba create -n app -y -c conda-forge -c bioconda \
         git \
         python=3.10 \
         cython \
@@ -13,6 +13,8 @@ RUN mamba install -y -c conda-forge -c bioconda \
         c-compiler \
         cxx-compiler \
     && mamba clean --all --yes
+
+ENV PATH=/opt/conda/envs/app/bin:$PATH
 
 WORKDIR /app
 COPY . /app
