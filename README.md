@@ -9,8 +9,9 @@ The algorithm will:
 * construct local diploid haplotypes from normal BAM file along with a haplotype carrying the target somatic indel.  
 * infer from which germline haplotyes the target indel is derived.    
 * realign the target indel haplotype to the inferred germline haplotype for personalization.
+
 <p align="center">
-    <img src="./fig_repo.svg" alt="indel inside" width="500">
+    <img src="./fig_repo.svg" alt="algorithm" width="500">
 </p>
 
 
