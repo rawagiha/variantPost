@@ -784,7 +784,7 @@ def mut_tbl(args: argparse.Namespace) -> None:
         ref_col="RefIndelChannelCOSMIC83",
         personal_col="PersonalIndelChannelCOSMIC83",
         sample_name=args.sample_name,
-        out_filename=f"{args.sample}_indel_83_matrix.txt",
+        out_filename=f"{args.sample_name}.indel_83_matrix.txt",
         filter_sets=filter_sets,
     )
 
@@ -795,7 +795,7 @@ def mut_tbl(args: argparse.Namespace) -> None:
         ref_col="RefIndelChannel89",
         personal_col="PersonalIndelChannel89",
         sample_name=args.sample_name,
-        out_filename=f"{args.sample}_indel_89_matrix.txt",
+        out_filename=f"{args.sample_name}.indel_89_matrix.txt",
         filter_sets=filter_sets,
     )
 
