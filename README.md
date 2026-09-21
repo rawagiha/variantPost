@@ -1,6 +1,6 @@
 # indelinside
 <p align="left">
-  <img src="./indelinside_logo.svg" alt="indel inside" width="150">
+  <img src="./indelinside_logo.svg" alt="indel inside" width="100">
 </p>
 
 indelinside is a command-line tool to reanalyze somatic indels on locally personalized genome for indel signature analysis.
@@ -11,7 +11,7 @@ The algorithm will:
 * realign the target indel haplotype to the inferred germline haplotype for personalization.
 
 <p align="center">
-    <img src="./fig_repo.svg" alt="algorithm" width="500">
+    <img src="./fig_repo.svg" alt="algorithm" width="800">
 </p>
 
 
