@@ -783,7 +783,7 @@ def mut_tbl(args: argparse.Namespace) -> None:
         keys_tuple=KEYS_83,
         ref_col="RefIndelChannelCOSMIC83",
         personal_col="PersonalIndelChannelCOSMIC83",
-        sample_name=args.sample,
+        sample_name=args.sample_name,
         out_filename=f"{args.sample}_indel_83_matrix.txt",
         filter_sets=filter_sets,
     )
@@ -794,7 +794,7 @@ def mut_tbl(args: argparse.Namespace) -> None:
         keys_tuple=KEYS_89,
         ref_col="RefIndelChannel89",
         personal_col="PersonalIndelChannel89",
-        sample_name=args.sample,
+        sample_name=args.sample_name,
         out_filename=f"{args.sample}_indel_89_matrix.txt",
         filter_sets=filter_sets,
     )
@@ -910,7 +910,7 @@ def parse_arguments() -> argparse.Namespace:
         help="Path to output TSV file from personalize subcommand",
     )
     parser_table.add_argument(
-        "-s", "--sample", required=True, type=str, help="Sample identifier string"
+        "--sample_name", required=True, type=str, help="Sample identifier string"
     )
     parser_table.add_argument(
         "-c",
