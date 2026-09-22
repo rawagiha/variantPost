@@ -1,24 +1,24 @@
 FROM condaforge/miniforge3:latest
 
-ENV CONDA_PKGS_DIRS=/tmp/pkgs
-
 RUN mamba create -n app -y -c conda-forge -c bioconda \
-        git \
         python=3.10 \
-        cython \
+        "pysam>=0.23.3" \
+        "cython>=3.0.0" \
         numpy \
         scipy \
-        pysam \
         pandas \
         c-compiler \
         cxx-compiler \
-    && mamba clean --all --yes
+    && mamba clean --all --f --yes \
+    && rm -rf /opt/conda/pkgs/* /tmp/*
 
 ENV PATH=/opt/conda/envs/app/bin:$PATH
 
 WORKDIR /app
+
 COPY . /app
 
-RUN pip install --no-cache-dir --no-build-isolation .
+RUN rm -rf build/ dist/ *.egg-info variantpost/*.so \
+    && pip install --no-cache-dir --no-build-isolation .
 
 ENTRYPOINT ["indelinside"]

@@ -12,7 +12,3 @@ python:
   install:
   - method: pip
     path: .
-#   version: 3.8
-##   install:
-#   - method: setuptools
-#     path: .

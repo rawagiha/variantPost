@@ -83,11 +83,11 @@ from SigProfilerAssignment import Analyzer
 
 Analyzer.cosmic_fit(
     samples="my_sample.indel_83_matrix.txt",  # COSMIC-compatible 83-indel channel matrix  
-    output=/path/to/output_dir,
+    output="/path/to/output_dir",
     input_type="matrix", 
     context_type="ID",  
     collapse_to_SBS96=False,
-    signature_database=/path/to/COSMIC_signature_database # restrict IDs as needed
+    signature_database="/path/to/COSMIC_signature_database" # restrict IDs as needed
 )
 ```
 

@@ -7,7 +7,6 @@ build/
 dist/
 test/
 variantpost.egg-info/
-run_test.py
 
 */__pycache__/
 

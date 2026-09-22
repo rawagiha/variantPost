@@ -1,5 +1,6 @@
+include README.md
+include LICENSE
 include requirements.txt
-include variantpost/__search.pxd
-include variantpost/__search.pyx
-include variantpost/*cpp
-include variantpost/*h
+include variantpost/version.py
+
+recursive-include variantpost *.h *.hpp *.c *.cpp *.pyx *.pxd
