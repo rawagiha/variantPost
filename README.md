@@ -43,7 +43,7 @@
 `indelinside` is distributed as a command-line utility within the `variantPost` package:
 
 ```bash
-pip install git+[https://github.com/rawagiha/variantPost](https://github.com/rawagiha/variantPost)
+pip install variantpost
 ```
 
 ---
