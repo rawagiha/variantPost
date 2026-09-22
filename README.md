@@ -10,7 +10,7 @@
 
 <br>
 
-**`indelinside`** is a command-line tool that eliminates mapping ambiguities and alignment noise when profiling somatic indel signatures by realigning variants against a **locally personalized germline background**.
+**`indelinside`** is a command-line tool that resolves mapping ambiguities for indel signature analysis by realigning variants against a **locally personalized germline background**.
 
 ---
 
