@@ -67,7 +67,7 @@ indelinside personalize \
 
 #### Step 2: Generate Indel Signature Matrix
 
-Generate a COSMIC-compatible indel signature matrix from the personalized output. Filter consensus calls across callers using `-c` / `--consensus_level`. `-c N` selects indels called by `N` or more callers. 
+Generate a COSMIC-compatible indel signature matrix from the personalized output. Filter consensus calls across callers using `-c` / `--consensus_level`. `-c N` selects indels called by `N` or more callers (`-c 1` is the union of all callers). 
 
 ```bash
 indelinside matrix \
