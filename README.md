@@ -17,16 +17,16 @@
 ### Core Workflow
 
 1. **Harmonization**
-   Standardizes inconsistent indel representations across different variant callers into a unified canonical form.
+   Unifies inconsistent indel representations across different variant callers.
 
 2. **Local Haplotype Assembly**
-   Constructs local diploid germline haplotypes (**`hap1`** & **`hap2`**) from the normal BAM file, alongside the somatic indel haplotype (**`hap0`**).
+   Constructs local diploid germline haplotypes (**`hap1`** & **`hap2`**) from the normal BAM file, alongside the somatic indel haplotype (**`hap0`**) from the tumor BAM file.
 
 3. **Origin Inference**
-   Determines precisely which germline haplotype (**`hap1`** or **`hap2`**) the somatic indel was derived from.
+   Determines which germline haplotype (**`hap1`** or **`hap2`**) the somatic indel was derived from.
 
 4. **Personalized Realignment**
-   Realigns the somatic haplotype (**`hap0`**) to its inferred parent germline background. Depending on the context, the variant may be resolved into an SNV, a different indel class, or a complex indel—delivering a polished input for downstream signature analysis.
+   Realigns the somatic haplotype (**`hap0`**) to its inferred parent germline background. Depending on the context, the indel may be personalized to a substitute, a different indel class, or a complex indel—delivering a polished input for downstream signature analysis.
 
 <br>
 
@@ -40,7 +40,7 @@
 
 ### Installation
 
-`indelinside` is distributed as a core utility within the `variantPost` package:
+`indelinside` is distributed as a command-line utility within the `variantPost` package:
 
 ```bash
 pip install git+[https://github.com/rawagiha/variantPost](https://github.com/rawagiha/variantPost)
@@ -67,7 +67,7 @@ indelinside personalize \
 
 #### Step 2: Generate Indel Signature Matrix
 
-Generate a COSMIC-compatible indel signature matrix from the personalized output. Filter consensus calls across callers using `-c` / `--min_callers`.
+Generate a COSMIC-compatible indel signature matrix from the personalized output. Filter consensus calls across callers using `-c` / `--consensus_level`. `-c N` selects indels called by `N` or more callers. 
 
 ```bash
 indelinside matrix \
