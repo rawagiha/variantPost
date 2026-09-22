@@ -9,16 +9,15 @@ RUN mamba create -n app -y -c conda-forge -c bioconda \
         pandas \
         c-compiler \
         cxx-compiler \
-    && mamba clean --all --f --yes \
+    && mamba clean --all --yes \
     && rm -rf /opt/conda/pkgs/* /tmp/*
 
 ENV PATH=/opt/conda/envs/app/bin:$PATH
 
 WORKDIR /app
-
 COPY . /app
 
-RUN rm -rf build/ dist/ *.egg-info variantpost/*.so \
-    && pip install --no-cache-dir --no-build-isolation .
+RUN rm -rf build/ dist/ *.egg-info variantpost/*.so || true
+RUN pip install --no-cache-dir --no-build-isolation .
 
 ENTRYPOINT ["indelinside"]
