@@ -52,7 +52,7 @@ extensions = [
             "variantpost/match.cpp",
             "variantpost/util.cpp",
             "variantpost/consensus.cpp",
-            "variantpost/ssw/ssw.c",
+            "variantpost/ssw/ssw.cpp",
             "variantpost/ssw/ssw_cpp.cpp",
             "variantpost/fasta/Fasta.cpp",
             "variantpost/fasta/split.cpp",
