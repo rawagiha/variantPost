@@ -62,7 +62,8 @@ indelinside personalize \
   -n normal.wgs.bam \
   -r reference.fa \
   -v caller_a.vcf caller_b.vcf caller_c.vcf \
-  -o indelinside.out.txt
+  -o indelinside.out.txt \
+  -p 12 # for faster analysis
 ```
 
 #### Step 2: Generate Indel Signature Matrix
