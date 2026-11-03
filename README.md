@@ -1,20 +1,17 @@
 <h1 align="left">indelinside</h1>
 
 <div align="left">
-  <table style="border-collapse: collapse; border: none; margin: 0 auto;">
-    <tr>
-      <td align="center" valign="middle" style="border: none; padding-right: 14px;">
-        <img src="./indelinside_logo.svg" alt="indelinside logo" width="60">
+  <table style="border: none !important; border-collapse: collapse !important; background: transparent !important; margin: 0 auto;">
+    <tr style="border: none !important; background: transparent !important;">
+      <td align="center" valign="middle" style="border: none !important; background: transparent !important; padding-right: 14px;">
+        <img src="./indelinside_logo.svg" alt="indelinside logo" width="60" style="border: none !important; background: transparent !important;">
       </td>
-      <td align="left" valign="middle" style="border: none;">
+      <td align="left" valign="middle" style="border: none !important; background: transparent !important;">
         <b>Reanalyzing Somatic Indels on Locally Personalized Genomes for Indel Signature Analysis</b>
       </td>
     </tr>
   </table>
 </div>
-
-<br>
-
 
 <br>
 
