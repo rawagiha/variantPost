@@ -38,7 +38,7 @@
 
 ### Installation
 
-`indelinside` is distributed as a command-line utility within the `variantPost` package:
+`indelinside` is distributed as a command-line utility within the `variantPost` (enhanced implementation of [indelPost](https://github.com/stjude/indelPost) package:
 
 ```bash
 pip install variantpost
