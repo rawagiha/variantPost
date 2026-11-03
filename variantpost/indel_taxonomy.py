@@ -240,8 +240,8 @@ class IndelTaxon(object):
 
     def micro_homology_deletion_classify(self):
         len_83 = min(5, self.len)
-        mh_83 = min(4, self.mlen)
-
+        mh_83 = min(5, self.mlen)
+        
         self.class_83 = f"{len_83}:Del:M:{mh_83}"
 
         if self.mlen == 1:
@@ -264,3 +264,4 @@ class IndelTaxon(object):
                 self.class_89 = "Del(4,5):M(3,4)"
             else:
                 self.class_89 = "Del(6,):M(4,)"
+

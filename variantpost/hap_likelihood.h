@@ -8,12 +8,12 @@
 #include "util.h"
 
 namespace HapLL {
-    constexpr double MU_INS = 1.0e-9;
-    constexpr double MU_DEL = 2.5e-9;
-    constexpr double BETA   = 1.15;
-    constexpr double GAMMA  = 0.1;
-    constexpr double ALPHA  = 0.9;
-    constexpr double P_BG   = 0.25;
+    constexpr double MU_INS = 0.08e-9; 
+    constexpr double MU_DEL = 0.22e-9; 
+    constexpr double BETA   = 1.0;  
+    constexpr double GAMMA  = 0.5;
+    //constexpr double ALPHA  = 1.0;
+    //constexpr double P_BG   = 0.25;
 
     struct RepeatInfo {
         std::string unit = "";
@@ -24,9 +24,11 @@ namespace HapLL {
     };
 
     inline double calculate_anchored_homology(const std::string& target, const std::string& flank, bool is_5_prime) {
-        if (target.empty() || flank.empty()) return 0.0;
+        double pseudo_val = 0.00001;
 
-        int match_len = 0;
+        if (target.empty() || flank.empty()) return pseudo_val;
+
+        int match_len = 0; // with pseudo count
         int n = std::min(target.length(), flank.length());
 
         if (is_5_prime) {
@@ -47,7 +49,10 @@ namespace HapLL {
             }
         }
 
-        return static_cast<double>(match_len) / target.length();
+        if (match_len) {
+            return static_cast<double>(match_len) / target.length();
+        } 
+        return pseudo_val;
     }
 
 
@@ -144,6 +149,7 @@ namespace HapLL {
         double log_mu = std::log(is_insertion ? MU_INS : MU_DEL);
         double log_phi = BETA * std::max(0, L - k); 
         double log_psi = std::log(1.0 - GAMMA) + (k - 1) * std::log(GAMMA) - (0.5 * k * k * 0.1);
+        //double log_psi = std::log(1.0 - GAMMA) + (k - 1) * std::log(GAMMA);
         
         double sim_prev = calculate_anchored_homology(target_seq, ref_prev, true);
         double sim_next = calculate_anchored_homology(target_seq, ref_next, false);
@@ -154,9 +160,9 @@ namespace HapLL {
         //double sim_next = calculate_similarity(target_seq, ref_next);
         //double best_sim = std::max(sim_prev, sim_next);
         
-        double prob_homology = ALPHA * best_sim;
-        double prob_rand = (1.0 - ALPHA) * std::pow(P_BG, k);
-        double log_omega = std::log(prob_homology + prob_rand);
+        //double prob_homology = ALPHA * best_sim;
+        //double prob_rand = (1.0 - ALPHA) * std::pow(P_BG, k);
+        double log_omega = std::log(best_sim);
         
         return log_mu + log_phi + log_psi + log_omega;
     }
