@@ -1,9 +1,10 @@
 <h1 align="center"><em>indelinside</em></h1>
 
 <p align="center">
-  <img src="./indelinside_logo.svg" alt="indelinside logo" width="30" style="vertical-align: middle; margin-right: 8px;">
-  <b>Reanalyzing Somatic Indels on Locally Personalized Genomes for Indel Signature Analysis</b>
+  <img src="./indelinside_logo.svg" alt="indelinside logo" width="70" style="vertical-align: middle; margin-right: 14px;">
+  <span style="vertical-align: middle;"><b>Reanalyzing Somatic Indels on Locally Personalized Genomes for Indel Signature Analysis</b></span>
 </p>
+
 
 <br>
 
