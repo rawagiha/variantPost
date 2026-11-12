@@ -1,5 +1,7 @@
 <h1 align="left">indelinside</h1>
 
+[![Documentation Status](https://readthedocs.org/projects/indelinside/badge/?version=latest)](https://indelinside.readthedocs.io/en/latest/)
+
 <p align="left">
   <a href="./indelinside_logo.svg"><img src="./indelinside_logo.svg" alt="indelinside logo" width="80" align="middle"></a>
   &nbsp;&nbsp;
@@ -63,17 +65,6 @@ indelinside personalize \
   -o indelinside.out.txt \
   -p 12 # for faster analysis
 ```
-* <details>
-    <summary> Options (click for details)</summary><p>
-    
-    * ```-t``` Tumor WGS BAM file (default: None)
-    * ```-n``` Normal WGS BAM file (default: None)
-    * ```-r``` Referene genome  FASTA file (default: None)
-    * ```-v``` VCF file(s). Space-separated (default: None)
-    * ```-p``` Number of parallel worker processes (default: 4)
-    * ```--filters```  Commna-separated(or semicolon-separated) list of accepted FILTER values (default: PASS).
-
-</p></details>
 
 #### Step 2: Generate Indel Signature Matrix
 
@@ -100,6 +91,9 @@ Analyzer.cosmic_fit(
     signature_database="/path/to/COSMIC_signature_database" # restrict IDs as needed
 )
 ```
+### Documentation
+
+See the [documentation](https://indelinside.readthedocs.io/en/latest/).
 
 <br>
 
