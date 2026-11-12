@@ -79,7 +79,6 @@ setup(
     packages=find_packages(exclude=["tests"]),
     cmdclass={"build_ext": SafeBuildExt},
     ext_modules=get_ext_modules(),
-    setup_requires=["pysam>=0.23.3", "cython>=3.0.0"],
     install_requires=["pysam>=0.23.3"],
     entry_points={
         "console_scripts": [

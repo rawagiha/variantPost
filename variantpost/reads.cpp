@@ -362,15 +362,6 @@ void Read::checkByRepeatCount(const Variant& target, bool& has_excess_ins_hap) {
     }
 }
 
-inline auto append_num = [](std::string& target, auto val) {
-    std::array<char, 20> buffer; 
-    auto [ptr, ec] = std::to_chars(buffer.data(), buffer.data() + buffer.size(), val);
-    if (ec == std::errc{}) {
-        target.append(buffer.data(), ptr - buffer.data());
-    }
-};
-
-
 //------------------------------------------------------------------------------
 // NOTE: qualityCheck before use
 void Read::setSignatureStrings(const UserParams& params) {

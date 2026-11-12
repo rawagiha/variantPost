@@ -29,6 +29,10 @@ cdef extern from "search.h":
         vector[int] target_statuses
         vector[bool_t] are_from_first_bam
         vector[string] trans_vars
+        
+        #for test#
+        string homos, parental_hap_hets, loc_gt
+        int parental_hap
 
     void _search_target(
         SearchResult&, string&, string&, int, string&, string&,
@@ -189,5 +193,11 @@ cpdef object search_target(
         contig_dict, rslt.target_statuses, read_names, is_reverse, is_control, tags,
         rslt.ppos, rslt.pref.decode("ascii"), rslt.palt.decode("ascii"),
         rslt.pltseq.decode("ascii"), rslt.prtseq.decode("ascii"),
-        rslt.ref.decode("ascii"), rslt.alt.decode("ascii"), trans_vars_str, rslt.personalized, rslt.likely_simple_on_personalized_genome, rslt.possible_snv
+        rslt.ref.decode("ascii"), rslt.alt.decode("ascii"), 
+        trans_vars_str, rslt.personalized, 
+        rslt.likely_simple_on_personalized_genome,
+        rslt.possible_snv, 
+        rslt.homos.decode("utf-8"), 
+        rslt.parental_hap_hets.decode("utf-8"), 
+        rslt.parental_hap, rslt.loc_gt.decode("utf-8")
     )

@@ -80,7 +80,8 @@ class VariantAlignment(object):
         "has_second", "contig_dict", "target_status", "read_names", "is_reverse",
         "is_control", "tags", "ppos", "pref", "palt", "pltseq",
         "prtseq", "ref", "alt", "skips", "trans_vars", "read_names", "is_with_target",
-        "personalized", "likely_simple_on_personalized_genome", "possible_snv"
+        "personalized", "likely_simple_on_personalized_genome", "possible_snv",
+        "homos", "parental_hap_hets", "parental_hap", "loc_gt"
     )
 
     
@@ -135,7 +136,11 @@ class VariantAlignment(object):
             self.trans_vars,
             self.personalized,
             self.likely_simple_on_personalized_genome,
-            self.possible_snv
+            self.possible_snv,
+            self.homos,
+            self.parental_hap_hets,
+            self.parental_hap,
+            self.loc_gt
         ) = search_target(
             bam,
             second_bam,
@@ -166,8 +171,7 @@ class VariantAlignment(object):
         )
         
         self.is_with_target = (1 in self.target_status)
-
-        
+            
         #############TODO#################
         #implement later
         self.skips = []
@@ -199,6 +203,16 @@ class VariantAlignment(object):
 
         return ref_txn.class_83, ref_txn.class_89, personal_txn.class_83, personal_txn.class_89
 
+    
+    def infer_parental_haplotype(self):
+        homos, hets = [], []
+        
+        vsrt2vlst(self.homos, homos, self.chrom)
+        vsrt2vlst(self.parental_hap_hets, hets, self.chrom)
+        
+        return fill_parental_hap(self.loc_gt, self.parental_hap, homos, hets)
+    
+    
     def get_tag(self, tag):
         s_tags, n_tags, u_tags = [], [], []
         for taglst, status in zip(self.tags, self.target_status):
@@ -428,3 +442,29 @@ def fill_cnt_data(sf, sr, nf, nr, uf, ur):
     )
 
     return ac
+
+def vsrt2vlst(vstr, vlst, chrom):
+    """ vstr = "pos:ref:alt;pos:ref:alt"
+        -> [(chrom, pos, ref, alt),...]
+    """
+    if not vstr:
+        return 
+         
+    for v in vstr.split(";"):
+        pos, ref, alt = v.split(":")
+        vlst.append((chrom, int(pos), ref, alt))
+
+def fill_parental_hap(gt, hap, homos, hets):
+    ParentalHap = namedtuple(
+        "ParentalHap",
+        [
+         "local_germline_genotype",
+         "hap",
+         "homozygous",
+         "heterozygous",
+        ],
+    )
+
+    ph = ParentalHap(gt, hap, homos, hets)
+
+    return ph

@@ -5,16 +5,13 @@
 #include "consensus.h"
 #include "variant_types.h"
 
-
-// pasted from reads.cpp
-inline auto append_num = [](std::string& target, auto val) {
-    std::array<char, 20> buffer; 
-    auto [ptr, ec] = std::to_chars(buffer.data(), buffer.data() + buffer.size(), val);
-    if (ec == std::errc{}) {
-        target.append(buffer.data(), ptr - buffer.data());
+inline void to_var_str(std::string& vstr, const Vars& vars) {
+    for (const auto& v : vars) {
+        append_num(vstr, v.pos);
+        vstr.append(":").append(v.ref).append(":").append(v.alt).append(";");
     }
-};
-
+    if (!vstr.empty() && vstr.back() == ';') vstr.pop_back();
+}
 
 SearchResult::SearchResult() {}
 
@@ -142,9 +139,19 @@ void _search_target(SearchResult& rslt,
     }
 
     // Realn against personalized genome
-    if (pileup.has_second_bam && !target.is_substitute)
-        personalize(pileup, loc_ref, params, target, rslt);    
-    
+    if (pileup.has_second_bam && !target.is_substitute) {
+        
+        personalize(pileup, loc_ref, params, target, rslt);
+        
+        to_var_str(rslt.homos, pileup.homo_vars);
+
+        if (rslt.parental_hap == 1) {
+            to_var_str(rslt.parental_hap_hets, pileup.hap1_vars);
+        } else if (rslt.parental_hap == 2) {
+            to_var_str(rslt.parental_hap_hets, pileup.hap2_vars);
+        }
+    }
+
     if (pileup.has_hiconf_support) {
         from_consensus_variant_list(rslt, loc_ref, pileup.start, pileup.end, pileup.hap0_vars);
     }

@@ -15,6 +15,7 @@
 #include <limits>
 #include <algorithm>
 #include <string_view>
+#include <system_error>
 #include <unordered_map>
 
 //gcc 14
@@ -242,6 +243,17 @@ bool operator < (const Variant& lhs, const Variant& rhs);
 /*********************************************************************************/
 /*                               utility functions                               */
 /*********************************************************************************/
+
+//------------------------------------------------------------------------------
+template <typename T>
+inline void append_num(std::string& target, T val) {
+    std::array<char, 20> buffer;
+    auto [ptr, ec] = std::to_chars(buffer.data(), buffer.data() + buffer.size(), val);
+    if (ec == std::errc{}) {
+        target.append(buffer.data(), ptr - buffer.data());
+    }
+}
+
 
 //------------------------------------------------------------------------------
 // input vec MUST be SORTED

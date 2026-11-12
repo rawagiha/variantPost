@@ -347,9 +347,9 @@ inline void fill_result(const Variant& v, const ReAlnQc& qc, SearchResult& rslt)
 void personalize(Pileup& pileup, LocalReference& loc_ref, const UserParams& params, const Variant& target, SearchResult& rslt) {
         
     if (!pileup.has_hiconf_support || pileup.seq0.empty()) return;
-    
+
     // REF/REF case -> no personalization
-    if (pileup.is_ref_hom){ 
+    if (pileup.is_ref_hom){
         rslt.personalized = true;  // background haplotype successfully identified as REF/REF
         return;                    // -> safe to phase to a complex event 
     }
@@ -363,8 +363,7 @@ void personalize(Pileup& pileup, LocalReference& loc_ref, const UserParams& para
         gap_open_penal = 10; gap_ext_penal = 0;
     }
     Alignment aln; Filter filter;
-    Aligner aligner(params.match_score, params.mismatch_penal,
-                    gap_open_penal, gap_ext_penal);
+    Aligner aligner(params.match_score, params.mismatch_penal, gap_open_penal, gap_ext_penal);
     
     size_t with_hap1 = count_overlap(pileup.hap0_vars, pileup.hap1_vars);
      
@@ -376,7 +375,9 @@ void personalize(Pileup& pileup, LocalReference& loc_ref, const UserParams& para
     ReAlnQc qc_hap2 = qc_hap1;
     
     bool hap1_inferred = false, hap2_inferred = false;
-    if (pileup.is_alt_het) {    
+    if (pileup.is_alt_het) {
+        rslt.loc_gt = "alt_het";
+            
         size_t with_hap2 = count_overlap(pileup.hap0_vars, pileup.hap2_vars);
         
         if (with_hap1 > with_hap2) {
@@ -403,11 +404,16 @@ void personalize(Pileup& pileup, LocalReference& loc_ref, const UserParams& para
             }
         }
     } else {
+        rslt.loc_gt = pileup.is_ref_het ? "ref_het" : "alt_hom";        
+       
         // Test if the target hap would share variants if it is on hap 1
+        // Note that would_share is false if no hap1_vars (e.g. alt_hom)
         bool would_share = expect_to_share_hets(pileup.start, pileup.end, pileup.hap1_vars, loc_ref, target);
         
         // No sharing while it should -> ref hap
-        if (would_share && with_hap1 == 0) return; 
+        if (would_share && with_hap1 == 0) {
+            rslt.parental_hap = 2; return; 
+        }
         
         realn_to_perfonalized_genome(aligner, filter, aln, pv1, qc_hap1, hiconf_seq, pileup.seq1, pileup.i2p1);
         if (!qc_hap1.pass()) return;
@@ -425,10 +431,10 @@ void personalize(Pileup& pileup, LocalReference& loc_ref, const UserParams& para
     }
     
     if (hap1_inferred) {
-        fill_result(pv1, qc_hap1, rslt);
+        rslt.parental_hap = 1; fill_result(pv1, qc_hap1, rslt);
     } else if (hap2_inferred) {
-        fill_result(pv2, qc_hap2, rslt);
+        rslt.parental_hap = 2; fill_result(pv2, qc_hap2, rslt);
     } else {
-        // inferrence failed  
+        // no inferrence (e.g., tie score or low QC) 
     }
 }

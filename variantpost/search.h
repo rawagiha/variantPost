@@ -6,50 +6,53 @@
 
 struct SearchResult 
 {
-    bool likely_simple_on_personalized_genome = false; 
-    bool personalized = false;
-    bool possible_snv = false;
+    //-------------------------------------------------------------------------
+    SearchResult();
+    
+    //-------------------------------------------------------------------------
+    void setReadInfo(const Read& read, const char qual_thresh);
+
+    //-------------------------------------------------------------------------
+    // feed trans_vars with recurrent HQ variants in non-target reads
+    void finalize();
+    
+    // 8x-byte members 
+    Ints positions;
+    Strs ref_bases;
+    Strs alt_bases;
+    
+    Ints target_statuses;
+    Bools are_from_first_bam;
+    Strs trans_vars;
+    
+    // stores high quality variant-key and its count in reads not carrying 
+    // the target variant (negative). 
+    std::unordered_map<VariantKey, int, VariantKeyHash> hq_negative_cnts;
      
-    std::vector<int> positions;
-    std::vector<std::string> ref_bases;
-    std::vector<std::string> alt_bases;
-    //std::vector<std::string> base_quals;
-    //std::vector<int> skip_starts;
-    //std::vector<int> skip_ends;
-    int ppos = -1;
     std::string ref;
     std::string alt;
     std::string pref;
     std::string palt;
     std::string prtseq;
     std::string pltseq;
-    //std::vector<std::string> read_names;
-    //std::vector<bool> are_reverse;
-    std::vector<int> target_statuses;
-    std::vector<bool> are_from_first_bam;
-    std::vector<std::string> trans_vars;
+    
+    // stores homo vars (common to hap1/2)
+    std::string homos;
 
-    // Variants in high-quality non-supporting reads
-    // -> to be used for complex variant reconstruction
-    std::unordered_map<VariantKey, int, VariantKeyHash> hq_negative_cnts;
+    // stores het vars in hap parental to hap0
+    std::string parental_hap_hets;  
     
-    //bool is_retargeted;
-
-    SearchResult();
-                                                
-    void setReadInfo(const Read& read, const char qual_thresh);
-    void finalize(); 
+    // local genotype
+    std::string loc_gt = "ref_hom";
     
-    //void fill_read_info(const Reads& reads, const int target_status);
+    //4x-byte members
+    int ppos = -1;
+    int parental_hap = -1; // the origin of hap0
     
-    /*
-    void report(
-        const Contig& contig,
-        Reads& targets,
-        Reads& non_targets,
-        Reads& undetermined,
-        const bool is_retargeted = false
-    );*/
+    //1x-byte members
+    bool likely_simple_on_personalized_genome = false; 
+    bool personalized = false;
+    bool possible_snv = false;
 };
 
 
