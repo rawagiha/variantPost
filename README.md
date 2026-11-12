@@ -65,12 +65,15 @@ indelinside personalize \
 ```
 * <details>
     <summary> Options (click for details)</summary><p>
+    
     * ```-t``` Tumor WGS BAM file (default: None)
     * ```-n``` Normal WGS BAM file (default: None)
     * ```-r``` Referene genome  FASTA file (default: None)
     * ```-v``` VCF file(s). Space-separated (default: None)
     * ```-p``` Number of parallel worker processes (default: 4)
     * ```--filters```  Commna-separated(or semicolon-separated) list of accepted FILTER values (default: PASS).
+
+</p></details>
 
 #### Step 2: Generate Indel Signature Matrix
 
