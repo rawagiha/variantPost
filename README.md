@@ -1,6 +1,7 @@
 <h1 align="left">indelinside</h1>
 
 [![Documentation Status](https://readthedocs.org/projects/indelinside/badge/?version=latest)](https://indelinside.readthedocs.io/en/latest/)
+[![PyPI version](https://badge.fury.io/py/variantpost.svg)](https://badge.fury.io/py/variantpost)
 
 <p align="left">
   <a href="./indelinside_logo.svg"><img src="./indelinside_logo.svg" alt="indelinside logo" width="80" align="middle"></a>
@@ -94,8 +95,6 @@ Analyzer.cosmic_fit(
 ### Documentation
 
 See the [documentation](https://indelinside.readthedocs.io/en/latest/).
-
-<br>
 
 ### Acknowledgements
 variantPost internally uses the following packages. I thank the developers for making them freely available. 
