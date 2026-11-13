@@ -9,9 +9,24 @@ from variantpost.__search import search_target
 AlleleCount = namedtuple(
     "AlleleCount",
     [
-        "s", "s_names", "s_fw", "s_fw_names", "s_rv", "s_rv_names",
-        "n", "n_names", "n_fw", "n_fw_names", "n_rv", "n_rv_names",
-        "u", "u_names", "u_fw", "u_fw_names", "u_rv", "u_rv_names",
+        "s",
+        "s_names",
+        "s_fw",
+        "s_fw_names",
+        "s_rv",
+        "s_rv_names",
+        "n",
+        "n_names",
+        "n_fw",
+        "n_fw_names",
+        "n_rv",
+        "n_rv_names",
+        "u",
+        "u_names",
+        "u_fw",
+        "u_fw_names",
+        "u_rv",
+        "u_rv_names",
     ],
 )
 PairedAlleleCount = namedtuple("PairedAlleleCount", ["first", "second"])
@@ -75,16 +90,43 @@ class VariantAlignment(object):
     """
 
     __slots__ = (
-        "variant", "chrom", "bam_chrom", "target_pos", "target_is_indel",
-        "window", "reference", "base_quality_thresh", "local_thresh",
-        "has_second", "contig_dict", "target_status", "read_names", "is_reverse",
-        "is_control", "tags", "ppos", "pref", "palt", "pltseq",
-        "prtseq", "ref", "alt", "skips", "trans_vars", "read_names", "is_with_target",
-        "personalized", "likely_simple_on_personalized_genome", "possible_snv",
-        "homos", "parental_hap_hets", "parental_hap", "loc_gt"
+        "variant",
+        "chrom",
+        "bam_chrom",
+        "target_pos",
+        "target_is_indel",
+        "window",
+        "reference",
+        "base_quality_thresh",
+        "local_thresh",
+        "has_second",
+        "contig_dict",
+        "target_status",
+        "read_names",
+        "is_reverse",
+        "is_control",
+        "tags",
+        "ppos",
+        "pref",
+        "palt",
+        "pltseq",
+        "prtseq",
+        "ref",
+        "alt",
+        "skips",
+        "trans_vars",
+        "read_names",
+        "is_with_target",
+        "personalized",
+        "likely_simple_on_personalized_genome",
+        "possible_snv",
+        "homos",
+        "parental_hap_hets",
+        "parental_hap",
+        "loc_gt",
+        "infer_by",
     )
 
-    
     def __init__(
         self,
         variant,
@@ -121,10 +163,10 @@ class VariantAlignment(object):
 
         (
             self.contig_dict,
-            self.target_status, 
+            self.target_status,
             self.read_names,
-            self.is_reverse, 
-            self.is_control, 
+            self.is_reverse,
+            self.is_control,
             self.tags,
             self.ppos,
             self.pref,
@@ -140,7 +182,8 @@ class VariantAlignment(object):
             self.homos,
             self.parental_hap_hets,
             self.parental_hap,
-            self.loc_gt
+            self.loc_gt,
+            self.infer_by,
         ) = search_target(
             bam,
             second_bam,
@@ -167,52 +210,88 @@ class VariantAlignment(object):
             variant.unspliced_local_reference_start,
             variant.unspliced_local_reference_end,
             variant.k,
-            extract_read_tags
+            extract_read_tags,
         )
-        
-        self.is_with_target = (1 in self.target_status)
-            
+
+        self.is_with_target = 1 in self.target_status
+
         #############TODO#################
-        #implement later
+        # implement later
         self.skips = []
 
     def taxonomize(self):
-        ref_txn = IndelTaxon(self.variant.ref, self.variant.alt, self.variant.left_flank(), self.variant.right_flank())
-        
-        # personalization failed or not performed 
+        ref_txn = IndelTaxon(
+            self.variant.ref,
+            self.variant.alt,
+            self.variant.left_flank(),
+            self.variant.right_flank(),
+        )
+
+        # personalization failed or not performed
         # note: REF/REF region is considered "personalized" as it will test for true complex event
         if not self.personalized:
-            return ref_txn.class_83, ref_txn.class_89, ref_txn.class_83, ref_txn.class_89
-        
-        # target indel can be aligned as SNV on the personalized genome 
+            return (
+                ref_txn.class_83,
+                ref_txn.class_89,
+                ref_txn.class_83,
+                ref_txn.class_89,
+            )
+
+        # target indel can be aligned as SNV on the personalized genome
         if self.possible_snv:
             snv_txn = "PossibleSNV"
             return ref_txn.class_83, ref_txn.class_89, snv_txn, snv_txn
-        
-        # false complex indels (somatic + nearby germine SNP) evalauated on personalized genome 
+
+        # false complex indels (somatic + nearby germine SNP) evalauated on personalized genome
         v = self.phase2complex()
         if not v.is_simple_indel:
             cplx_tnx = "Complex"
             return ref_txn.class_83, ref_txn.class_89, cplx_tnx, cplx_tnx
-        
+
         # target indel is simple on the personalized genome
         if self.pref:
             personal_txn = IndelTaxon(self.pref, self.palt, self.pltseq, self.prtseq)
         else:
             personal_txn = ref_txn
 
-        return ref_txn.class_83, ref_txn.class_89, personal_txn.class_83, personal_txn.class_89
+        return (
+            ref_txn.class_83,
+            ref_txn.class_89,
+            personal_txn.class_83,
+            personal_txn.class_89,
+        )
 
-    
     def infer_parental_haplotype(self):
+        """returns :class:`ParentalHap` as `namedtuple <https://docs.python.org/3/library/collections.html#collections.namedtuple>`__
+        containing information about the parental haplotype from which the target somatic mutation is derived.
+
+         - **local_germline_genotype** - germline genotype observed in the normal data at the target locus.
+         - **hap** - either ``hap1`` or ``hap2``.
+         - **homozygous** - `list <https://docs.python.org/3/builtins/stdtypes.html#lists>`__ of homozygous variants in the inferred parental haplotype.
+         - **"heterozygous"** - `list <https://docs.python.org/3/builtins/stdtypes.html#lists>`__ of heterozygous variants in the inferred parental haplotype.
+         - **"infer_by"** - specifies how the parental haplotype is inferred: ``homozygous``, ``heterozygous_marker``, or ``conditional_likelihood``.
+
+        """
         homos, hets = [], []
-        
+
         vsrt2vlst(self.homos, homos, self.chrom)
         vsrt2vlst(self.parental_hap_hets, hets, self.chrom)
-        
-        return fill_parental_hap(self.loc_gt, self.parental_hap, homos, hets)
-    
-    
+
+        ParentalHap = namedtuple(
+            "ParentalHap",
+            [
+                "local_germline_genotype",
+                "hap",
+                "homozygous",
+                "heterozygous",
+                "infer_by",
+            ],
+        )
+
+        ph = ParentalHap(self.loc_gt, self.parental_hap, homos, hets, self.infer_by)
+
+        return ph
+
     def get_tag(self, tag):
         s_tags, n_tags, u_tags = [], [], []
         for taglst, status in zip(self.tags, self.target_status):
@@ -225,7 +304,6 @@ class VariantAlignment(object):
 
         return [s_tags, n_tags, u_tags]
 
-    
     def count_alleles(self):
         """returns :class:`AlleleCount` as `namedtuple <https://docs.python.org/3/library/collections.html#collections.namedtuple>`__ of read counts.
         :class:`AlleleCount` has the following fields accessible by attribute:
@@ -265,7 +343,6 @@ class VariantAlignment(object):
         for read_name, status, is_rv in zip(
             self.read_names, self.target_status, self.is_reverse
         ):
-
             flags = (status, is_rv)
 
             if flags == (1, True):
@@ -284,14 +361,12 @@ class VariantAlignment(object):
         return fill_cnt_data(sf, sr, nf, nr, uf, ur)
 
     def _paired_count(self):
-
         sf1, sf2, sr1, sr2, nf1, nf2, nr1, nr2, uf1, uf2, ur1, ur2 = (
             [] for i in range(12)
         )
         for read_name, status, is_rv, is_first in zip(
             self.read_names, self.target_status, self.is_reverse, self.is_control
         ):
-
             flags = (status, is_rv, is_first)
 
             if flags == (1, True, False):
@@ -327,9 +402,15 @@ class VariantAlignment(object):
         )
 
         return pac
-    
 
-    def phase2complex(self, cis=True, inplace=False, base_quality_threshold=20, match_penalty_for_phasing=3, max_common_substr_len=15):
+    def phase2complex(
+        self,
+        cis=True,
+        inplace=False,
+        base_quality_threshold=20,
+        match_penalty_for_phasing=3,
+        max_common_substr_len=15,
+    ):
         """returns :class:`~variantpost.Variant` representing a phased target variant.
 
         Parameters
@@ -347,11 +428,11 @@ class VariantAlignment(object):
         if not self.is_with_target:
             if not inplace:
                 return v
-        
+
         if cis and self.likely_simple_on_personalized_genome:
             if not inplace:
                 return v
-                 
+
         if cis:
             trans_vars = self.trans_vars
         else:
@@ -368,16 +449,16 @@ class VariantAlignment(object):
             match_penalty_for_phasing,
             max_common_substr_len,
         )
-            
+
         if phased and self.is_with_target:
-            v.pos = phased[0]    
+            v.pos = phased[0]
             v.ref = phased[1]
             v.alt = phased[2]
-            
+
             # normalizetion is supported for pos/ref/alt
             # not with cpos/cref/calt
             v.normalize(inplace=True)
-            
+
             self.variant.cpos = v.pos
             self.variant.cref = v.ref
             self.variant.calt = v.alt
@@ -387,11 +468,13 @@ class VariantAlignment(object):
             if not inplace:
                 return v
 
+
 def _find_value(lst, tag):
-        for elem in lst:
-            if elem[0] == tag:
-                return elem[1]
-        return None
+    for elem in lst:
+        if elem[0] == tag:
+            return elem[1]
+    return None
+
 
 def fill_cnt_data(sf, sr, nf, nr, uf, ur):
     AlleleCount = namedtuple(
@@ -443,28 +526,14 @@ def fill_cnt_data(sf, sr, nf, nr, uf, ur):
 
     return ac
 
+
 def vsrt2vlst(vstr, vlst, chrom):
-    """ vstr = "pos:ref:alt;pos:ref:alt"
-        -> [(chrom, pos, ref, alt),...]
+    """vstr = "pos:ref:alt;pos:ref:alt"
+    -> [(chrom, pos, ref, alt),...]
     """
     if not vstr:
-        return 
-         
+        return
+
     for v in vstr.split(";"):
         pos, ref, alt = v.split(":")
         vlst.append((chrom, int(pos), ref, alt))
-
-def fill_parental_hap(gt, hap, homos, hets):
-    ParentalHap = namedtuple(
-        "ParentalHap",
-        [
-         "local_germline_genotype",
-         "hap",
-         "homozygous",
-         "heterozygous",
-        ],
-    )
-
-    ph = ParentalHap(gt, hap, homos, hets)
-
-    return ph

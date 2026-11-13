@@ -42,8 +42,11 @@ struct SearchResult
     // stores het vars in hap parental to hap0
     std::string parental_hap_hets;  
     
-    // local genotype
+    // local backgound genotype
     std::string loc_gt = "ref_hom";
+    
+    // inferrence method
+    std::string infer_by;
     
     //4x-byte members
     int ppos = -1;
