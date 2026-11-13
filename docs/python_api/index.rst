@@ -1,7 +1,7 @@
-variantpost Python API
+variantPost Python API
 ======================
 
-The ``variantpost`` library provides the core Python
+The ``variantPost`` library provides the core Python
 implementation underlying ``indelinside``.
 
 The public API is centered around two main classes:

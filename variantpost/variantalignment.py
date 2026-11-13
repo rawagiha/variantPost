@@ -268,8 +268,8 @@ class VariantAlignment(object):
          - **local_germline_genotype** - germline genotype observed in the normal data at the target locus.
          - **hap** - either ``hap1`` or ``hap2``.
          - **homozygous** - `list <https://docs.python.org/3/builtins/stdtypes.html#lists>`__ of homozygous variants in the inferred parental haplotype.
-         - **"heterozygous"** - `list <https://docs.python.org/3/builtins/stdtypes.html#lists>`__ of heterozygous variants in the inferred parental haplotype.
-         - **"infer_by"** - specifies how the parental haplotype is inferred: ``homozygous``, ``heterozygous_marker``, or ``conditional_likelihood``.
+         - **heterozygous** - `list <https://docs.python.org/3/builtins/stdtypes.html#lists>`__ of heterozygous variants in the inferred parental haplotype.
+         - **infer_by** - specifies how the parental haplotype is inferred: ``homozygous``, ``heterozygous_marker``, or ``conditional_likelihood``.
 
         """
         homos, hets = [], []

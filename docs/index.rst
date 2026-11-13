@@ -1,7 +1,7 @@
 indelinside
 ===========
 
-Somatic Indel Personalization and Signature Analysis
+Somatic indel analysis on locally personalized genome.
 
 .. image:: https://img.shields.io/badge/docs-Read%20the%20Docs-blue
    :target: https://indelinside.readthedocs.io/
@@ -10,45 +10,38 @@ Overview
 --------
 
 **indelinside** is a command-line tool for somatic
-insertion and deletion (indel) personalization
-and mutational signature analysis.
-
-It is built on top of the ``variantpost`` Python library.
-
-The recommended way to use this project is through
-the ``indelinside`` command-line interface.
+insertion and deletion (indel) personalization.
 
 For users who need more granular control over
-the underlying algorithms, ``variantpost`` provides
+the underlying algorithms, ``variantPost`` provides
 a Python API for building custom workflows.
 
-Key Features
+Key features
 ------------
 
 * Somatic indel representation harmonization
 * Local haplotype-based indel personalization
-* COSMIC-compatible indel mutational signature matrices
 * Python API for advanced and custom workflows
 
-Getting Started
+Getting started
 ---------------
 
 .. toctree::
    :maxdepth: 2
-   :caption: User Guide
+   :caption: User guide
 
    installation
    quickstart
 
 .. toctree::
    :maxdepth: 2
-   :caption: Command-Line Interface
+   :caption: Command-line interface
 
    cli/index
 
 .. toctree::
    :maxdepth: 2
-   :caption: Advanced Usage
+   :caption: Advanced usage
 
    python_api/index
 

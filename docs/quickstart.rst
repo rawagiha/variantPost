@@ -9,7 +9,7 @@ The indelinside workflow consists of two main steps:
 1. Personalize somatic indels using local germline haplotypes.
 2. Generate a COSMIC-compatible indel signature matrix.
 
-Step 1: Personalize Somatic Indels
+Step 1: Personalize somatic indels
 ----------------------------------
 
 Run the ``personalize`` command:
@@ -37,7 +37,7 @@ The pipeline consolidates variants from multiple callers,
 harmonizes their representations, and performs
 local haplotype-based personalization.
 
-Step 2: Generate an Indel Signature Matrix
+Step 2: Generate an indel signature matrix
 ------------------------------------------
 
 Use the output from the personalization step:
@@ -57,7 +57,7 @@ least two variant callers.
 The output is a COSMIC-compatible 83-channel indel
 signature matrix.
 
-Downstream Signature Analysis
+Downstream signature analysis
 -----------------------------
 
 The resulting matrix can be used with external

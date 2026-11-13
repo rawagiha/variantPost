@@ -4,7 +4,8 @@ Installation
 Requirements
 ------------
 
-indelinside requires Python 3.11 or later.
+indelinside requires Python 3.11 or later and a C++17-compatible
+compiler to build its C++ extension modules.
 
 Install from PyPI
 -----------------
@@ -15,7 +16,7 @@ The recommended installation method is pip:
 
    pip install variantpost
 
-This package installs both the ``variantpost`` Python library
+This package installs both the ``variantPost`` Python library
 and the ``indelinside`` command-line interface.
 
 Verify Installation
