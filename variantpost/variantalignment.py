@@ -121,7 +121,8 @@ class VariantAlignment(object):
         "likely_simple_on_personalized_genome",
         "possible_snv",
         "homos",
-        "parental_hap_hets",
+        "hap1_hets",
+        "hap2_hets",
         "parental_hap",
         "loc_gt",
         "infer_by",
@@ -180,7 +181,8 @@ class VariantAlignment(object):
             self.likely_simple_on_personalized_genome,
             self.possible_snv,
             self.homos,
-            self.parental_hap_hets,
+            self.hap1_hets,
+            self.hap2_hets,
             self.parental_hap,
             self.loc_gt,
             self.infer_by,
@@ -266,29 +268,32 @@ class VariantAlignment(object):
         containing information about the parental haplotype from which the target somatic mutation is derived.
 
          - **local_germline_genotype** - germline genotype observed in the normal data at the target locus.
-         - **hap** - either ``hap1`` or ``hap2``.
+         - **parental** - inferred as either ``1`` or ``2``.
          - **homozygous** - `list <https://docs.python.org/3/builtins/stdtypes.html#lists>`__ of homozygous variants in the inferred parental haplotype.
-         - **heterozygous** - `list <https://docs.python.org/3/builtins/stdtypes.html#lists>`__ of heterozygous variants in the inferred parental haplotype.
+         - **hap1_heterozygous** - `list <https://docs.python.org/3/builtins/stdtypes.html#lists>`__ of heterozygous variants in haplotype ``1``.
+         - **hap2_heterozygous** - `list <https://docs.python.org/3/builtins/stdtypes.html#lists>`__ of heterozygous variants in haplotype ``2``.
          - **infer_by** - specifies how the parental haplotype is inferred: ``homozygous``, ``heterozygous_marker``, or ``conditional_likelihood``.
 
         """
-        homos, hets = [], []
+        homos, hap1_hets, hap2_hets = [], [], []
 
         vsrt2vlst(self.homos, homos, self.chrom)
-        vsrt2vlst(self.parental_hap_hets, hets, self.chrom)
+        vsrt2vlst(self.hap1_hets, hap1_hets, self.chrom)
+        vsrt2vlst(self.hap2_hets, hap2_hets, self.chrom)
 
         ParentalHap = namedtuple(
             "ParentalHap",
             [
                 "local_germline_genotype",
-                "hap",
+                "parental",
                 "homozygous",
-                "heterozygous",
+                "hap1_heterozygous",
+                "hap2_heterozygous",
                 "infer_by",
             ],
         )
 
-        ph = ParentalHap(self.loc_gt, self.parental_hap, homos, hets, self.infer_by)
+        ph = ParentalHap(self.loc_gt, self.parental_hap, homos, hap1_hets, hap2_hets, self.infer_by)
 
         return ph
 
@@ -343,6 +348,8 @@ class VariantAlignment(object):
         for read_name, status, is_rv in zip(
             self.read_names, self.target_status, self.is_reverse
         ):
+            read_name = read_name.decode("utf-8")
+
             flags = (status, is_rv)
 
             if flags == (1, True):
@@ -368,6 +375,8 @@ class VariantAlignment(object):
             self.read_names, self.target_status, self.is_reverse, self.is_control
         ):
             flags = (status, is_rv, is_first)
+
+            read_name = read_name.decode("utf-8")
 
             if flags == (1, True, False):
                 sr1.append(read_name)

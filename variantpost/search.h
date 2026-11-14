@@ -36,14 +36,13 @@ struct SearchResult
     std::string prtseq;
     std::string pltseq;
     
-    // stores homo vars (common to hap1/2)
+    // stores backgound germline variants
     std::string homos;
-
-    // stores het vars in hap parental to hap0
-    std::string parental_hap_hets;  
+    std::string hap1_hets;
+    std::string hap2_hets;  
     
     // local backgound genotype
-    std::string loc_gt = "ref_hom";
+    std::string loc_gt = "ref";
     
     // inferrence method
     std::string infer_by;

@@ -31,7 +31,7 @@ cdef extern from "search.h":
         vector[string] trans_vars
         
         #for test#
-        string homos, parental_hap_hets, loc_gt, infer_by
+        string homos, hap1_hets, hap2_hets, loc_gt, infer_by
         int parental_hap
 
     void _search_target(
@@ -198,7 +198,8 @@ cpdef object search_target(
         rslt.likely_simple_on_personalized_genome,
         rslt.possible_snv, 
         rslt.homos.decode("utf-8"), 
-        rslt.parental_hap_hets.decode("utf-8"), 
+        rslt.hap1_hets.decode("utf-8"), 
+        rslt.hap2_hets.decode("utf-8"),
         rslt.parental_hap, 
         rslt.loc_gt.decode("utf-8"),
         rslt.infer_by.decode("utf-8")

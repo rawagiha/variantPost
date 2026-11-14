@@ -379,7 +379,7 @@ void personalize(Pileup& pileup, LocalReference& loc_ref, const UserParams& para
     
     bool hap1_inferred = false, hap2_inferred = false;
     if (pileup.is_alt_het) {
-        rslt.loc_gt = "alt_het";
+        rslt.loc_gt = "multi_allelic";
             
         size_t with_hap2 = count_overlap(pileup.hap0_vars, pileup.hap2_vars);
         
@@ -409,8 +409,8 @@ void personalize(Pileup& pileup, LocalReference& loc_ref, const UserParams& para
             }
         }
     } else {
-        if (pileup.is_ref_het) { rslt.loc_gt = "ref_het"; }
-        else { rslt.loc_gt = "alt_hom"; rslt.infer_by = "homozygous"; rslt.parental_hap = 1; }       
+        if (pileup.is_ref_het) { rslt.loc_gt = "het"; }
+        else { rslt.loc_gt = "hom"; rslt.infer_by = "homozygous"; rslt.parental_hap = 1; }       
        
         // Test if the target hap would share variants if it is on hap 1
         // Note that would_share is false if no hap1_vars (e.g. alt_hom)

@@ -144,12 +144,8 @@ void _search_target(SearchResult& rslt,
         personalize(pileup, loc_ref, params, target, rslt);
         
         to_var_str(rslt.homos, pileup.homo_vars);
-
-        if (rslt.parental_hap == 1) {
-            to_var_str(rslt.parental_hap_hets, pileup.hap1_vars);
-        } else if (rslt.parental_hap == 2) {
-            to_var_str(rslt.parental_hap_hets, pileup.hap2_vars);
-        }
+        to_var_str(rslt.hap1_hets, pileup.hap1_vars);
+        to_var_str(rslt.hap2_hets, pileup.hap2_vars);
     }
 
     if (pileup.has_hiconf_support) {
