@@ -20,7 +20,10 @@ cdef extern from "search.h":
         bool_t likely_simple_on_personalized_genome
         bool_t personalized
         bool_t possible_snv
-        
+        bool_t with_high_confidence
+        bool_t hap_inf_tied
+        bool_t hap_realn_qc_failed
+         
         vector[int] positions
         vector[string] ref_bases
         vector[string] alt_bases
@@ -197,6 +200,9 @@ cpdef object search_target(
         trans_vars_str, rslt.personalized, 
         rslt.likely_simple_on_personalized_genome,
         rslt.possible_snv, 
+        rslt.with_high_confidence,
+        rslt.hap_inf_tied,
+        rslt.hap_realn_qc_failed,
         rslt.homos.decode("utf-8"), 
         rslt.hap1_hets.decode("utf-8"), 
         rslt.hap2_hets.decode("utf-8"),

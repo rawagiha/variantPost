@@ -318,7 +318,7 @@ void realn_to_perfonalized_genome(
 
 inline bool expect_to_share_hets(const int start, const int end, Vars& vars, LocalReference& loc_ref, const Variant& target) {
     const int target_start = target.lpos;
-    const int target_end = target.end_pos; 
+    const int target_end = target._end_pos; 
     
     for (auto& v : vars) {
         v.setEndPos(loc_ref);
@@ -346,8 +346,8 @@ inline void fill_result(const Variant& v, const ReAlnQc& qc, SearchResult& rslt)
 
 void personalize(Pileup& pileup, LocalReference& loc_ref, const UserParams& params, const Variant& target, SearchResult& rslt) {
         
-    if (!pileup.has_hiconf_support || pileup.seq0.empty()) return;
-
+    if (!pileup.has_hiconf_support || pileup.seq0.empty()) { rslt.loc_gt.clear(); return; }
+    
     // REF/REF case -> no personalization
     if (pileup.is_ref_hom){
         rslt.personalized = true;  // background haplotype successfully identified as REF/REF
@@ -361,7 +361,7 @@ void personalize(Pileup& pileup, LocalReference& loc_ref, const UserParams& para
     
     // Heuristic for longer (>20bp) indels to align it as a signle gap
     int gap_open_penal = params.gap_open_penal;
-    int gap_ext_penal =  params.gap_ext_penal;
+    int gap_ext_penal = params.gap_ext_penal;
     if (target.indel_len > 19) {
         gap_open_penal = 10; gap_ext_penal = 0;
     }
@@ -377,7 +377,7 @@ void personalize(Pileup& pileup, LocalReference& loc_ref, const UserParams& para
     ReAlnQc qc_hap1(loc_ref.flanking_start, loc_ref.flanking_end, pileup.v_cnt, params.local_thresh);
     ReAlnQc qc_hap2 = qc_hap1;
     
-    bool hap1_inferred = false, hap2_inferred = false;
+    bool hap1_inferred = false, hap2_inferred = false, tie_score = false, is_ref_hap = false;
     if (pileup.is_alt_het) {
         rslt.loc_gt = "multi_allelic";
             
@@ -387,6 +387,10 @@ void personalize(Pileup& pileup, LocalReference& loc_ref, const UserParams& para
             realn_to_perfonalized_genome(aligner, filter, aln, pv1, qc_hap1, hiconf_seq, pileup.seq1, pileup.i2p1);
             if (qc_hap1.pass()) { hap1_inferred = true; rslt.infer_by = "heterozygous_marker"; }
         } else if (with_hap1 < with_hap2) {
+            realn_to_perfonalized_genome(aligner, filter, aln, pv2, qc_hap2, hiconf_seq, pileup.seq2, pileup.i2p2);
+            if (qc_hap2.pass()) { hap2_inferred = true; rslt.infer_by = "heterozygous_marker"; }
+        } else if (!pileup.homo_vars.empty() && !pileup.hap1_vars.empty() && pileup.hap2_vars.empty() && with_hap1 == 0 && with_hap2 == 0) {
+            // Edge case: hap1_full = homo + hap1_het vs. hap2_full = homo (hap2_het empty)
             realn_to_perfonalized_genome(aligner, filter, aln, pv2, qc_hap2, hiconf_seq, pileup.seq2, pileup.i2p2);
             if (qc_hap2.pass()) { hap2_inferred = true; rslt.infer_by = "heterozygous_marker"; }
         } else {
@@ -400,7 +404,8 @@ void personalize(Pileup& pileup, LocalReference& loc_ref, const UserParams& para
                  if (!qc_hap1.alignable_as_snvs && !qc_hap2.alignable_as_snvs) {
                     double ll_hap1 = HapLL::evaluate_variant(pv1, ri1);
                     double ll_hap2 = HapLL::evaluate_variant(pv2, ri2);
-                    if (ll_hap1 >= ll_hap2){ hap1_inferred = true; } else { hap2_inferred = true; } 
+                    tie_score = (ll_hap1 == ll_hap2);
+                    if (ll_hap1 > ll_hap2){ hap1_inferred = true; } else { hap2_inferred = true; } 
                  } else {
                     hap1_inferred = qc_hap1.alignable_as_snvs; hap2_inferred = qc_hap2.alignable_as_snvs;
                  }  
@@ -410,20 +415,28 @@ void personalize(Pileup& pileup, LocalReference& loc_ref, const UserParams& para
         }
     } else {
         if (pileup.is_ref_het) { rslt.loc_gt = "het"; }
-        else { rslt.loc_gt = "hom"; rslt.infer_by = "homozygous"; rslt.parental_hap = 1; }       
-       
-        // Test if the target hap would share variants if it is on hap 1
+        else if (pileup.is_alt_hom) { rslt.loc_gt = "hom"; rslt.infer_by = "homozygous"; rslt.parental_hap = 1; }       
+        // this could happen: pileup.has_ref_hap == false & pileup.hap2_vars.empty() == true
+        // hap2 vars may be of low-confidence
+        else if (!pileup.hap1_vars.empty()) { rslt.loc_gt = "het"; } 
+
+        // Test if the target hap would share variants if it is on hap1
         // Note that would_share is false if no hap1_vars (e.g. alt_hom)
         bool would_share = expect_to_share_hets(pileup.start, pileup.end, pileup.hap1_vars, loc_ref, target);
         
         // No sharing while it should -> ref hap
-        if (would_share && with_hap1 == 0) {
+        if (rslt.loc_gt == "het" && would_share && with_hap1 == 0) {
             rslt.parental_hap = 2; rslt.infer_by = "heterozygous_marker"; return; 
         }
         
         realn_to_perfonalized_genome(aligner, filter, aln, pv1, qc_hap1, hiconf_seq, pileup.seq1, pileup.i2p1);
-        if (!qc_hap1.pass()) { rslt.parental_hap = -1; rslt.infer_by.clear(); return; }
-
+        if (!qc_hap1.pass()) { 
+            rslt.hap_realn_qc_failed = true; 
+            rslt.parental_hap = -1; 
+            rslt.infer_by.clear(); 
+            return; 
+         }
+        
         if (with_hap1 || qc_hap1.alignable_as_snvs) {
             hap1_inferred = true; rslt.infer_by = "heterozygous_marker";
         } else {           
@@ -432,16 +445,19 @@ void personalize(Pileup& pileup, LocalReference& loc_ref, const UserParams& para
             pv_ref.sample_lt_seq = std::string{target.lt_seq}; pv_ref.sample_rt_seq = std::string{target.rt_seq};
             double ll_hap1 = HapLL::evaluate_variant(pv1, ri1);
             double ll_ref  = HapLL::evaluate_variant(pv_ref, rir);
-            if (ll_hap1 >= ll_ref) { hap1_inferred = true; rslt.infer_by = "conditional_likelihood"; }
+            tie_score = (ll_hap1 == ll_ref);
+            if (ll_hap1 > ll_ref) { hap1_inferred = true; rslt.infer_by = "conditional_likelihood"; }
+            else if (ll_ref > ll_hap1) { is_ref_hap = true; hap2_inferred = true; rslt.infer_by = "conditional_likelihood"; }
         }
     }
     
     if (hap1_inferred) {
         rslt.parental_hap = 1; fill_result(pv1, qc_hap1, rslt);
-    } else if (hap2_inferred) {
+    } else if (hap2_inferred && !is_ref_hap) {
         rslt.parental_hap = 2; fill_result(pv2, qc_hap2, rslt);
     } else {
-        // no inferrence (e.g., tie score or low QC) 
-        rslt.infer_by.clear();
+        rslt.infer_by.clear(); 
+        rslt.hap_inf_tied = tie_score; 
+        if (!qc_hap1.pass() || !qc_hap2.pass()) rslt.hap_realn_qc_failed = true;
     }
 }

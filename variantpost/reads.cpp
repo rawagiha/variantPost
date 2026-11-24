@@ -130,7 +130,7 @@ void Read::setVariants(LocalReference& loc_ref) {
 
     for (auto& v : variants) { 
         var_pos.push_back(v.pos);
-
+         
         v.isInFlanking(loc_ref); 
         if (v.in_target_flnk) ++flnk_v_cnt;
     }

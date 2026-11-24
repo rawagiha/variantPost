@@ -131,6 +131,7 @@ void _search_target(SearchResult& rslt,
             rslt.setReadInfo(read, params.base_q_thresh);
         }
     } else {
+        pileup.setHaploTypes(loc_ref, target);
         for (const auto& read : pileup.reads) {
             //if (read.covering_ptrn == 'C') continue;
             
@@ -149,6 +150,7 @@ void _search_target(SearchResult& rslt,
     }
 
     if (pileup.has_hiconf_support) {
+        rslt.with_high_confidence = true;
         from_consensus_variant_list(rslt, loc_ref, pileup.start, pileup.end, pileup.hap0_vars);
     }
     

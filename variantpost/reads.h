@@ -85,7 +85,7 @@ struct Read {
     
     //-------------------------------------------------------------------------
     bool IsRefAt(const int pos) const;
-    
+     
     // 8-byte members (Pointers, string_view, std::string, std::vector)
     std::string_view name;
     std::string_view base_quals;
@@ -104,7 +104,8 @@ struct Read {
     Coord mapped_segments;  // excl N + D
     Coord skipped_segments;
     Ints var_idx;
-    Ints var_pos;
+    Ints var_pos; // incl indel padding bases, which may be ref
+    Ints nonref_pos; //excl indel padding bases
     CigarVec cigar_vector;
     Vars variants;
 

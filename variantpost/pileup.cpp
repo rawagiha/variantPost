@@ -147,7 +147,7 @@ Pileup::Pileup(const Strs& names, const Bools& is_rv, const Strs& cigar_strs,
             else { read.rank = Rank::NotSupporting; ++n_cnt; } 
             
             // Catch reference haplotype in control BAM here
-            if (read.is_control && read.is_quality_map && read.is_ref) { ++ref_hap_n; has_ref_hap = true; }              
+            if (read.is_control && read.is_central_mapped && read.is_ref) { ++ref_hap_n; has_ref_hap = true; }              
         }       
     }
     if (!s_cnt && !u_cnt) { has_no_support = true; return; }
@@ -334,8 +334,14 @@ void Pileup::inferGermlineHaplotype(const UserParams& params, const int target_p
                     break;
                 }
             }
-
-            read_calls.push_back({j, has_alt});
+            
+            if (has_alt) { 
+                read_calls.push_back({j, has_alt});
+            } else if (read.aln_start <= b_key.pos && b_key.pos <= read.aln_end) {
+                read_calls.push_back({j, false});
+            } else {
+               // read not covering the b_bey locus
+            }
         }
          
         // --- Within the same read, testing the linkage
@@ -575,7 +581,6 @@ void Pileup::setHaploTypes(LocalReference& loc_ref, const Variant& target) {
     }
      
     make_sequence(loc_ref, hap0_vars, start, end, seq0, &i2p0); 
-     
     if (has_second_bam) {
 
         Vars hap1_full = homo_vars;
@@ -583,7 +588,7 @@ void Pileup::setHaploTypes(LocalReference& loc_ref, const Variant& target) {
          
         Vars hap2_full = homo_vars;
         prep_vars(hap2_full, hap2_vars);
-        
+            
         // REF/REF case (ref_homo)
         if (hap1_full.empty() && hap2_full.empty()) {
             is_ref_hom = true; return;

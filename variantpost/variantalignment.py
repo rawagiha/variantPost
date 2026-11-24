@@ -120,6 +120,9 @@ class VariantAlignment(object):
         "personalized",
         "likely_simple_on_personalized_genome",
         "possible_snv",
+        "with_high_confidence",
+        "hap_inf_tied",
+        "hap_realn_failed",
         "homos",
         "hap1_hets",
         "hap2_hets",
@@ -180,6 +183,9 @@ class VariantAlignment(object):
             self.personalized,
             self.likely_simple_on_personalized_genome,
             self.possible_snv,
+            self.with_high_confidence,
+            self.hap_inf_tied,
+            self.hap_realn_failed,
             self.homos,
             self.hap1_hets,
             self.hap2_hets,
@@ -267,13 +273,16 @@ class VariantAlignment(object):
         """returns :class:`ParentalHap` as `namedtuple <https://docs.python.org/3/library/collections.html#collections.namedtuple>`__
         containing information about the parental haplotype from which the target somatic mutation is derived.
 
-         - **local_germline_genotype** - germline genotype observed in the normal data at the target locus.
-         - **parental** - inferred as either ``1`` or ``2``.
-         - **homozygous** - `list <https://docs.python.org/3/builtins/stdtypes.html#lists>`__ of homozygous variants in the inferred parental haplotype.
+         - **local_germline_genotype** - germline genotype observed in the normal data at the target locus: ``ref``, ``het``, ``hom``, ``multi_allelic`` or empty. 
+         - **parental** - either of ``1`` for hap1 or ``2`` for hap2. ``-1`` means inference failed (typically due to ``with_high_confidence=False``). 
+         - **homozygous** - `list <https://docs.python.org/3/builtins/stdtypes.html#lists>`__ of homozygous variants in the inferred genotype.
          - **hap1_heterozygous** - `list <https://docs.python.org/3/builtins/stdtypes.html#lists>`__ of heterozygous variants in haplotype ``1``.
          - **hap2_heterozygous** - `list <https://docs.python.org/3/builtins/stdtypes.html#lists>`__ of heterozygous variants in haplotype ``2``.
          - **infer_by** - specifies how the parental haplotype is inferred: ``homozygous``, ``heterozygous_marker``, or ``conditional_likelihood``.
-
+         - **has_hiconf_target** - ``True`` if the target somatic indel was detected with high confidence.
+         - **liklihood_score_tied** - ``True`` if conditional likelihood scores for two haplotypes are tied.
+         - **realn_failed** - ``True`` if realignment to a parental haplotype failed.
+        
         """
         homos, hap1_hets, hap2_hets = [], [], []
 
@@ -290,10 +299,13 @@ class VariantAlignment(object):
                 "hap1_heterozygous",
                 "hap2_heterozygous",
                 "infer_by",
+                "has_hiconf_target",
+                "likelihood_score_tied",
+                "realn_failed",
             ],
         )
 
-        ph = ParentalHap(self.loc_gt, self.parental_hap, homos, hap1_hets, hap2_hets, self.infer_by)
+        ph = ParentalHap(self.loc_gt, self.parental_hap, homos, hap1_hets, hap2_hets, self.infer_by, self.with_high_confidence, self.hap_inf_tied, self.hap_realn_failed)
 
         return ph
 

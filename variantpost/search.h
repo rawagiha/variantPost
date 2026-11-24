@@ -55,6 +55,9 @@ struct SearchResult
     bool likely_simple_on_personalized_genome = false; 
     bool personalized = false;
     bool possible_snv = false;
+    bool with_high_confidence = false;
+    bool hap_inf_tied = false;
+    bool hap_realn_qc_failed = false;
 };
 
 
